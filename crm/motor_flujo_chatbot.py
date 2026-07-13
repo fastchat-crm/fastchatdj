@@ -1295,6 +1295,12 @@ class MotorFlujo:
         cfg = nodo.config or {}
         if not cfg.get('notificar_asesor'):
             return
+        if getattr(self, '_fin_asignado_nodo_id', None) == nodo.id:
+            self._trace('notificar_asesor',
+                        'Notificación al departamento omitida: el agente asignado '
+                        'ya recibió notificación y correo con el link', True,
+                        {'nodo_id': nodo.id})
+            return
         if self.skip_side_effects:
             self._trace('side_effect_skipped',
                         'Notificación a asesor OMITIDA (dry-run)', True,
@@ -1743,6 +1749,20 @@ class MotorFlujo:
             mensaje = cfg.get('mensaje') or nodo.respuesta or self.session.mensaje_despedida or ''
             if mensaje:
                 self.enviar(mensaje)
+            if (cfg.get('notificar_asesor') and not self.skip_side_effects
+                    and not self.conversation.asignado_a_id):
+                try:
+                    from crm.helpers_asignacion import auto_asignar_agente
+                    asignado = auto_asignar_agente(self.conversation, motivo='fin_flujo')
+                except Exception:
+                    asignado = None
+                    logger.exception('Auto-asignación fallida en fin conv=%s',
+                                     self.conversation.id)
+                if asignado:
+                    self._fin_asignado_nodo_id = nodo.id
+                    self._trace('fin_asignacion',
+                                f'Conversación asignada a {asignado} (menor carga 24h)',
+                                True, {'nodo_id': nodo.id, 'agente_id': asignado.id})
             self.finalizado = True
             self.estado.finalizado = True
             self.estado.save()

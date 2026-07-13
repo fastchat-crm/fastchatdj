@@ -1029,6 +1029,24 @@
             .fail(function () { alertaWarning('Error de red.'); });
     }
 
+    $(document).on('click', '.ci-tomar-btn', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const btn = $(this);
+        const id = btn.data('id');
+        btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>');
+        $.post('', { action: 'tomar-conversacion', pk: id, csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val() })
+            .done(function(r) {
+                if (r.error) { alertaWarning(r.message || 'No se pudo tomar la conversación.'); }
+                cargarConversaciones();
+                if (!r.error) { cargarMensajes(id); }
+            })
+            .fail(function() {
+                alertaWarning('Error de red.');
+                btn.prop('disabled', false).html('<i class="fa fa-hand-pointer me-1"></i>Tomar conversación');
+            });
+    });
+
     $(document).on('click', '#btn-confirmar-reiniciar-flujo', function() {
         const id = $('#conversacion-id').val();
         if (!id) return;

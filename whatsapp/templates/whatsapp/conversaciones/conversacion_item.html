@@ -78,6 +78,11 @@
                         {% endwith %}
                     {% endif %}
                 </div>
+                {% if conversacion.estado_conversacion == 0 and not conversacion.asignado_a %}
+                    <button type="button" class="btn btn-success btn-sm w-100 mt-1 ci-tomar-btn" data-id="{{ conversacion.id }}">
+                        <i class="fa fa-hand-pointer me-1"></i>Tomar conversación
+                    </button>
+                {% endif %}
                 {% if es_vista_completa %}
                 <div class="d-flex align-items-center justify-content-between mt-1 small">
                     <span class="text-muted text-truncate me-2">

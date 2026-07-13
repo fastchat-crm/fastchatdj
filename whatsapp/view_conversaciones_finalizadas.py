@@ -254,9 +254,15 @@ def conversacionesFinalizadasView(request):
                     mensaje.save()
 
                     reactivar_conversacion(conversacion)
+                    campos = []
                     if not conversacion.primer_agente:
                         conversacion.primer_agente = request.user
-                        conversacion.save(update_fields=['primer_agente'])
+                        campos.append('primer_agente')
+                    if conversacion.ai_activo:
+                        conversacion.ai_activo = False
+                        campos.append('ai_activo')
+                    if campos:
+                        conversacion.save(update_fields=campos)
 
                     log(
                         f"Mensaje enviado y conversacion {conversacion.id} reactivada (a {conversacion.contacto_numero})",

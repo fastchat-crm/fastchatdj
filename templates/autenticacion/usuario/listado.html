@@ -90,6 +90,12 @@
             <a href="javascript:void(0)"
                onclick="formModal('', 'Cargar Usuarios Administrativos mediante plantilla excel', 'uploadUsers')"
                class="btn btn-primary me-2"><i class="fa fa-upload"></i> Cargar Usuarios</a>
+            <a href="?action=exportar_excel{{ url_vars }}" class="btn btn-success me-2">
+                <i class="fa fa-file-excel me-1"></i> Exportar Excel
+            </a>
+            <a href="javascript:void(0)" onclick="cambiarcontrasenaMasivo()" class="btn btn-warning">
+                <i class="fa fa-key me-1"></i> Contraseña masiva ({{ list_count }})
+            </a>
         </div>
     </div>
 
@@ -358,6 +364,49 @@
         </div>
     </div>
 
+    <div class="modal fade" id="modalPassMasivo" tabindex="-1" aria-labelledby="modalPassMasivoLabel"
+         aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form autocomplete="off" id="frmPassMasivo" method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="change_password_masivo">
+                    <input type="hidden" name="filtros_qs" id="filtros_qs" value="">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalPassMasivoLabel">
+                            <i class="fa fa-key me-2"></i>Cambio masivo de contraseña
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="alert alert-warning">
+                            <h5><i class="fa fa-triangle-exclamation me-1"></i> Atención</h5>
+                            <p class="mb-1">Vas a asignar la misma contraseña a los
+                                <b>{{ list_count }}</b> usuarios que coinciden con el filtro actual del listado.</p>
+                            <p class="mb-0">Tu propio usuario queda excluido. Los superusuarios solo pueden ser
+                                modificados por otro superusuario.</p>
+                        </div>
+                        <label class="form-label">Nueva contraseña para todos:</label>
+                        <div class="input-group">
+                            <input type="password" name="password" class="form-control password" minlength="6" required>
+                            <button type="button" class="btn btn-secondary togglePassword">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-danger" data-bs-dismiss="modal">
+                            <i class="fa fa-window-close me-1"></i> Cancelar
+                        </button>
+                        <button type="submit" class="btn btn-success">
+                            <i class="fa fa-save me-1"></i> Aplicar a {{ list_count }} usuarios
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade" id="modalActivar" tabindex="-1" aria-labelledby="modalActivarLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -507,6 +556,14 @@
 
             // Usar BS5 modal
             var modal = new bootstrap.Modal(document.getElementById('modalChangePassword'));
+            modal.show();
+        }
+
+        function cambiarcontrasenaMasivo() {
+            var modalPassMasivo = $('#modalPassMasivo');
+            modalPassMasivo.find("input[name=password]").val('');
+            modalPassMasivo.find("#filtros_qs").val(window.location.search);
+            var modal = new bootstrap.Modal(document.getElementById('modalPassMasivo'));
             modal.show();
         }
 

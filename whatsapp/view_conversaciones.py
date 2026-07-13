@@ -631,10 +631,19 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                         mensaje.archivo.save(archivo.name, ContentFile(file_bytes), save=False)
                     mensaje.save()
 
-                    # Registrar primer agente humano en responder
+                    # Registrar primer agente y pausar bot/flujo: si un humano
+                    # responde desde plataforma, ni la IA ni el chatbot
+                    # tradicional deben volver a contestar (ai_activo gatea
+                    # ambos en procesar_mensaje).
+                    campos = []
                     if not conversacion.primer_agente:
                         conversacion.primer_agente = request.user
-                        conversacion.save(update_fields=['primer_agente'])
+                        campos.append('primer_agente')
+                    if conversacion.ai_activo:
+                        conversacion.ai_activo = False
+                        campos.append('ai_activo')
+                    if campos:
+                        conversacion.save(update_fields=campos)
 
                     log(f"Mensaje enviado a {conversacion.contacto_numero}", request, "add", obj=conversacion.id)
 
@@ -647,6 +656,57 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                     })
                 elif action == 'reenviar_mensaje':
                     return _reenviar_mensaje(request)
+                elif action == 'tomar-conversacion':
+                    # El primer asesor que toca "Tomar" se queda con la
+                    # conversación. UPDATE condicional = atómico: ante dos
+                    # clicks simultáneos solo uno gana.
+                    pk = int(request.POST['pk'])
+                    conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
+                    if rol_en_sesion(request.user, conversacion.sesion) not in ('superuser', 'supervisor', 'asesor'):
+                        return JsonResponse({'error': True, 'message': 'No autorizado.'})
+                    actualizadas = ConversacionWhatsApp.objects.filter(
+                        pk=pk, asignado_a__isnull=True, estado_conversacion=0,
+                    ).update(
+                        asignado_a=request.user,
+                        fecha_asignacion=timezone.now(),
+                        ai_activo=False,
+                    )
+                    conversacion.refresh_from_db()
+                    if not actualizadas:
+                        nombre = (conversacion.asignado_a.get_full_name() or conversacion.asignado_a.username) if conversacion.asignado_a else ''
+                        return JsonResponse({
+                            'error': True,
+                            'tomada_por': nombre,
+                            'message': f'Ya la tomó {nombre}.' if nombre else 'La conversación ya no está disponible.',
+                        })
+                    if not conversacion.primer_agente_id:
+                        conversacion.primer_agente = request.user
+                        conversacion.save(update_fields=['primer_agente'])
+                    from .models import HistorialAsignacion
+                    HistorialAsignacion.objects.create(
+                        conversacion=conversacion,
+                        asignado_a=request.user,
+                        asignado_por=request.user,
+                        nota='Tomada por el asesor desde el panel.',
+                    )
+                    from crm.helpers_asignacion import _marcar_ultima_asignacion
+                    _marcar_ultima_asignacion(request.user)
+                    log(f"Conversación {conversacion.id} tomada por el asesor", request, "change", obj=conversacion.id)
+                    try:
+                        from asgiref.sync import async_to_sync
+                        from channels.layers import get_channel_layer
+                        async_to_sync(get_channel_layer().group_send)(
+                            f"whatsapp_sessionroom_{conversacion.sesion.id}",
+                            {'type': 'whatsapp_event', 'conversation_id': conversacion.id, 'from_me': True},
+                        )
+                    except Exception:
+                        logging.getLogger(__name__).exception(
+                            'No pude difundir la toma de la conv#%s', conversacion.id)
+                    return JsonResponse({
+                        'error': False,
+                        'message': 'Conversación asignada a ti.',
+                        'asignado_nombre': request.user.get_full_name() or request.user.username,
+                    })
                 elif action in ('cambiar_estado_atencion', 'posponer_conversacion', 'reabrir_conversacion'):
                     return _gestionar_atencion(request, action)
                 elif action in ('editar_mensaje', 'eliminar_mensaje'):
@@ -717,9 +777,15 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
 
                     # El contador veces_enviada + ultimo_envio lo actualiza
                     # MetaWhatsAppService.send_template via F('veces_enviada')+1.
+                    campos_plantilla = []
                     if not conversacion.primer_agente:
                         conversacion.primer_agente = request.user
-                        conversacion.save(update_fields=['primer_agente'])
+                        campos_plantilla.append('primer_agente')
+                    if conversacion.ai_activo:
+                        conversacion.ai_activo = False
+                        campos_plantilla.append('ai_activo')
+                    if campos_plantilla:
+                        conversacion.save(update_fields=campos_plantilla)
 
                     log(f"Plantilla Meta '{plantilla.nombre}' enviada a {conversacion.contacto_numero}",
                         request, "add", obj=conversacion.id)

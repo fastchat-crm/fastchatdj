@@ -172,7 +172,13 @@ SENTIMIENTO_CHOICES  # muy_positiva / positiva / neutral / tibia / pasiva / nega
 
 ### Flujo inicial de la vista
 
-1. Carga sesiones del usuario (`SesionWhatsApp.objects.filter(usuario_id=request.user.id, status=True)`).
+1. Carga sesiones vía `sesiones_visibles(request.user)` (`whatsapp/permisos_sesion.py`):
+   solo sesiones donde el usuario es dueño (`usuario=`) o participante por
+   `PerfilSesionWhatsApp` activo (rol supervisor o asesor). Sin bypass de
+   superuser en el selector — un superuser sin participación no ve la sesión
+   listada (sí puede abrir cualquier conversación por deep-link:
+   `puede_ver_conversacion` mantiene su bypass). Aplica a los tres canales
+   (WhatsApp/Instagram/TikTok), finalizadas y pendiente-reconexión.
 2. Resuelve sesión seleccionada vía `leer_sesion_id(request)` o el primer match.
 3. Soporte `request.session.pop('contactoId')` — usado al volver de finalizadas tras reactivar.
 4. Soporte deep-link `?conv=<token>` (`view_conversaciones.py:168-181`):
@@ -204,8 +210,9 @@ que crea el `ClienteOrigen` amarrado a la conversación (unique `cliente+convers
 
 | Action | Línea | Mutación principal | Side effects |
 |--------|-------|---------------------|--------------|
-| `send` | 323 | Persiste `MensajeWhatsApp` con `agente=request.user`, `ia_generado=False` | Llama service según proveedor, registra `primer_agente` si no existe, log |
-| `enviar_plantilla_meta` | 403 | Persiste mensaje renderizado con placeholders sustituidos | Solo Meta + plantilla `APPROVED` |
+| `send` | 323 | Persiste `MensajeWhatsApp` con `agente=request.user`, `ia_generado=False` | Llama service según proveedor, registra `primer_agente` si no existe, **setea `ai_activo=False`** (al escribir un humano desde plataforma se desactivan IA y flujo tradicional — `procesar_mensaje` gatea ambos por ese flag), log |
+| `tomar-conversacion` | (POST) | El primer asesor que toca "Tomar" queda como `asignado_a` (UPDATE condicional `asignado_a__isnull=True` = atómico ante clicks simultáneos) + `ai_activo=False` + `primer_agente` si vacío + `HistorialAsignacion` | Broadcast a `whatsapp_sessionroom_<sid>` para que el botón desaparezca en las demás pantallas; si perdió la carrera responde `{error, tomada_por}` |
+| `enviar_plantilla_meta` | 403 | Persiste mensaje renderizado con placeholders sustituidos | Solo Meta + plantilla `APPROVED`. También setea `ai_activo=False` (envío humano desde plataforma desactiva IA + flujo tradicional); idem el `send` de finalizadas. La plantilla de RECONEXIÓN (`enviar_plantilla_reconexion` en `funcionesWhatsappConversacion.py`) NO lo hace — su flujo pendiente_reconexion se maneja aparte |
 | `cambiar-clasificacion` | 483 | `clasificacion` | Form save + log |
 | `cambiar-nombre-contacto` | 497 | `Contacto.contacto_nombre` | Form save + log |
 | `asignar-conversacion` | 512 | `asignado_a`, `fecha_asignacion`, **`ai_activo=False`**, `nota_interna` | Crea `HistorialAsignacion` + `Notificacion` al agente; envía mensaje de handoff vía service con `simularEscritura=True` |
@@ -403,7 +410,7 @@ Al pulsar enviar el JS pausa la IA preventivamente para evitar double-reply.
 | Archivo | Propósito |
 |---------|-----------|
 | `conversaciones_partial.html` | Wrapper que itera `{% for conversacion in conversaciones %}` y delega |
-| `conversacion_item.html` | Card individual: avatar, status dot, badges (plataforma/clasif/IA-OFF/sentimiento/asignado), nombre, snippet, hora relativa, badge no-leído |
+| `conversacion_item.html` | Card individual: avatar, status dot, badges (plataforma/clasif/IA-OFF/sentimiento/asignado), nombre, snippet, hora relativa, badge no-leído. Si la conv está abierta y sin `asignado_a`, muestra botón `.ci-tomar-btn` ("Tomar conversación") — handler delegado en las tres copias de `listado.html` que hace POST `tomar-conversacion` |
 | `mensajes_partial.html` | Historial completo. Dos ramas: `msg-out` (agente o IA) y `msg-in` (cliente). Soporta texto, imagen (fancybox), sticker, audio (con botón transcribir), video, documento. Incluye ack states + feedback IA + form de corrección |
 | `mensaje_enviado_partial.html` | Render mínimo de un mensaje recién enviado, para inyección AJAX sin recargar el chat |
 | `modal_resumen_conversacion.html` | Resumen IA con sentimiento + barra de puntuación + agente asignado |

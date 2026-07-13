@@ -29,8 +29,10 @@ UI para configurar el equipo del número: `whatsapp/view_sesiones.py`
 Todo punto de asignación lee de **una sola función**:
 
 `crm/helpers_asignacion.py` → `candidatos_ordenados(conversacion)` →
-`[(usuario, carga), ...]` ya filtrado por disponibilidad y ordenado por menor
-carga (empate → quien lleva más tiempo sin recibir asignación).
+`[(usuario, carga), ...]` ya filtrado por disponibilidad y ordenado por **menos
+asignaciones recibidas en las últimas 24 horas** (`HistorialAsignacion`,
+ventana `HORAS_VENTANA_REPARTO=24`). Empate → quien lleva más tiempo sin
+recibir asignación; luego menor carga abierta.
 
 ```
 candidatos_ordenados(conv)
@@ -40,9 +42,10 @@ candidatos_ordenados(conv)
    │     └─ (si vacío) _agentes_legacy_disponibilidad(conv)   ← fallback de migración
    │
    ├─ por cada agente: _carga_abierta(u)        → ConversacionWhatsApp abiertas asignadas
+   ├─ _asignaciones_ultimas_24h(agentes)        → HistorialAsignacion en ventana 24h
    ├─ filtra con DisponibilidadAgente            → disponible=True y carga < max_conversaciones
    │     (sin registro = disponible, sin tope)
-   └─ ordena por (carga asc, ultimo_asignado_en asc)
+   └─ ordena por (asignaciones_24h asc, ultimo_asignado_en asc, carga asc)
 ```
 
 ### Quién la consume
@@ -50,8 +53,10 @@ candidatos_ordenados(conv)
 | Punto de asignación | Archivo | Nota |
 |---|---|---|
 | Handoff del flujo / timeout | `crm/helpers_asignacion.py:auto_asignar_agente` | Setea `ai_activo=False` (pausa IA) + notifica |
+| Nodo `fin` con `notificar_asesor` | `crm/motor_flujo_chatbot.py` (rama `tipo == 'fin'`) | Motivo `fin_flujo`. Si la conv no tiene `asignado_a`, llama `auto_asignar_agente` — el agente elegido recibe notificación interna + correo con el link del chat, y se OMITE el broadcast al departamento (`_fin_asignado_nodo_id`). Si no hay candidatos o ya estaba asignada, cae al broadcast normal |
 | Round-robin automático | `whatsapp/services_round_robin.py:asignar_automaticamente` | Lock transaccional + traza `AsignacionAutomatica`. **No** toca `ai_activo` |
 | Dropdown manual | `whatsapp/forms.py:AsignarAgenteForm` | Mismo pool; muestra rol + carga |
+| Botón "Tomar" en el panel | `whatsapp/view_conversaciones.py` action `tomar-conversacion` | Pull-based: el primer asesor que lo toca gana (UPDATE condicional atómico). Setea `ai_activo=False` + `HistorialAsignacion` + broadcast al sessionroom. Para habilitarlo, el rol asesor ahora ve también las conversaciones SIN asignar (`filtro_conversaciones_por_rol` → `asignado_a=user OR asignado_a is null`) |
 
 ---
 
@@ -74,10 +79,11 @@ Mensaje / handoff / nueva conversación
         ├─ con registro DisponibilidadAgente: disponible=True Y carga < max
         └─ sin registro: se considera disponible
         ▼
-   Ordena por (menor carga, más antiguo sin asignación)
+   Ordena por (menos asignaciones en 24h, más antiguo sin asignación, menor carga)
         ▼
    Elige el primero
         ├─ handoff/timeout  → asignado_a + ai_activo=False + Historial + Notificación
+        ├─ fin_flujo        → idem handoff; correo con link al agente; omite broadcast depto
         ├─ round-robin      → asignado_a + AsignacionAutomatica + Historial (NO toca ai_activo)
         └─ manual           → el operador elige del dropdown (mismo pool, ordenado por carga)
 ```

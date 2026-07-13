@@ -17,7 +17,9 @@ Política de auto-asignación:
 2. Pool de candidatos = asesores de la sesión (`PerfilSesionWhatsApp`).
 3. Se filtra por disponibilidad (`disponible=True`, carga < `max_conversaciones`).
    Un asesor SIN registro de `DisponibilidadAgente` se considera disponible.
-4. Se elige al de menor carga (empate → quien lleva más tiempo sin asignación).
+4. Se elige al que MENOS asignaciones recibió en las últimas 24 horas
+   (`HistorialAsignacion`). Empate → quien lleva más tiempo sin recibir
+   asignación; luego menor carga abierta.
 5. Si no hay candidatos → no asigna (devuelve `None`).
 
 Fallback de migración: si la sesión no tiene asesores en `PerfilSesionWhatsApp`,
@@ -31,6 +33,7 @@ Cuando hay asignación, se dispara:
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 
 from django.conf import settings
 from django.utils import timezone
@@ -38,10 +41,13 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
+HORAS_VENTANA_REPARTO = 24
+
 MOTIVOS_LABEL = {
     'handoff': 'Transferido por el flujo del chatbot',
     'manual': 'Asignación manual',
     'round_robin': 'Round-robin automático',
+    'fin_flujo': 'Flujo completado — seguimiento de inscripción',
 }
 
 
@@ -140,12 +146,35 @@ def _carga_abierta(usuario):
         return 0
 
 
+def _asignaciones_ultimas_24h(agentes):
+    """Asignaciones recibidas por cada asesor dentro de la ventana de reparto
+    (`HORAS_VENTANA_REPARTO`), contadas desde `HistorialAsignacion`. Es el
+    criterio principal de selección: gana el que menos recibió."""
+    try:
+        from django.db.models import Count
+        from whatsapp.models import HistorialAsignacion
+        desde = timezone.now() - timedelta(hours=HORAS_VENTANA_REPARTO)
+        filas = (
+            HistorialAsignacion.objects
+            .filter(asignado_a__in=agentes, fecha__gte=desde)
+            .values('asignado_a')
+            .annotate(total=Count('id'))
+        )
+        return {f['asignado_a']: f['total'] for f in filas}
+    except Exception:
+        logger.exception('No pude contar asignaciones de las últimas %sh',
+                         HORAS_VENTANA_REPARTO)
+        return {}
+
+
 def candidatos_ordenados(conversacion):
     """FUENTE ÚNICA de selección de asesor. Devuelve [(usuario, carga)] ya
-    filtrado por disponibilidad y ordenado por carga ascendente (empate →
-    quien lleva más tiempo sin recibir asignación).
+    filtrado por disponibilidad y ordenado por menos asignaciones recibidas en
+    las últimas 24 horas (empate → quien lleva más tiempo sin recibir
+    asignación; luego menor carga abierta).
 
-    La usan por igual el handoff del flujo, el round-robin y el dropdown manual.
+    La usan por igual el handoff del flujo, el fin de flujo con notificación,
+    el round-robin y el dropdown manual.
     """
     agentes = agentes_candidatos(conversacion)
     if not agentes:
@@ -158,6 +187,8 @@ def candidatos_ordenados(conversacion):
         }
     except Exception:
         disp_map = {}
+
+    asig_24h = _asignaciones_ultimas_24h(agentes)
 
     minimo = timezone.datetime.min
     try:
@@ -177,10 +208,10 @@ def candidatos_ordenados(conversacion):
             ultima = disp.ultimo_asignado_en or minimo
         else:
             ultima = minimo
-        elegibles.append((u, carga, ultima))
+        elegibles.append((u, carga, asig_24h.get(u.id, 0), ultima))
 
-    elegibles.sort(key=lambda it: (it[1], it[2]))
-    return [(u, carga) for (u, carga, _ult) in elegibles]
+    elegibles.sort(key=lambda it: (it[2], it[3], it[1]))
+    return [(u, carga) for (u, carga, _asig, _ult) in elegibles]
 
 
 def asesores_disponibles_sesion(conversacion):

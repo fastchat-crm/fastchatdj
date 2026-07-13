@@ -5,9 +5,10 @@ from .models import SesionWhatsApp
 
 def sesiones_visibles(usuario):
     qs = SesionWhatsApp.objects.filter(status=True, activo=True)
-    if getattr(usuario, 'is_superuser', False):
-        return qs
-    return qs.filter(usuario=usuario)
+    return qs.filter(
+        Q(usuario=usuario)
+        | Q(perfilsesionwhatsapp__usuario=usuario, perfilsesionwhatsapp__status=True)
+    ).distinct()
 
 
 def sesiones_visibles_activas(usuario):
@@ -42,7 +43,7 @@ def filtro_conversaciones_por_rol(usuario, sesion):
     if rol in ('superuser', 'supervisor'):
         return Q()
     if rol == 'asesor':
-        return Q(asignado_a=usuario)
+        return Q(asignado_a=usuario) | Q(asignado_a__isnull=True)
     return Q(pk__in=[])
 
 
@@ -54,5 +55,5 @@ def puede_ver_conversacion(usuario, conv):
     if rol == 'supervisor':
         return True
     if rol == 'asesor':
-        return conv.asignado_a_id == usuario.id
+        return conv.asignado_a_id == usuario.id or conv.asignado_a_id is None
     return False

@@ -181,9 +181,17 @@ class SessionRoomConsumer(AsyncWebsocketConsumer):
     def get_conversacion_data(self, conversacion_id):
         try:
             conversacion = ConversacionWhatsApp.objects.filter(
-                contacto__sesion__usuario__id=self.user.id, id=conversacion_id
-            ).select_related('contacto').first()
+                id=conversacion_id
+            ).select_related('contacto', 'contacto__sesion').first()
             if not conversacion:
+                return {'html': '', 'nombre': '', 'preview': ''}
+            sesion_conv = conversacion.contacto.sesion
+            permitido = (
+                getattr(self.user, 'is_superuser', False)
+                or sesion_conv.usuario_id == getattr(self.user, 'id', None)
+                or sesion_conv.es_participante(self.user)
+            )
+            if not permitido:
                 return {'html': '', 'nombre': '', 'preview': ''}
             from datetime import timedelta as _td
             from django.utils import timezone as _tz
