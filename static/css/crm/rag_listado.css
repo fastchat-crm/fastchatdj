@@ -1,0 +1,70 @@
+.rag-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.rag-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: .75rem;
+    padding: 1rem 1.25rem;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .05);
+}
+
+.rag-card h5 {
+    margin-bottom: .25rem;
+}
+
+.rag-card .rag-desc {
+    color: #6b7280;
+    font-size: .85rem;
+    min-height: 2.2em;
+}
+
+.rag-metricas {
+    display: flex;
+    gap: 1rem;
+    margin: .5rem 0 .75rem;
+    font-size: .85rem;
+}
+
+.rag-metricas b {
+    display: block;
+    font-size: 1.1rem;
+}
+
+.rag-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+}
+
+.rag-vacio {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #6b7280;
+}
+
+.rag-vacio i {
+    font-size: 2.5rem;
+    margin-bottom: .75rem;
+    display: block;
+}
+
+.rag-fuente-error {
+    color: #dc2626;
+    font-size: .8rem;
+}
+
+#rag-prueba-resultados .rag-chunk {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: .5rem;
+    padding: .5rem .75rem;
+    margin-bottom: .5rem;
+    font-size: .85rem;
+    white-space: pre-wrap;
+}

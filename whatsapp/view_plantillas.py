@@ -219,6 +219,15 @@ def _manejar_post(request, data):
                         'error': True,
                         'message': f'No se puede someter en estado {plantilla.get_estado_meta_display()}.'
                     })
+                import re as _re
+                _cuerpo_pl = (plantilla.cuerpo or '').strip()
+                if _re.search(r'^\{\{\d+\}\}', _cuerpo_pl) or _re.search(r'\{\{\d+\}\}$', _cuerpo_pl):
+                    return JsonResponse({
+                        'error': True,
+                        'message': 'Meta no permite que el cuerpo empiece o termine con una variable '
+                                   '({{N}}). Agrega texto antes de la primera variable o después de la '
+                                   'última (ej. "¡Gracias!") y vuelve a someter.',
+                    })
                 from .services_meta import MetaWhatsAppService
                 result = MetaWhatsAppService().crear_plantilla_en_meta(
                     plantilla.config_meta.sesion.session_id, plantilla

@@ -13,11 +13,29 @@ La persistencia (confirmar plantillas) es responsabilidad de la view porque
 no toca el LLM.
 """
 import logging
+import re
 
 from .base import IAActionError, invocar_json
 from .prompts import get_prompt
 
 logger = logging.getLogger(__name__)
+
+_VAR_INICIO = re.compile(r'^\s*\{\{\d+\}\}')
+_VAR_FIN = re.compile(r'\{\{\d+\}\}\s*$')
+
+
+def ajustar_variables_extremos(cuerpo: str) -> str:
+    """Meta rechaza plantillas cuyo cuerpo empieza o termina con una variable
+    (error 2388299). Si la IA igual las genera asi, se agrega texto literal
+    en el extremo afectado para que la plantilla sea aceptable."""
+    cuerpo = (cuerpo or '').strip()
+    if not cuerpo:
+        return cuerpo
+    if _VAR_INICIO.search(cuerpo):
+        cuerpo = f'Hola {cuerpo}'
+    if _VAR_FIN.search(cuerpo):
+        cuerpo = f'{cuerpo} ¡Gracias!'
+    return cuerpo
 
 
 # ============================================================================
@@ -83,6 +101,9 @@ def generar_uno(*, descripcion_usuario: str, sesion) -> dict:
         temperature=0.4,
     )
 
+    if isinstance(plantilla, dict) and plantilla.get('cuerpo'):
+        plantilla['cuerpo'] = ajustar_variables_extremos(str(plantilla['cuerpo']))
+
     return {
         'plantilla': plantilla,
         'tokens': tokens,
@@ -113,7 +134,7 @@ def _sanitizar_plantilla(p: dict) -> dict:
         'categoria':        cat,
         'header_tipo':      ht,
         'header_contenido': _sanitizar_header_meta(p.get('header_contenido') or '') if ht == 'TEXT' else '',
-        'cuerpo':           (str(p.get('cuerpo') or '').strip())[:1024],
+        'cuerpo':           ajustar_variables_extremos(str(p.get('cuerpo') or ''))[:1024],
         'footer':           _sanitizar_header_meta(p.get('footer') or ''),
     }
 

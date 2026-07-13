@@ -99,6 +99,11 @@ class SesionWhatsApp(ModeloBase):
     #IDIOMA
     language = models.CharField('Idioma', max_length=50, choices=LANGUAGES, default='es')
     agente_ia = models.ForeignKey('crm.AgentesIA', on_delete=models.PROTECT, null=True, blank=True)
+    rag_coleccion = models.ForeignKey(
+        'crm.RagColeccion', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='sesiones', verbose_name='Colección RAG',
+        help_text='Conocimiento RAG propio de esta sesión/número (independiente del agente).',
+    )
     proveedor = models.CharField(
         max_length=20, choices=PROVEEDORES_SESION, default='baileys',
         verbose_name='Proveedor WhatsApp',

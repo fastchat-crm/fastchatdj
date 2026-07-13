@@ -692,6 +692,21 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                     from crm.helpers_asignacion import _marcar_ultima_asignacion
                     _marcar_ultima_asignacion(request.user)
                     log(f"Conversación {conversacion.id} tomada por el asesor", request, "change", obj=conversacion.id)
+                    # Presentación automática al cliente (mismo patrón que el
+                    # mensaje de handoff de asignar-conversacion).
+                    try:
+                        nombre_asesor = request.user.get_full_name() or request.user.username
+                        service_tomar = get_whatsapp_service(conversacion.sesion)
+                        service_tomar.send_text_message(
+                            conversacion.sesion.session_id,
+                            conversacion.contacto.from_number,
+                            f'Hola 👋 Soy {nombre_asesor}, tu asesor y te guiaré en este proceso.',
+                            conversacion_id=conversacion.id,
+                            simularEscritura=True,
+                        )
+                    except Exception:
+                        logging.getLogger(__name__).exception(
+                            'No pude enviar la presentación del asesor conv#%s', conversacion.id)
                     try:
                         from asgiref.sync import async_to_sync
                         from channels.layers import get_channel_layer

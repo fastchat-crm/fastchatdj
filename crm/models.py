@@ -2127,3 +2127,108 @@ class ClienteOrigen(ModeloBase):
 
     def __str__(self):
         return f'{self.cliente_id} · {self.numero or "?"}'
+
+
+RAG_FUENTE_TIPOS = (
+    (1, 'Enlace'),
+    (2, 'Archivo'),
+    (3, 'Texto'),
+)
+
+RAG_FUENTE_ESTADOS = (
+    ('pendiente', 'Pendiente'),
+    ('indexado', 'Indexado'),
+    ('error', 'Error'),
+)
+
+
+class RagColeccion(ModeloBase):
+    """Colección de conocimiento RAG independiente del agente.
+
+    Fase 1 (almacenamiento): el operador crea la colección, sube fuentes y las
+    indexa a un FAISS propio (`media/vectorstores/rag_col_<id>/`). Una colección
+    puede asociarse a una o varias sesiones WhatsApp
+    (`SesionWhatsApp.rag_coleccion`) — el consumo en el chat llega en fase 2.
+    """
+    perfil = models.ForeignKey(
+        PerfilNegocioIA, on_delete=models.CASCADE,
+        related_name='rag_colecciones', verbose_name='Perfil de negocio',
+    )
+    nombre = models.CharField('Nombre', max_length=150)
+    descripcion = models.TextField('Descripción', blank=True, default='')
+    apikey = models.ForeignKey(
+        'crm.ApiKeyIA', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='rag_colecciones', verbose_name='API Key para embeddings',
+        help_text='Si está vacía se usa la primera API Key activa del perfil.',
+    )
+    vectorstore_path = models.CharField('Ruta del índice FAISS', max_length=1000, blank=True, default='')
+    total_chunks = models.PositiveIntegerField('Chunks indexados', default=0)
+    ultima_indexacion = models.DateTimeField('Última indexación', null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Colección RAG'
+        verbose_name_plural = 'Colecciones RAG'
+        ordering = ['-fecha_registro']
+
+    def __str__(self):
+        return self.nombre
+
+    def ruta_indice(self):
+        import os
+        from django.conf import settings
+        return os.path.join(settings.MEDIA_ROOT, 'vectorstores', f'rag_col_{self.id}')
+
+    def fuentes_activas(self):
+        return self.fuentes.filter(status=True)
+
+    def fuentes_pendientes(self):
+        return self.fuentes.filter(status=True, estado='pendiente')
+
+    def apikey_efectiva(self):
+        if self.apikey and self.apikey.estado:
+            return self.apikey
+        return ApiKeyIA.objects.filter(
+            perfil=self.perfil, estado=True, status=True,
+        ).exclude(descripcion='').first()
+
+
+class RagFuente(ModeloBase):
+    """Una fuente de conocimiento dentro de una colección RAG:
+    enlace, archivo (Tika/OCR) o texto pegado."""
+    coleccion = models.ForeignKey(
+        RagColeccion, on_delete=models.CASCADE,
+        related_name='fuentes', verbose_name='Colección',
+    )
+    tipo = models.PositiveSmallIntegerField('Tipo', choices=RAG_FUENTE_TIPOS, default=2)
+    titulo = models.CharField('Título', max_length=200, blank=True, default='')
+    enlace = models.URLField('Enlace', max_length=600, blank=True, default='')
+    archivo = models.FileField(
+        upload_to='rag_colecciones/', blank=True, null=True, verbose_name='Archivo',
+        validators=[FileExtensionValidator([
+            'pdf', 'csv', 'json', 'xlsx', 'txt', 'md',
+            'doc', 'docx', 'ppt', 'pptx', 'odt', 'odp', 'ods', 'rtf', 'epub', 'html', 'htm',
+            'png', 'jpg', 'jpeg', 'tif', 'tiff', 'bmp', 'webp',
+        ]), FileMaxSizeInMbValidator(10)],
+    )
+    texto = models.TextField('Texto', blank=True, default='')
+    estado = models.CharField('Estado', max_length=12, choices=RAG_FUENTE_ESTADOS, default='pendiente')
+    error_detalle = models.TextField('Detalle del error', blank=True, default='')
+    chunks = models.PositiveIntegerField('Chunks generados', default=0)
+
+    class Meta:
+        verbose_name = 'Fuente RAG'
+        verbose_name_plural = 'Fuentes RAG'
+        ordering = ['-fecha_registro']
+
+    def __str__(self):
+        return self.titulo or f'Fuente #{self.id}'
+
+    def nombre_visible(self):
+        if self.titulo:
+            return self.titulo
+        if self.tipo == 2 and self.archivo:
+            import os
+            return os.path.basename(self.archivo.name)
+        if self.tipo == 1:
+            return self.enlace[:80]
+        return (self.texto or '')[:60] or f'Fuente #{self.id}'

@@ -44,10 +44,18 @@ def index(request):
     hace_7d = ahora - timedelta(days=7)
     mes_ini = ahora.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
+    # Sesiones del panel: las que el usuario creó (dueño) MÁS las que tiene
+    # asignadas vía PerfilSesionWhatsApp (supervisor o asesor). Un asesor sin
+    # sesiones propias ve igual el resumen de sus sesiones asignadas.
+    q_mis_sesiones = Q(usuario=persona) | Q(
+        perfilsesionwhatsapp__usuario=persona,
+        perfilsesionwhatsapp__status=True,
+    )
     sesiones_qs = (
         SesionWhatsApp.objects
-        .filter(status=True, usuario=persona)
+        .filter(q_mis_sesiones, status=True)
         .select_related('config_meta', 'config_baileys', 'agente_ia')
+        .distinct()
     )
 
     stats_sesiones = sesiones_qs.aggregate(
@@ -106,40 +114,35 @@ def index(request):
     )
 
     contactos_total = Contacto.objects.filter(
-        status=True, sesion__usuario=persona, sesion__status=True,
+        status=True, sesion__in=sesiones_qs,
     ).count()
 
     convs_abiertas_total = ConversacionWhatsApp.objects.sin_expirar.filter(
         status=True,
         contacto__status=True,
-        contacto__sesion__usuario=persona,
-        contacto__sesion__status=True,
+        contacto__sesion__in=sesiones_qs,
     ).count()
 
     convs_no_asignadas = ConversacionWhatsApp.objects.sin_expirar.filter(
         status=True,
         contacto__status=True,
         asignado_a__isnull=True,
-        contacto__sesion__usuario=persona,
-        contacto__sesion__status=True,
+        contacto__sesion__in=sesiones_qs,
     ).count()
 
     convs_mes_actual = ConversacionWhatsApp.objects.filter(
         status=True,
-        contacto__sesion__usuario=persona,
-        contacto__sesion__status=True,
+        contacto__sesion__in=sesiones_qs,
         fecha_registro__gte=mes_ini,
     ).count()
 
     mensajes_24h = MensajeWhatsApp.objects.filter(
-        conversacion__contacto__sesion__usuario=persona,
-        conversacion__contacto__sesion__status=True,
+        conversacion__contacto__sesion__in=sesiones_qs,
         fecha__gte=hace_24h,
     ).count()
 
     mensajes_7d = MensajeWhatsApp.objects.filter(
-        conversacion__contacto__sesion__usuario=persona,
-        conversacion__contacto__sesion__status=True,
+        conversacion__contacto__sesion__in=sesiones_qs,
         fecha__gte=hace_7d,
     ).count()
 
@@ -148,8 +151,7 @@ def index(request):
         dia_ini = (ahora - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
         dia_fin = dia_ini + timedelta(days=1)
         n = MensajeWhatsApp.objects.filter(
-            conversacion__contacto__sesion__usuario=persona,
-            conversacion__contacto__sesion__status=True,
+            conversacion__contacto__sesion__in=sesiones_qs,
             fecha__gte=dia_ini, fecha__lt=dia_fin,
         ).count()
         serie_7d.append({'label': dia_ini.strftime('%a'), 'valor': n})

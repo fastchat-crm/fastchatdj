@@ -202,6 +202,18 @@ Validators en `archivo`: `FileExtensionValidator(['pdf','csv','json','xlsx'])`
      `{MEDIA_ROOT}/vectorstores/agente_{id}/`.
 4. Si embedding falla → `ApiKeyIA.estado=False`, `msgerror=...`.
 
+**`RagColeccion` + `RagFuente`** (`crm/models.py`, final del archivo — 2026-07-13,
+fase 1 del RAG por sesión). Colección de conocimiento independiente del agente:
+fuentes enlace/archivo/texto con estado de indexación (`pendiente|indexado|error`),
+FAISS propio en `media/vectorstores/rag_col_<id>/`, `apikey` opcional (fallback a
+la primera activa del perfil, `apikey_efectiva()`). Se vincula a sesiones vía
+`SesionWhatsApp.rag_coleccion` (FK, `related_name='sesiones'`). Motor:
+`agents_ai/rag/colecciones.py` (`indexar_coleccion` / `consultar_coleccion`).
+UI: `/crm/rag/` (`crm/view_rag.py`, template `templates/crm/rag/listado.html`).
+Migraciones pendientes de correr por el developer. Fase 2 (pendiente): grafo de
+consulta router→retrieve→respond con memoria resumida, consumido desde
+`AgenteConsultor` cuando la sesión tenga colección.
+
 **`ApiKeyIA`** (`crm/models.py:928-967`) — credencial LLM.
 
 | Campo | Tipo |

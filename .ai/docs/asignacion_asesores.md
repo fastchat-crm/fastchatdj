@@ -197,7 +197,7 @@ los afecta.
 
 | Archivo | Rol |
 |---|---|
-| `crm/helpers_asignacion.py` | Fuente única: `candidatos_ordenados`, `auto_asignar_agente`, `asesores_disponibles_sesion`, notificación |
+| `crm/helpers_asignacion.py` | Fuente única: `candidatos_ordenados`, `auto_asignar_agente`, `asesores_disponibles_sesion`, notificación. `notificar_agente_asignado` dispara TRIPLE aviso: Notificacion interna (+push), correo con link, y WhatsApp al teléfono del agente (`_avisar_agente_por_whatsapp`, usa la sesión de la conversación; normaliza 09XXXXXXXX → 593...; en Meta puede fallar fuera de la ventana 24h — best-effort logueado) |
 | `whatsapp/services_round_robin.py` | Round-robin (lock + traza), delega el pool |
 | `whatsapp/forms.py` (`AsignarAgenteForm`) | Dropdown manual, pool por sesión |
 | `crm/helpers_correo_flujo.py` | Notificación del flujo a asesores disponibles de la sesión |

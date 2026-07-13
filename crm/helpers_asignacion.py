@@ -263,10 +263,53 @@ def _ultimo_mensaje_cliente(conv):
         return ''
 
 
-def notificar_agente_asignado(conversacion, agente, motivo='handoff', asignador=None):
-    """Crea la Notificacion interna (→ dispara push) y envía correo al agente.
+def _numero_whatsapp_agente(agente):
+    """Número del agente normalizado a dígitos E.164. Formato local de
+    Ecuador (09XXXXXXXX) se convierte a 5939XXXXXXXX."""
+    crudo = (getattr(agente, 'telefono', '') or getattr(agente, 'celular', '') or '')
+    numero = ''.join(filter(str.isdigit, str(crudo)))
+    if not numero:
+        return ''
+    if len(numero) == 10 and numero.startswith('0'):
+        numero = '593' + numero[1:]
+    return numero
 
-    No falla si el correo o el push fallan — el side-effect es best-effort.
+
+def _avisar_agente_por_whatsapp(conversacion, agente, titulo, link_chat, motivo_label):
+    """Envía al TELÉFONO del agente un WhatsApp con el aviso de asignación y el
+    link directo a la conversación, usando la propia sesión de la conversación.
+
+    Best-effort: en sesiones Meta el envío puede fallar fuera de la ventana de
+    24h (requiere plantilla) — queda logueado sin romper la asignación.
+    """
+    telefono = _numero_whatsapp_agente(agente)
+    sesion = getattr(getattr(conversacion, 'contacto', None), 'sesion', None)
+    if not telefono or not sesion or not getattr(sesion, 'activo', False):
+        return False
+    try:
+        from whatsapp.services import get_whatsapp_service
+        destino = telefono
+        if getattr(sesion, 'es_baileys', False):
+            destino = f'{telefono}@s.whatsapp.net'
+        texto = (
+            f'🔔 {titulo}.\n'
+            f'{motivo_label}.\n'
+            f'Revisa y responde aquí: {link_chat}'
+        )
+        service = get_whatsapp_service(sesion)
+        respuesta = service.send_text_message(sesion.session_id, destino, texto)
+        return bool(respuesta.get('success'))
+    except Exception:
+        logger.exception('No se pudo avisar por WhatsApp al agente %s conv %s',
+                         getattr(agente, 'id', None), conversacion.id)
+        return False
+
+
+def notificar_agente_asignado(conversacion, agente, motivo='handoff', asignador=None):
+    """Crea la Notificacion interna (→ dispara push), envía correo al agente y
+    le manda un WhatsApp a su teléfono con el link de la conversación.
+
+    No falla si el correo, el push o el WhatsApp fallan — todo es best-effort.
     """
     if not agente:
         return False
@@ -335,6 +378,8 @@ def notificar_agente_asignado(conversacion, agente, motivo='handoff', asignador=
         except Exception:
             logger.exception('Fallo enviando email de asignación a %s conv %s',
                              email, conversacion.id)
+
+    _avisar_agente_por_whatsapp(conversacion, agente, titulo, link_chat, motivo_label)
     return True
 
 
