@@ -2129,6 +2129,44 @@ class ClienteOrigen(ModeloBase):
         return f'{self.cliente_id} · {self.numero or "?"}'
 
 
+CANALES_NOTIF_ASIGNACION = (
+    ('interna', 'Notificación interna'),
+    ('correo', 'Correo'),
+    ('whatsapp', 'WhatsApp'),
+)
+
+
+class LogNotificacionAsignacion(ModeloBase):
+    """Trazabilidad de cada aviso enviado al asesor cuando se le asigna una
+    conversación (interna/correo/WhatsApp). Un registro por canal e intento,
+    con éxito o detalle del fallo — permite auditar si el asesor fue avisado."""
+    conversacion = models.ForeignKey(
+        'whatsapp.ConversacionWhatsApp', on_delete=models.CASCADE,
+        related_name='logs_notificacion_asignacion', verbose_name='Conversación',
+    )
+    agente = models.ForeignKey(
+        'autenticacion.Usuario', on_delete=models.CASCADE,
+        related_name='logs_notificacion_asignacion', verbose_name='Agente',
+    )
+    canal = models.CharField('Canal', max_length=12, choices=CANALES_NOTIF_ASIGNACION)
+    motivo = models.CharField('Motivo', max_length=30, blank=True, default='')
+    destino = models.CharField('Destino', max_length=200, blank=True, default='')
+    exito = models.BooleanField('Éxito', default=False)
+    detalle = models.TextField('Detalle', blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Log de notificación de asignación'
+        verbose_name_plural = 'Logs de notificación de asignación'
+        ordering = ['-fecha_registro']
+        indexes = [
+            models.Index(fields=['conversacion']),
+            models.Index(fields=['agente']),
+        ]
+
+    def __str__(self):
+        return f'Conv #{self.conversacion_id} → {self.agente_id} [{self.canal}] {"✓" if self.exito else "✗"}'
+
+
 RAG_FUENTE_TIPOS = (
     (1, 'Enlace'),
     (2, 'Archivo'),

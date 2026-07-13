@@ -818,6 +818,27 @@
             });
         }
     </script>
+    <script>
+        function verLogsNotif(id) {
+            if (typeof pantallaespera === 'function') pantallaespera();
+            $.get(window.location.pathname, { action: 'logs_notificaciones', id: id }, function (r) {
+                $.unblockUI();
+                if (r && r.result === true) {
+                    Swal.fire({
+                        title: 'Avisos al asesor',
+                        html: '<div style="text-align:left;max-height:60vh;overflow:auto;">' + r.data + '</div>',
+                        width: '900px',
+                        confirmButtonText: 'Cerrar'
+                    });
+                } else {
+                    if (typeof mensajeWarning === 'function') mensajeWarning((r && r.message) || 'No se pudo cargar el log.');
+                }
+            }, 'json').fail(function () {
+                $.unblockUI();
+                if (typeof mensajeWarning === 'function') mensajeWarning('Error de conexión.');
+            });
+        }
+    </script>
     <script src="{% static 'stylenew/sesiones.js' %}?v=9"></script>
 {% endblock %}
 {% block jscript %}

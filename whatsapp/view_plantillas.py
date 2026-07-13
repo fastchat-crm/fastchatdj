@@ -80,6 +80,18 @@ def plantillasView(request):
         data['categoria_info'] = CATEGORIA_INFO
         return render(request, 'whatsapp/plantillas/form.html', data)
 
+    if action == 'ver':
+        pk = request.GET.get('pk')
+        plantilla = PlantillaWhatsApp.objects.filter(
+            id=pk, config_meta__sesion__usuario=request.user
+        ).select_related('config_meta', 'config_meta__sesion').first()
+        if not plantilla:
+            return JsonResponse({'error': True, 'message': 'Plantilla no encontrada.'})
+        from django.template.loader import render_to_string
+        html = render_to_string('whatsapp/plantillas/_modal_ver.html',
+                                {'p': plantilla}, request=request)
+        return JsonResponse({'error': False, 'html': html, 'nombre': plantilla.nombre})
+
     if action == 'change':
         pk = request.GET.get('pk')
         plantilla = PlantillaWhatsApp.objects.filter(
@@ -272,6 +284,52 @@ def _manejar_post(request, data):
 
             elif action == 'confirmar_plantillas_ia':
                 return _confirmar_plantillas_ia(request)
+
+            elif action == 'editar_con_ia':
+                # Edita una plantilla existente con IA segun instruccion libre.
+                # Trazabilidad: invocar_json registra ConsumoTokenIA
+                # (origen='plantilla') + log de auditoria con la instruccion.
+                from agents_ai.ai_actions import IAActionError
+                from agents_ai.ai_actions import plantillas_wa
+                pk = int(request.POST.get('id'))
+                instruccion = (request.POST.get('instruccion') or '').strip()
+                plantilla = PlantillaWhatsApp.objects.filter(
+                    id=pk, config_meta__sesion__usuario=request.user
+                ).select_related('config_meta__sesion', 'config_meta__sesion__agente_ia').first()
+                if not plantilla:
+                    return JsonResponse({'error': True, 'message': 'Plantilla no encontrada.'})
+                if plantilla.estado_meta not in ('BORRADOR', 'REJECTED'):
+                    return JsonResponse({
+                        'error': True,
+                        'message': 'Solo se pueden editar con IA plantillas en BORRADOR o RECHAZADAS.',
+                    })
+                sesion = plantilla.config_meta.sesion
+                apikey = _get_apikey_para_ia(request, sesion)
+                try:
+                    resultado = plantillas_wa.editar_uno(
+                        plantilla=plantilla,
+                        instruccion=instruccion,
+                        apikey_obj=apikey,
+                        agente=getattr(sesion, 'agente_ia', None),
+                    )
+                except IAActionError as ex:
+                    return JsonResponse({'error': True, 'message': str(ex)})
+                except Exception as ex:
+                    logger.exception('Error editando plantilla con IA')
+                    return JsonResponse({'error': True, 'message': f'Error del LLM: {str(ex)[:500]}'})
+                for campo, valor in resultado['campos'].items():
+                    setattr(plantilla, campo, valor)
+                plantilla.save()
+                log(f"Plantilla #{plantilla.id} ({plantilla.nombre}) editada con IA: {instruccion[:150]}",
+                    request, "change", obj=plantilla.id)
+                return JsonResponse({
+                    'error': False,
+                    'message': 'Plantilla actualizada con IA.',
+                    'cuerpo': plantilla.cuerpo,
+                    'footer': plantilla.footer,
+                    'header_contenido': plantilla.header_contenido,
+                    'tokens': resultado.get('tokens'),
+                })
 
             elif action == 'generar_con_ia':
                 # Wrapper HTTP: la logica IA vive en

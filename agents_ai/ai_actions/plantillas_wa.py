@@ -112,6 +112,79 @@ def generar_uno(*, descripcion_usuario: str, sesion) -> dict:
 
 
 # ============================================================================
+# Edicion asistida de una plantilla existente (action 'editar_con_ia')
+# ============================================================================
+def editar_uno(*, plantilla, instruccion: str, apikey_obj, agente=None) -> dict:
+    """Edita UNA plantilla existente via LLM segun la instruccion del usuario.
+
+    No persiste — devuelve los campos nuevos ya sanitizados; la view decide
+    guardar. Registra ConsumoTokenIA (origen='plantilla') via invocar_json.
+
+    Returns:
+        dict con keys: campos (dict listo para setattr), tokens, modelo.
+
+    Raises:
+        IAActionError — instruccion corta, sin apikey, JSON invalido o LLM error.
+    """
+    import json as _json
+
+    instruccion = (instruccion or '').strip()
+    if len(instruccion) < 5:
+        raise IAActionError('Describe qué quieres cambiar de la plantilla.')
+    if not apikey_obj:
+        raise IAActionError('No hay API Key IA activa. Configura una en CRM → Entrenamiento.')
+
+    plantilla_json = _json.dumps({
+        'nombre': plantilla.nombre,
+        'idioma': plantilla.idioma,
+        'categoria': plantilla.categoria,
+        'header_tipo': plantilla.header_tipo,
+        'header_contenido': plantilla.header_contenido or '',
+        'cuerpo': plantilla.cuerpo or '',
+        'footer': plantilla.footer or '',
+    }, ensure_ascii=False, indent=2)
+
+    prompt = get_prompt(
+        'plantillas_wa.editar',
+        plantilla_json=plantilla_json,
+        instruccion=instruccion,
+    )
+
+    payload, tokens, modelo = invocar_json(
+        prompt,
+        apikey_obj=apikey_obj,
+        origen='plantilla',
+        agente=agente,
+        prompt_preview=f'editar #{plantilla.id}: {instruccion}'[:300],
+        max_tokens=4000,
+        temperature=0.4,
+    )
+
+    if not isinstance(payload, dict) or not str(payload.get('cuerpo') or '').strip():
+        raise IAActionError('La IA no devolvió una plantilla válida. Intenta con otra instrucción.')
+
+    from whatsapp.services_meta import _sanitizar_header_meta
+
+    cat = str(payload.get('categoria') or plantilla.categoria).upper()
+    ht = str(payload.get('header_tipo') or plantilla.header_tipo).upper()
+    header_contenido = str(payload.get('header_contenido') or '')
+    if ht == 'TEXT':
+        header_contenido = _sanitizar_header_meta(header_contenido)
+
+    return {
+        'campos': {
+            'categoria': cat if cat in VALID_CATEGORIAS else plantilla.categoria,
+            'header_tipo': ht if ht in HEADER_TIPOS_OK else plantilla.header_tipo,
+            'header_contenido': header_contenido,
+            'cuerpo': ajustar_variables_extremos(str(payload['cuerpo']))[:1024],
+            'footer': _sanitizar_header_meta(str(payload.get('footer') or '')),
+        },
+        'tokens': tokens,
+        'modelo': modelo,
+    }
+
+
+# ============================================================================
 # Generador lote (mantiene el flujo del action 'preview_plantillas_ia')
 # ============================================================================
 def _sanitizar_plantilla(p: dict) -> dict:

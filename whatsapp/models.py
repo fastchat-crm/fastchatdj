@@ -1781,6 +1781,18 @@ class PlantillaWhatsApp(ModeloBase):
     def __str__(self):
         return f"{self.nombre} ({self.idioma}) · {self.get_estado_meta_display()}"
 
+    def save(self, *args, **kwargs):
+        # Regla dura de Meta (error 2388299): el cuerpo no puede empezar ni
+        # terminar con una variable {{N}}. Se corrige acá para que TODOS los
+        # caminos (form manual, generador IA, editar con IA, confirmar lote)
+        # queden cubiertos sin repetir la lógica.
+        try:
+            from agents_ai.ai_actions.plantillas_wa import ajustar_variables_extremos
+            self.cuerpo = ajustar_variables_extremos(self.cuerpo or '')[:1024]
+        except Exception:
+            pass
+        super().save(*args, **kwargs)
+
     @property
     def aprobada(self):
         return self.estado_meta == 'APPROVED'

@@ -263,6 +263,24 @@ def _ultimo_mensaje_cliente(conv):
         return ''
 
 
+def _log_notif(conversacion, agente, canal, motivo, destino, exito, detalle=''):
+    """Persiste la traza de un aviso de asignación (best-effort, nunca rompe)."""
+    try:
+        from crm.models import LogNotificacionAsignacion
+        LogNotificacionAsignacion.objects.create(
+            conversacion=conversacion,
+            agente=agente,
+            canal=canal,
+            motivo=(motivo or '')[:30],
+            destino=(destino or '')[:200],
+            exito=bool(exito),
+            detalle=(detalle or '')[:1000],
+        )
+    except Exception:
+        logger.exception('No se pudo registrar LogNotificacionAsignacion conv=%s canal=%s',
+                         getattr(conversacion, 'id', None), canal)
+
+
 def _numero_whatsapp_agente(agente):
     """Número del agente normalizado a dígitos E.164. Formato local de
     Ecuador (09XXXXXXXX) se convierte a 5939XXXXXXXX."""
@@ -275,16 +293,19 @@ def _numero_whatsapp_agente(agente):
     return numero
 
 
-def _avisar_agente_por_whatsapp(conversacion, agente, titulo, link_chat, motivo_label):
+def _avisar_agente_por_whatsapp(conversacion, agente, titulo, link_chat, motivo_label, motivo=''):
     """Envía al TELÉFONO del agente un WhatsApp con el aviso de asignación y el
     link directo a la conversación, usando la propia sesión de la conversación.
 
     Best-effort: en sesiones Meta el envío puede fallar fuera de la ventana de
-    24h (requiere plantilla) — queda logueado sin romper la asignación.
+    24h (requiere plantilla) — queda logueado sin romper la asignación. Cada
+    intento se persiste en `LogNotificacionAsignacion`.
     """
     telefono = _numero_whatsapp_agente(agente)
     sesion = getattr(getattr(conversacion, 'contacto', None), 'sesion', None)
     if not telefono or not sesion or not getattr(sesion, 'activo', False):
+        _log_notif(conversacion, agente, 'whatsapp', motivo, telefono, False,
+                   'Sin teléfono del agente o sesión inactiva.')
         return False
     try:
         from whatsapp.services import get_whatsapp_service
@@ -298,10 +319,14 @@ def _avisar_agente_por_whatsapp(conversacion, agente, titulo, link_chat, motivo_
         )
         service = get_whatsapp_service(sesion)
         respuesta = service.send_text_message(sesion.session_id, destino, texto)
-        return bool(respuesta.get('success'))
-    except Exception:
+        exito = bool(respuesta.get('success'))
+        _log_notif(conversacion, agente, 'whatsapp', motivo, telefono, exito,
+                   '' if exito else str(respuesta.get('error') or 'Fallo de envío'))
+        return exito
+    except Exception as ex:
         logger.exception('No se pudo avisar por WhatsApp al agente %s conv %s',
                          getattr(agente, 'id', None), conversacion.id)
+        _log_notif(conversacion, agente, 'whatsapp', motivo, telefono, False, str(ex))
         return False
 
 
@@ -348,9 +373,11 @@ def notificar_agente_asignado(conversacion, agente, motivo='handoff', asignador=
             prioridad=2,
             tipo=3,
         )
-    except Exception:
+        _log_notif(conversacion, agente, 'interna', motivo, agente.username, True)
+    except Exception as ex:
         logger.exception('No se pudo crear Notificacion para agente %s conv %s',
                          getattr(agente, 'id', None), conversacion.id)
+        _log_notif(conversacion, agente, 'interna', motivo, agente.username, False, str(ex))
 
     email = (getattr(agente, 'email', '') or '').strip()
     if email:
@@ -375,11 +402,16 @@ def notificar_agente_asignado(conversacion, agente, motivo='handoff', asignador=
                 [email],
                 [],
             )
-        except Exception:
+            _log_notif(conversacion, agente, 'correo', motivo, email, True)
+        except Exception as ex:
             logger.exception('Fallo enviando email de asignación a %s conv %s',
                              email, conversacion.id)
+            _log_notif(conversacion, agente, 'correo', motivo, email, False, str(ex))
+    else:
+        _log_notif(conversacion, agente, 'correo', motivo, '', False,
+                   'El agente no tiene correo configurado.')
 
-    _avisar_agente_por_whatsapp(conversacion, agente, titulo, link_chat, motivo_label)
+    _avisar_agente_por_whatsapp(conversacion, agente, titulo, link_chat, motivo_label, motivo=motivo)
     return True
 
 

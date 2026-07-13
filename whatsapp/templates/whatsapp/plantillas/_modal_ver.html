@@ -1,0 +1,58 @@
+<div class="d-flex flex-wrap gap-2 mb-3">
+    <span class="badge bg-{{ p.color_estado }}">{{ p.get_estado_meta_display }}</span>
+    <span class="badge bg-light text-dark border">{{ p.get_categoria_display }}</span>
+    <span class="badge bg-light text-dark border">{{ p.idioma }}</span>
+    <span class="badge bg-light text-dark border"><i class="fab fa-whatsapp text-success me-1"></i>{{ p.config_meta.sesion.nombre|default:p.config_meta.sesion.numero }}</span>
+</div>
+
+{% if p.header_tipo != 'NONE' %}
+    <p class="small fw-bold mb-1">Encabezado ({{ p.get_header_tipo_display }})</p>
+    {% if p.header_tipo == 'TEXT' %}
+        <p class="small bg-light border rounded p-2">{{ p.header_contenido|default:'—' }}</p>
+    {% else %}
+        <p class="small"><a href="{{ p.header_contenido }}" target="_blank">{{ p.header_contenido|truncatechars:80 }}</a></p>
+    {% endif %}
+{% endif %}
+
+<p class="small fw-bold mb-1">Cuerpo</p>
+<pre class="small bg-light border rounded p-2" style="white-space:pre-wrap;">{{ p.cuerpo }}</pre>
+
+{% if p.footer %}
+    <p class="small text-muted mb-2"><b>Pie:</b> {{ p.footer }}</p>
+{% endif %}
+
+{% if p.variables_json %}
+    <p class="small fw-bold mb-1">Variables</p>
+    <div class="d-flex flex-wrap gap-1 mb-2">
+        {% for v in p.variables_json %}
+            <span class="badge bg-light text-dark border">{{ forloop.counter }}: {{ v.nombre|default:'—' }} <span class="text-muted">({{ v.ejemplo|default:'sin ejemplo' }})</span></span>
+        {% endfor %}
+    </div>
+{% endif %}
+
+{% if p.botones_json %}
+    <p class="small fw-bold mb-1">Botones</p>
+    <div class="d-flex flex-wrap gap-1 mb-2">
+        {% for b in p.botones_json %}
+            <span class="badge bg-light text-dark border">{{ b.type }}: {{ b.text|default:'—' }}</span>
+        {% endfor %}
+    </div>
+{% endif %}
+
+<hr class="my-3">
+<p class="small fw-bold mb-2"><i class="fab fa-meta text-primary me-1"></i>Metadatos de Meta</p>
+<div class="table-responsive">
+    <table class="table table-sm table-bordered small mb-2">
+        <tbody>
+        <tr><th class="bg-light">ID en Meta</th><td>{% if p.id_meta %}<code>{{ p.id_meta }}</code>{% else %}Aún no enviada a Meta{% endif %}</td></tr>
+        <tr><th class="bg-light">Estado</th><td><span class="badge bg-{{ p.color_estado }}">{{ p.get_estado_meta_display }}</span></td></tr>
+        {% if p.motivo_rechazo %}
+            <tr><th class="bg-light">Motivo de rechazo</th><td class="text-danger">{{ p.motivo_rechazo }}</td></tr>
+        {% endif %}
+        <tr><th class="bg-light">Fecha de aprobación</th><td>{{ p.fecha_aprobacion|date:'d/m/Y H:i'|default:'—' }}</td></tr>
+        <tr><th class="bg-light">Última sincronización</th><td>{{ p.ultima_sincronizacion|date:'d/m/Y H:i'|default:'—' }}</td></tr>
+        <tr><th class="bg-light">Veces enviada</th><td>{{ p.veces_enviada }}{% if p.ultimo_envio %} · último: {{ p.ultimo_envio|date:'d/m/Y H:i' }}{% endif %}</td></tr>
+        <tr><th class="bg-light">Creada / modificada</th><td>{{ p.fecha_registro|date:'d/m/Y H:i' }} · {{ p.fecha_modificacion|date:'d/m/Y H:i' }}</td></tr>
+        </tbody>
+    </table>
+</div>

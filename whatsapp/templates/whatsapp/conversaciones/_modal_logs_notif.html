@@ -1,0 +1,47 @@
+<p class="small text-muted mb-2">{{ titulo_scope }}</p>
+{% if logs %}
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered small align-middle mb-0">
+            <thead>
+            <tr>
+                <th>Fecha</th>
+                {% if mostrar_conversacion %}<th>Conv.</th>{% endif %}
+                <th>Agente</th>
+                <th>Canal</th>
+                <th>Motivo</th>
+                <th>Destino</th>
+                <th class="text-center">Estado</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for l in logs %}
+                <tr>
+                    <td class="text-nowrap">{{ l.fecha_registro|date:'d/m/Y H:i' }}</td>
+                    {% if mostrar_conversacion %}<td>#{{ l.conversacion_id }}</td>{% endif %}
+                    <td>{{ l.agente.get_full_name|default:l.agente.username }}</td>
+                    <td>
+                        {% if l.canal == 'whatsapp' %}<i class="fab fa-whatsapp text-success me-1"></i>
+                        {% elif l.canal == 'correo' %}<i class="fa fa-envelope text-primary me-1"></i>
+                        {% else %}<i class="fa fa-bell text-warning me-1"></i>{% endif %}
+                        {{ l.get_canal_display }}
+                    </td>
+                    <td>{{ l.motivo|default:'—' }}</td>
+                    <td>{{ l.destino|default:'—'|truncatechars:35 }}</td>
+                    <td class="text-center">
+                        {% if l.exito %}
+                            <span class="badge bg-success">Enviado</span>
+                        {% else %}
+                            <span class="badge bg-danger" title="{{ l.detalle }}">Falló</span>
+                        {% endif %}
+                        {% if l.detalle %}
+                            <div class="text-danger small">{{ l.detalle|truncatechars:80 }}</div>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% else %}
+    <p class="text-muted mb-0"><i class="fa fa-bell-slash me-1"></i>Todavía no hay avisos de asignación registrados.</p>
+{% endif %}

@@ -1175,6 +1175,30 @@ def sesionesView(request):
     }
     addData(request, data)
 
+    if request.GET.get('action') == 'logs_notificaciones':
+        sesion_logs = SesionWhatsApp.objects.filter(
+            id=request.GET.get('id'), status=True,
+        ).first()
+        if not sesion_logs or not (
+            sesion_logs.usuario_id == request.user.id
+            or sesion_logs.es_participante(request.user)
+            or request.user.is_superuser
+        ):
+            return JsonResponse({'error': True, 'message': 'Sesión no encontrada o sin acceso.'})
+        from crm.models import LogNotificacionAsignacion
+        from django.template.loader import get_template as _get_template
+        logs = (
+            LogNotificacionAsignacion.objects
+            .filter(conversacion__contacto__sesion=sesion_logs, status=True)
+            .select_related('agente', 'conversacion')[:100]
+        )
+        html = _get_template('whatsapp/conversaciones/_modal_logs_notif.html').render({
+            'logs': logs,
+            'titulo_scope': f'Avisos de asignación de la sesión "{sesion_logs.nombre or sesion_logs.numero}" (últimos 100)',
+            'mostrar_conversacion': True,
+        })
+        return JsonResponse({'result': True, 'data': html})
+
     criterio = (request.GET.get('criterio') or '').strip()
     filtros = Q(status=True, usuario=request.user)
     if criterio:

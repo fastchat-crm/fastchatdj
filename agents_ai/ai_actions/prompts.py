@@ -144,6 +144,39 @@ PROMPTS = {
     ),
 
     # ─────────────────────────────────────────────────────────────────────
+    # WhatsApp — PlantillaWhatsApp (Meta) — edicion asistida de una existente
+    # Placeholders: {plantilla_json}, {instruccion}
+    # ─────────────────────────────────────────────────────────────────────
+    'plantillas_wa.editar': (
+        "Eres un experto en plantillas de WhatsApp Business (Meta Cloud API).\n"
+        "Edita la siguiente plantilla EXISTENTE aplicando la instruccion del usuario. "
+        "Manten intacto todo lo que la instruccion no pida cambiar.\n"
+        "\n"
+        "PLANTILLA ACTUAL (JSON):\n"
+        "{plantilla_json}\n"
+        "\n"
+        "INSTRUCCION DEL USUARIO:\n"
+        "{instruccion}\n"
+        "\n"
+        "Responde SOLO con un bloque JSON valido (sin markdown, sin texto extra):\n"
+        "{{\n"
+        '  "categoria": "UTILITY o MARKETING o AUTHENTICATION",\n'
+        '  "header_tipo": "NONE o TEXT o IMAGE o VIDEO o DOCUMENT",\n'
+        '  "header_contenido": "texto del header o vacio",\n'
+        '  "cuerpo": "texto principal con {{{{1}}}}, {{{{2}}}}... para variables",\n'
+        '  "footer": "pie opcional o vacio"\n'
+        "}}\n"
+        "\n"
+        "Reglas:\n"
+        "- NO cambies el nombre ni el idioma de la plantilla.\n"
+        "- Placeholders estrictamente {{{{1}}}}, {{{{2}}}}... en orden consecutivo.\n"
+        "- PROHIBIDO que el cuerpo empiece o termine con una variable: Meta rechaza "
+        "la plantilla (error 2388299). El cuerpo SIEMPRE abre y cierra con texto literal.\n"
+        "- header_contenido TEXT y footer: max 60 chars, sin emojis ni markdown.\n"
+        "- Escribe en espanol salvo que la plantilla original este en otro idioma.\n"
+    ),
+
+    # ─────────────────────────────────────────────────────────────────────
     # WhatsApp — PlantillaWhatsApp (Meta) — generacion en lote (N plantillas)
     # Placeholders: {n}, {descripcion}, {contexto_negocio}
     # ─────────────────────────────────────────────────────────────────────

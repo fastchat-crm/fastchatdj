@@ -75,6 +75,10 @@
                 <i class="fa fa-ellipsis-vertical"></i>
             </button>
             <div class="kebab-menu" data-kebab-menu>
+                <button type="button" class="kebab-item" onclick="verLogsNotif({{ sesion.id }})">
+                    <i class="fa fa-bell"></i> Avisos al asesor
+                </button>
+                <div class="kebab-sep"></div>
                 {% if sesion.es_instagram %}
                     <div class="kebab-heading">Instagram</div>
                     <a href="/instagram/sesiones/" class="kebab-item"><i class="fab fa-instagram"></i> Gestionar cuenta</a>

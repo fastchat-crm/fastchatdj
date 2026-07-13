@@ -474,6 +474,25 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                 return JsonResponse({'result': True, 'data': template.render(ctx, request)})
             except Exception as ex:
                 return JsonResponse({'result': False, 'message': str(ex)})
+        elif action == 'logs-notificaciones':
+            try:
+                conv = get_object_or_404(ConversacionWhatsApp, pk=int(request.GET['id']))
+                if not puede_ver_conversacion(request.user, conv):
+                    return JsonResponse({'error': True, 'message': 'No autorizado.'})
+                from crm.models import LogNotificacionAsignacion
+                logs = (
+                    LogNotificacionAsignacion.objects
+                    .filter(conversacion=conv, status=True)
+                    .select_related('agente')[:50]
+                )
+                template = get_template('whatsapp/conversaciones/_modal_logs_notif.html')
+                return JsonResponse({'result': True, 'data': template.render({
+                    'logs': logs,
+                    'titulo_scope': f'Avisos de asignación de la conversación #{conv.id}',
+                    'mostrar_conversacion': False,
+                })})
+            except Exception as ex:
+                return JsonResponse({'error': True, 'message': str(ex)})
         elif action == 'historial_mensajes':
             try:
                 conv = get_object_or_404(ConversacionWhatsApp, pk=int(request.GET['pk']))

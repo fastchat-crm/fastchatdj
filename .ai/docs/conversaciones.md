@@ -198,6 +198,7 @@ SENTIMIENTO_CHOICES  # muy_positiva / positiva / neutral / tibia / pasiva / nega
 | `listar_plantillas_meta` | 280 | Lista plantillas `APPROVED` de `sesion.config_meta` | JSON `{plantillas: [...]}` |
 | `ficha_cliente` | 477 | Ficha CRM de la conversación: clientes registrados + form de alta manual con prefill de variables del flujo (`_prefill_ficha_cliente`) | JSON + HTML de `_modal_ficha_cliente.html` |
 | `historial_cliente` / `historial_mensajes` | 471 / 495 | Historial de conversaciones/mensajes del contacto (`funcionesWhatsappConversacion`) | JSON |
+| `logs-notificaciones` | (GET) | Avisos de asignación enviados al asesor (interna/correo/WhatsApp) de esta conversación — `crm.LogNotificacionAsignacion`. Item "Avisos al asesor" (`form_modal`) en el dropdown del header, replicado en las 3 copias. La misma tabla se ve por sesión desde el kebab del tablero `/whatsapp/sesiones/` (action `logs_notificaciones` en `view_sesiones.py`) | JSON `{result, data}` con `_modal_logs_notif.html` |
 
 **Ficha estricta por conversación:** `_clientes_de_conversacion(conv)` (tope del
 módulo) solo matchea `Q(conversacion_origen=conv) | Q(origenes__conversacion=conv)`.
