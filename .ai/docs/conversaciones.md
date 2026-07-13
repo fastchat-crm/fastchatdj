@@ -190,6 +190,15 @@ SENTIMIENTO_CHOICES  # muy_positiva / positiva / neutral / tibia / pasiva / nega
 | `cambiar-nombre-contacto` | 259 | Form modal | JSON + HTML de `form.html` |
 | `asignar-conversacion` | 271 | Form modal con dropdown de agentes (anotados con carga de trabajo) | JSON + HTML de `form.html` |
 | `listar_plantillas_meta` | 280 | Lista plantillas `APPROVED` de `sesion.config_meta` | JSON `{plantillas: [...]}` |
+| `ficha_cliente` | 477 | Ficha CRM de la conversación: clientes registrados + form de alta manual con prefill de variables del flujo (`_prefill_ficha_cliente`) | JSON + HTML de `_modal_ficha_cliente.html` |
+| `historial_cliente` / `historial_mensajes` | 471 / 495 | Historial de conversaciones/mensajes del contacto (`funcionesWhatsappConversacion`) | JSON |
+
+**Ficha estricta por conversación:** `_clientes_de_conversacion(conv)` (tope del
+módulo) solo matchea `Q(conversacion_origen=conv) | Q(origenes__conversacion=conv)`.
+Clientes del mismo contacto registrados en conversaciones anteriores NO aparecen
+— la vista finalizadas reusa el mismo helper. El alta manual
+(`POST action=crear_cliente_manual`) delega en `crm.funciones_cliente.cliente_upsert`,
+que crea el `ClienteOrigen` amarrado a la conversación (unique `cliente+conversacion`).
 
 ### Acciones POST (`action=...`)
 

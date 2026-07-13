@@ -39,35 +39,17 @@ from .permisos_sesion import (
 
 
 def _clientes_de_conversacion(conv):
-    """Devuelve TODOS los Clientes (CRM) registrados desde una conversación.
+    """Devuelve los Clientes (CRM) registrados desde ESTA conversación.
 
-    Una conversación/contacto puede registrar varios clientes (el titular
-    inscribe a otras personas). Busca de forma robusta por:
-      - conversacion_origen / origenes.conversacion = esta conversación
-      - contacto_origen / origenes.contacto = el contacto de la conversación
-      - cédula(s) capturada(s) en las variables del flujo (cubre el caso de
-        cédula ya existente, donde el origen FK quedó en una conversación previa).
+    Estricto por conversación: solo matchea conversacion_origen /
+    origenes.conversacion = esta conversación. Una conversación puede registrar
+    varios clientes (el titular inscribe a otras personas), pero clientes del
+    mismo contacto registrados en conversaciones anteriores NO se muestran acá
+    — para eso está la ficha completa del CRM.
     """
     from crm.models import Cliente
 
     cond = Q(conversacion_origen=conv) | Q(origenes__conversacion=conv)
-    contacto = getattr(conv, 'contacto', None)
-    if contacto:
-        cond |= Q(contacto_origen=contacto) | Q(origenes__contacto=contacto)
-
-    try:
-        estado = getattr(conv, 'estado_flujo', None)
-        variables = (estado.variables or {}) if estado else {}
-        cedulas = [
-            str(v).strip()
-            for k, v in variables.items()
-            if 'cedula' in k.lower() and str(v or '').strip()
-        ]
-        if cedulas:
-            cond |= Q(cedula__in=cedulas)
-    except Exception:
-        logging.getLogger(__name__).exception(
-            'No pude leer cédulas del flujo conv#%s', getattr(conv, 'id', '?'))
 
     return list(
         Cliente.objects.filter(cond, status=True)
