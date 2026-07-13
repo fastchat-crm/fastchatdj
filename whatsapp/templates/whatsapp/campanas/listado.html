@@ -267,6 +267,19 @@
             </div>
             <div class="modal-body">
 
+                <div class="row g-2 mb-3">
+                    <div class="col-md-6">
+                        <button type="button" class="btn btn-primary w-100" id="btnModoIa">
+                            <i class="fa fa-wand-magic-sparkles me-1"></i> Crear con IA
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <button type="button" class="btn btn-secondary w-100" id="btnModoManual">
+                            <i class="fa fa-pen me-1"></i> Crear manual — ver cómo funciona
+                        </button>
+                    </div>
+                </div>
+
                 {# ===== Qué es una campaña ===== #}
                 <div class="alert alert-info d-flex gap-2 align-items-start py-2 small mb-3" role="button"
                      data-bs-toggle="collapse" data-bs-target="#campInfo">
@@ -296,7 +309,7 @@
                             <i class="fa fa-wand-magic-sparkles text-primary"></i>
                             <strong class="small">Generar con IA</strong>
                             <span class="text-muted small flex-grow-1">Describe la campaña y la IA llena los campos.</span>
-                            <button type="button" class="btn btn-sm btn-outline-primary" id="btnToggleIa">
+                            <button type="button" class="btn btn-sm btn-primary" id="btnToggleIa">
                                 <i class="fa fa-sparkles me-1"></i> Abrir asistente
                             </button>
                         </div>
@@ -504,6 +517,30 @@ function toggleIaCampana(abrir) {
 document.getElementById('btnToggleIa').addEventListener('click', () => {
     const form = document.getElementById('iaCampanaForm');
     toggleIaCampana(form.style.display === 'none');
+});
+
+document.getElementById('btnModoIa').addEventListener('click', () => {
+    const card = document.getElementById('iaCampanaCard');
+    const sel = document.getElementById('selSesionCampana');
+    card.style.display = '';
+    toggleIaCampana(true);
+    const msgEl = document.getElementById('iaCampanaMsg');
+    if (!sel.value) {
+        msgEl.innerHTML = '<span class="text-danger">Primero selecciona la sesión (canal) — la IA usa su contexto para redactar.</span>';
+        sel.focus();
+    } else {
+        msgEl.innerHTML = '';
+    }
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+
+document.getElementById('btnModoManual').addEventListener('click', () => {
+    toggleIaCampana(false);
+    const info = document.getElementById('campInfo');
+    bootstrap.Collapse.getOrCreateInstance(info, { toggle: false }).show();
+    info.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const nombre = document.querySelector('#modalCampana [name=nombre]');
+    if (nombre) nombre.focus();
 });
 
 document.getElementById('btnGenerarIaCampana').addEventListener('click', async () => {
