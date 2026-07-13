@@ -209,7 +209,9 @@ FAISS propio en `media/vectorstores/rag_col_<id>/`, `apikey` opcional (fallback 
 la primera activa del perfil, `apikey_efectiva()`). Se vincula a sesiones vía
 `SesionWhatsApp.rag_coleccion` (FK, `related_name='sesiones'`). Motor:
 `agents_ai/rag/colecciones.py` (`indexar_coleccion` / `consultar_coleccion`).
-UI: `/crm/rag/` (`crm/view_rag.py`, template `templates/crm/rag/listado.html`).
+UI: `/crm/rag/` (`crm/view_rag.py`, template `templates/crm/rag/listado.html`);
+la card de la sesión en `/whatsapp/sesiones/` (`_card.html`) muestra la colección
+vinculada con link a `/crm/rag/`.
 Migraciones pendientes de correr por el developer. Fase 2 (pendiente): grafo de
 consulta router→retrieve→respond con memoria resumida, consumido desde
 `AgenteConsultor` cuando la sesión tenga colección.

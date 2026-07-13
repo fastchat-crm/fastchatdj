@@ -36,8 +36,14 @@ def index(request):
         return render(request, 'seguridad/index.html', data)
 
     data['PERFIL_EXISTE'] = True
-    mostrar_modal_ia = not hasattr(persona, 'perfil_ia') or not persona.perfil_ia.tiene_datos_basicos()
-    data['mostrar_modal_ia'] = mostrar_modal_ia
+    # Bienvenida de primer ingreso: se muestra UNA sola vez y se marca vista.
+    # Reemplaza al viejo modal "Conoce tu asistente" que salía en cada login
+    # hasta configurar un agente IA.
+    mostrar_bienvenida = not getattr(persona, 'bienvenida_vista', True)
+    if mostrar_bienvenida:
+        persona.bienvenida_vista = True
+        persona.save(update_fields=['bienvenida_vista'])
+    data['mostrar_bienvenida'] = mostrar_bienvenida
 
     ahora = timezone.now()
     hace_24h = ahora - timedelta(hours=24)

@@ -418,55 +418,44 @@
     </div>
   {% endif %}
 
-  {% if mostrar_modal_ia %}
-    <div class="modal fade" id="modalEntrenamientoIA" tabindex="-1" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered modal-xl">
+  {% if mostrar_bienvenida %}
+    <div class="modal fade" id="modalBienvenida" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content shadow-lg border-0 rounded-4">
           <div class="modal-body p-5">
-            <div class="row">
-              <div class="col-lg-7 col-md-12 order-lg-1 order-md-1 order-2 pe-lg-4 border-lg-end border-md-none border-bottom pb-4 pb-lg-0">
+            <div class="row align-items-center">
+              <div class="col-lg-7 col-md-12">
                 <div class="px-3 px-md-0">
-                  <h3 class="fw-bold mb-3">🎯 ¡Conoce tu asistente inteligente!</h3>
-                  <p class="text-muted mb-4">Antes de empezar, cuéntanos un poco sobre tu negocio.
-                    Esto nos ayudará a entrenar la IA para que hable como tú, entienda tu industria
-                    y atienda a tus clientes como si fueras tú.</p>
-
+                  <h3 class="fw-bold mb-3">👋 ¡Bienvenido, {{ request.user.first_name|default:request.user.username }}!</h3>
+                  <p class="text-muted mb-4">Tu cuenta está lista. Desde este panel puedes ver el estado
+                    de tus canales y entrar directo a las conversaciones que tienes asignadas.</p>
                   <ul class="list-unstyled mt-4">
-                    <li class="d-flex align-items-start mb-3">
-                      <i class="fas fa-robot fa-lg text-primary me-3 mt-1"></i>
-                      <div>
-                        <strong>Entrena tu IA</strong><br>
-                        <span class="text-muted">Define tu industria, tus servicios y cómo hablas.</span>
-                      </div>
-                    </li>
                     <li class="d-flex align-items-start mb-3">
                       <i class="fas fa-comments fa-lg text-primary me-3 mt-1"></i>
                       <div>
-                        <strong>Conversaciones reales</strong><br>
-                        <span class="text-muted">Tu IA responderá mensajes según tu estilo y tono.</span>
+                        <strong>Conversaciones</strong><br>
+                        <span class="text-muted">Responde a tus clientes en tiempo real desde el inbox.</span>
                       </div>
                     </li>
                     <li class="d-flex align-items-start mb-4">
-                      <i class="fas fa-chart-line fa-lg text-primary me-3 mt-1"></i>
+                      <i class="fas fa-bell fa-lg text-primary me-3 mt-1"></i>
                       <div>
-                        <strong>Automatiza y gana tiempo</strong><br>
-                        <span class="text-muted">Deja que tu asistente trabaje mientras tú vendes.</span>
+                        <strong>Notificaciones</strong><br>
+                        <span class="text-muted">Cuando se te asigne una conversación te avisamos por el sistema, correo y WhatsApp.</span>
                       </div>
                     </li>
                   </ul>
-
-                  <a href="/crm/entrenamiento/" class="btn btn-primary btn-lg w-100 mt-2">
-                    ¡Configurar ahora! <i class="fas fa-arrow-right ms-2"></i>
-                  </a>
+                  <button type="button" class="btn btn-primary btn-lg w-100 mt-2" data-bs-dismiss="modal">
+                    ¡Comenzar! <i class="fas fa-arrow-right ms-2"></i>
+                  </button>
                 </div>
               </div>
-
-              <div class="col-lg-5 col-md-12 order-lg-2 order-md-2 order-1 d-flex justify-content-center align-items-center mb-4 mb-lg-0">
+              <div class="col-lg-5 col-md-12 d-flex justify-content-center align-items-center mb-4 mb-lg-0">
                 <div class="text-center p-3">
                   <img src="/media/{{ confi.imagenprincipal }}"
                        class="img-fluid rounded shadow-sm"
-                       alt="Asistente IA"
-                       style="max-height: 300px; width: auto;">
+                       alt="Bienvenida"
+                       style="max-height: 260px; width: auto;">
                 </div>
               </div>
             </div>
@@ -479,10 +468,10 @@
 {% endblock %}
 
 {% block jscript %}
-  {% if mostrar_modal_ia %}
+  {% if mostrar_bienvenida %}
     <script>
       document.addEventListener('DOMContentLoaded', function () {
-        new bootstrap.Modal(document.getElementById('modalEntrenamientoIA')).show();
+        new bootstrap.Modal(document.getElementById('modalBienvenida')).show();
       });
     </script>
   {% endif %}

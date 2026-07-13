@@ -39,6 +39,10 @@ class Usuario(AbstractUser, ModeloBase):
     cambio_clave = models.BooleanField(default=False, verbose_name='Cambio de Contraseña Obligatorio')
     # CONFIGURACIÓN DE USUARIO
     notificar_por_correo = models.BooleanField(default=True, verbose_name='Recibe notificaciones por correo')
+    bienvenida_vista = models.BooleanField(
+        default=False, verbose_name='Bienvenida vista',
+        help_text='True cuando el usuario ya vio el mensaje de bienvenida del primer ingreso.',
+    )
     # empresa = models.ForeignKey('seguridad.Empresa', on_delete=models.PROTECT, blank=True, null=True, verbose_name='Empresa')
 
     # TIPO_DOCUMENTO

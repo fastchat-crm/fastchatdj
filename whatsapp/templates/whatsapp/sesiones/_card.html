@@ -243,6 +243,13 @@
                 </div>
             {% endif %}
         {% endif %}
+        {% if sesion.rag_coleccion %}
+            <div class="card-subinfo">
+                <i class="fa fa-database"></i> Conocimiento:
+                <a href="/crm/rag/" title="Ver colecciones RAG"><b>{{ sesion.rag_coleccion.nombre }}</b></a>
+                <span class="text-muted">({{ sesion.rag_coleccion.total_chunks }} chunks)</span>
+            </div>
+        {% endif %}
 
         {# Mostrar departamentos asignados si modo usa flujo (tradicional o hibrido) #}
         {% if sesion.modo_bot == 'tradicional' or sesion.modo_bot == 'hibrido' %}
