@@ -880,13 +880,30 @@ class MetaWhatsAppService(ServicioCanalBase):
             if plantilla.header_tipo == 'TEXT' and plantilla.header_contenido:
                 # Meta rechaza el header con newlines, **negritas**, emojis o
                 # formato markdown. Sanitizamos antes de enviar.
-                header_comp['text'] = _sanitizar_header_meta(plantilla.header_contenido)
+                header_texto = _sanitizar_header_meta(plantilla.header_contenido)
+                header_comp['text'] = header_texto
+                vars_header = _re.findall(r'\{\{(\d+)\}\}', header_texto)
+                if vars_header:
+                    header_comp['example'] = {'header_text': ['Ejemplo'] * len(vars_header)}
             components.append(header_comp)
 
         # Cuerpo: max 1024 chars segun Meta. Si hay markdown tipo *negrita*
         # Meta lo acepta — no lo limpiamos aca.
         cuerpo = (plantilla.cuerpo or '')[:1024]
-        components.append({'type': 'BODY', 'text': cuerpo})
+        body_comp = {'type': 'BODY', 'text': cuerpo}
+        # Meta exige ejemplos por variable — sin `example` el revisor no puede
+        # evaluar el contenido y la plantilla suele ser RECHAZADA.
+        vars_cuerpo = _re.findall(r'\{\{(\d+)\}\}', cuerpo)
+        if vars_cuerpo:
+            ejemplos_cfg = plantilla.variables_json or []
+            ejemplos = []
+            for i, _v in enumerate(sorted(set(vars_cuerpo), key=int)):
+                ej = ''
+                if i < len(ejemplos_cfg) and isinstance(ejemplos_cfg[i], dict):
+                    ej = str(ejemplos_cfg[i].get('ejemplo') or '').strip()
+                ejemplos.append(ej or f'Ejemplo {i + 1}')
+            body_comp['example'] = {'body_text': [ejemplos]}
+        components.append(body_comp)
 
         if plantilla.footer:
             # Footer: max 60 chars, sin newlines ni emojis.

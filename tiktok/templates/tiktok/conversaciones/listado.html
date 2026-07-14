@@ -191,6 +191,11 @@
                                 <i class="fa fa-check-circle"></i> Terminar
                             </a>
                         </div>
+                        <a href="javascript:void(0)" target="_blank" rel="noopener"
+                           class="btn btn-sm btn-success d-none" id="btn-wa-web"
+                           title="Escribirle por WhatsApp Web">
+                            <i class="fab fa-whatsapp"></i>
+                        </a>
                         <div class="d-inline d-none" id="dropdowns-btn">
                             <a href="javascript:void(0)" class="btn btn-sm btn-default"
                                role="button" data-bs-toggle="offcanvas" data-bs-target="#convAccionesOffcanvas"
@@ -1830,7 +1835,7 @@
             sessionWebSocket(sesionId, filtroActivo);
             $('#mensajes-container').html('<div class="text-center p-5"><i class="fa fa-comments fa-4x text-muted mb-3"></i><p>Selecciona una conversación para ver los mensajes</p></div>');
             $('#chat-footer').hide();
-            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #clasificacion-inline-container').addClass('d-none');
+            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #clasificacion-inline-container, #btn-wa-web').addClass('d-none');
             $('#stats-panel, #control-respuestas-panel').addClass('d-none');
             $('#contacto-nombre').text('Selecciona una conversación');
             $('#conv-id-badge').hide();
@@ -1903,7 +1908,7 @@
             $('#conv-id-badge').hide();
             $('#conv-fecha-inicio').hide();
             $('#contacto-foto').attr('src', '/static/assets/img/avatar.png');
-            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container, #clasificacion-inline-container').addClass('d-none').hide();
+            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container, #clasificacion-inline-container, #btn-wa-web').addClass('d-none').hide();
             $('#stats-panel, #control-respuestas-panel, #menus-rapidos-bar').addClass('d-none');
             $('#chat-footer').addClass('d-none').hide();
             if (typeof resetHistorialCliente === 'function') resetHistorialCliente();
@@ -2400,7 +2405,7 @@
             if (chatSocket) { chatSocket.close(); chatSocket = null; }
 
             // Ocultar controles + empty state mientras carga
-            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container, #chat-footer, #clasificacion-inline-container').addClass('d-none').hide();
+            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container, #chat-footer, #clasificacion-inline-container, #btn-wa-web').addClass('d-none').hide();
             $('#stats-panel, #control-respuestas-panel').addClass('d-none');
             $('#respuestas-btn').removeClass('visible');
             cerrarModalRespuestas();
@@ -2421,6 +2426,14 @@
                     // Actualizar información de contacto
                     $('#contacto-nombre').text(response.contacto_nombre || response.contacto_numero);
                     $('#contacto-numero').text(response.contacto_numero);
+                    let _numWa = String(response.contacto_numero || '').replace(/\D/g, '');
+                    if (_numWa.length === 10 && _numWa.charAt(0) === '0') _numWa = '593' + _numWa.substring(1);
+                    if (_numWa.length === 9 && _numWa.charAt(0) === '9') _numWa = '593' + _numWa;
+                    if (_numWa) {
+                        $('#btn-wa-web').attr('href', 'https://wa.me/' + _numWa).removeClass('d-none').show();
+                    } else {
+                        $('#btn-wa-web').attr('href', 'javascript:void(0)').addClass('d-none').hide();
+                    }
                     $('#contacto-hashedId').text(response.hashed_id && `#${response.hashed_id}` || '');
                     $('#conv-id-badge').text('Conv #' + conversacionId).show();
 

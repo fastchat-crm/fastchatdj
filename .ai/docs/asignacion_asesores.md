@@ -52,7 +52,7 @@ candidatos_ordenados(conv)
 
 | Punto de asignación | Archivo | Nota |
 |---|---|---|
-| Handoff del flujo / timeout | `crm/helpers_asignacion.py:auto_asignar_agente` | Setea `ai_activo=False` (pausa IA) + notifica |
+| Handoff del flujo / timeout | `crm/helpers_asignacion.py:auto_asignar_agente` | Setea `ai_activo=False` (pausa IA) + notifica al agente (triple aviso) + **avisa al CLIENTE "te atenderá X"** (`_avisar_cliente_asignacion`, respeta `sesion.mensaje_handoff`; persistido+difundido vía `persistir_y_difundir_automatico` de `whatsapp/funcionesWhatsappConversacion.py`). Desactivable con `avisar_cliente=False` |
 | Nodo `fin` con `notificar_asesor` | `crm/motor_flujo_chatbot.py` (rama `tipo == 'fin'`) | Motivo `fin_flujo`. Si la conv no tiene `asignado_a`, llama `auto_asignar_agente` — el agente elegido recibe notificación interna + correo con el link del chat, y se OMITE el broadcast al departamento (`_fin_asignado_nodo_id`). Si no hay candidatos o ya estaba asignada, cae al broadcast normal |
 | Round-robin automático | `whatsapp/services_round_robin.py:asignar_automaticamente` | Lock transaccional + traza `AsignacionAutomatica`. **No** toca `ai_activo` |
 | Dropdown manual | `whatsapp/forms.py:AsignarAgenteForm` | Mismo pool; muestra rol + carga |

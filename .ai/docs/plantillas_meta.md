@@ -28,6 +28,17 @@ Vista: `whatsapp/view_plantillas.py` (`plantillasView`). Template:
   `_procesar_cambio_plantilla`, guarda `reason`) — la suscripción del WABA debe
   incluir ese campo. Fallback manual: acción `sincronizar` (botón global por
   sesión y dentro del modal Ver cuando está PENDING o REJECTED).
+- **Ejemplos obligatorios:** al someter, `_construir_payload_plantilla`
+  (`meta/whatsapp.py`) incluye `example.body_text` (desde `variables_json`
+  ejemplos, fallback "Ejemplo N") y `example.header_text` si hay `{{N}}` —
+  sin ejemplos el revisor de Meta no puede evaluar y rechaza (fix 2026-07-14).
+- **Categorización (doc Meta 2026-05):** los recordatorios de
+  inscripción/carrito/renovación son **MARKETING** ("nueva segmentación") aunque
+  el usuario los haya pedido; UTILITY exige tono transaccional sin persuasión
+  ("¡No te quedes fuera!", "¡Te esperamos!" lo descalifican). Desde abr-2025
+  Meta re-categoriza UTILITY→MARKETING automáticamente y rechaza con
+  `INCORRECT_CATEGORY`. URLs variables `{{N}}` en el cuerpo son otra causa
+  frecuente de rechazo — preferir botón URL con sufijo dinámico.
 - **Motivo de rechazo:** Graph API NO devuelve `rejected_reason` por defecto —
   `sincronizar_plantillas` (`meta/whatsapp.py:805`) lo pide explícito vía
   `fields=...,rejected_reason,quality_score` (fix 2026-07-13; antes el motivo

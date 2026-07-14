@@ -140,6 +140,11 @@
                         <i class="fa fa-xmark me-1"></i>Descartar
                     </a>
                 </div>
+                <a href="javascript:void(0)" target="_blank" rel="noopener"
+                   class="btn btn-sm btn-success d-none" id="btn-wa-web"
+                   title="Escribirle por WhatsApp Web">
+                    <i class="fab fa-whatsapp me-1"></i>WhatsApp Web
+                </a>
                 <div class="dropdown d-inline d-none" id="dropdowns-btn">
                     <a href="javascript:void(0)" class="btn btn-sm btn-default" data-bs-toggle="dropdown" data-bs-strategy="fixed">
                         <i class="fa fa-ellipsis-v"></i>
@@ -430,6 +435,7 @@ $(document).ready(function() {
         $('#contacto-nombre').text('Selecciona una conversación');
         $('#contacto-foto').attr('src', '/static/assets/img/avatar.png');
         $('#contacto-numero, #contacto-hashedId').text('');
+        $('#btn-wa-web').addClass('d-none').hide();
         $('#conv-id-badge').hide();
         $('#conv-fechas').hide();
         $('.conversacion-item').removeClass('active');
@@ -481,6 +487,14 @@ $(document).ready(function() {
                 $('#mensajes-container').removeClass('is-loading').html(r.html);
                 $('#contacto-nombre').text(r.contacto_nombre || r.contacto_numero);
                 $('#contacto-numero').text(r.contacto_numero);
+                let _numWa = String(r.contacto_numero || '').replace(/\D/g, '');
+                if (_numWa.length === 10 && _numWa.charAt(0) === '0') _numWa = '593' + _numWa.substring(1);
+                if (_numWa.length === 9 && _numWa.charAt(0) === '9') _numWa = '593' + _numWa;
+                if (_numWa) {
+                    $('#btn-wa-web').attr('href', 'https://wa.me/' + _numWa).removeClass('d-none').show();
+                } else {
+                    $('#btn-wa-web').attr('href', 'javascript:void(0)').addClass('d-none').hide();
+                }
                 $('#contacto-hashedId').text(r.hashed_id ? '#' + r.hashed_id : '');
                 $('#conv-id-badge').text('Conv #' + id).show();
                 $('#contacto-foto').attr('src', r.contacto_foto || '/static/assets/img/avatar.png');
