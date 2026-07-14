@@ -1,0 +1,227 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <div class="container-fluid p-0">
+
+        <div class="alert alert-info d-flex align-items-center gap-3 mb-3">
+            <i class="fa fa-comment-dots fa-2x"></i>
+            <div>
+                <strong>¿Qué es una regla de comentarios?</strong><br>
+                <small>
+                    Automatiza los comentarios de tus publicaciones de {{ nombre_canal }}: cuando alguien
+                    comenta con una palabra clave (ej. <code>precio</code>, <code>info</code>), el sistema
+                    puede <strong>responder público</strong>, <strong>mandarle un DM</strong> (private reply)
+                    y <strong>etiquetarlo</strong>. El DM convierte al comentarista en una conversación de tu
+                    bandeja — un comentario pasa a ser un lead. La primera regla que coincide gana
+                    (usa el campo orden para priorizar).
+                </small>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="GET" class="mb-0">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-8">
+                            <label class="form-label">Búsqueda</label>
+                            <div class="input-group">
+                                <span class="input-group-text border-end-0">
+                                    <i class="fa fa-search text-muted"></i>
+                                </span>
+                                <input type="text" class="form-control border-start-0"
+                                       placeholder="Buscar por nombre o palabra clave" name="criterio"
+                                       value="{{ criterio|default:'' }}">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search me-1"></i> Filtrar
+                                </button>
+                                {% if url_vars %}
+                                    <a href="{{ request.path }}" class="btn btn-default">
+                                        <i class="fas fa-times"></i> Limpiar
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h4 class="mb-0">Reglas de comentarios {{ nombre_canal }}</h4>
+                <small class="text-muted">
+                    {{ list_count|default:0 }} regla{{ list_count|default:0|pluralize }}
+                    · Comentario con keyword → respuesta + DM + etiqueta
+                </small>
+            </div>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalRegla">
+                <i class="fa fa-plus"></i> Nueva regla
+            </button>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <table class="table table-striped align-middle">
+                    <thead>
+                    <tr>
+                        <th>Orden</th>
+                        <th>Nombre</th>
+                        <th>Palabras clave</th>
+                        <th>Acciones al coincidir</th>
+                        <th>Usos</th>
+                        <th>Estado</th>
+                        <th style="width:160px">Acciones</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for r in listado %}
+                        <tr data-id="{{ r.id }}">
+                            <td>{{ r.orden }}</td>
+                            <td>
+                                <strong>{{ r.nombre }}</strong><br>
+                                <small class="text-muted">{{ r.sesion.nombre|default:r.sesion.session_id }}{% if r.media_id %} · solo publicación {{ r.media_id }}{% endif %}</small>
+                            </td>
+                            <td>
+                                {% if r.keywords %}
+                                    <small>{{ r.keywords }}</small>
+                                {% else %}
+                                    <small class="text-muted">Todos los comentarios</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if r.respuesta_publica %}<span class="badge bg-success"><i class="fa fa-comment"></i> Público</span>{% endif %}
+                                {% if r.mensaje_dm %}<span class="badge bg-primary"><i class="fa fa-paper-plane"></i> DM</span>{% endif %}
+                                {% if r.etiqueta %}<span class="badge" style="background:{{ r.etiqueta.color }}">{{ r.etiqueta.nombre }}</span>{% endif %}
+                            </td>
+                            <td>{{ r.usos }}</td>
+                            <td>
+                                {% if r.activa %}
+                                    <span class="badge bg-success">Activa</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Pausada</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-secondary btn-edit" title="Editar"
+                                        data-id="{{ r.id }}" data-nombre="{{ r.nombre }}"
+                                        data-keywords="{{ r.keywords }}" data-media="{{ r.media_id }}"
+                                        data-publica="{{ r.respuesta_publica }}" data-dm="{{ r.mensaje_dm }}"
+                                        data-etiqueta="{{ r.etiqueta_id|default:'' }}"
+                                        data-sesion="{{ r.sesion_id }}" data-orden="{{ r.orden }}"
+                                        data-activa="{{ r.activa|yesno:'1,0' }}">
+                                    <i class="fa fa-pen"></i>
+                                </button>
+                                <button class="btn btn-sm btn-warning btn-toggle" title="Activar / pausar"
+                                        data-id="{{ r.id }}">
+                                    <i class="fa fa-power-off"></i>
+                                </button>
+                                <button class="btn btn-sm btn-danger btn-del" title="Eliminar"
+                                        data-id="{{ r.id }}" data-nombre="{{ r.nombre }}">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted">
+                                Aún no has creado reglas. Crea la primera y convierte comentarios en conversaciones.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% include 'paginacion.html' %}
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalRegla" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <form class="modal-content" id="formRegla">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Nueva regla</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="action" value="add">
+                    <input type="hidden" name="pk" value="">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-5">
+                            <label class="form-label">Nombre *</label>
+                            <input type="text" name="nombre" class="form-control" required maxlength="120"
+                                   placeholder="Ej: Comentarios que piden precio">
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label">Sesión *</label>
+                            <select name="sesion_id" class="form-select" required>
+                                {% for s in sesiones %}
+                                    <option value="{{ s.id }}">{{ s.nombre|default:s.session_id }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Orden</label>
+                            <input type="number" name="orden" class="form-control" min="1" value="1">
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-7">
+                            <label class="form-label">Palabras clave</label>
+                            <input type="text" name="keywords" class="form-control"
+                                   placeholder="precio, info, quiero, cuánto cuesta">
+                            <small class="text-muted">Separadas por coma, sin importar tildes ni mayúsculas. Vacío = todos los comentarios.</small>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label">Solo esta publicación</label>
+                            <input type="text" name="media_id" class="form-control" placeholder="ID de la publicación (opcional)">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Respuesta pública</label>
+                        <textarea name="respuesta_publica" class="form-control" rows="2"
+                                  placeholder="Opcional. Ej: ¡Te escribimos por DM! 📩"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Mensaje DM (private reply)</label>
+                        <textarea name="mensaje_dm" class="form-control" rows="2"
+                                  placeholder="Opcional. Ej: ¡Hola! Vimos tu comentario, aquí va la info que pediste…"></textarea>
+                        <small class="text-muted">El DM abre una conversación en tu bandeja cuando el autor responde.</small>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Etiqueta a aplicar</label>
+                            <select name="etiqueta_id" class="form-select">
+                                <option value="">— Ninguna —</option>
+                                {% for et in etiquetas_disponibles %}
+                                    <option value="{{ et.id }}">{{ et.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-end">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="activa" id="chkReglaActiva" checked>
+                                <label class="form-check-label" for="chkReglaActiva">Regla activa</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="alert alert-warning mb-0">
+                        <small>La regla necesita al menos una acción (respuesta pública, DM o etiqueta). El DM usa la ventana de 7 días de Meta para private replies.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+    <script src="/static/js/whatsapp/reglas_comentarios.js?v1.0"></script>
+{% endblock %}

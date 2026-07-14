@@ -10,3 +10,8 @@ Dos memorias distintas, no confundirlas:
 Costos: escribir = 1 embedding (el mismo vector sirve para dedupe e indexado);
 leer = 0 embeddings extra si llega `query_vector`. Tope 4.000 docs por agente,
 dedupe por similitud ≤0.05. Switch por agente: `AgentesIA.memoria_rag_activa`.
+
+Umbral de relevancia en lectura: `recuperar_memoria` descarta recuerdos con
+distancia L2² mayor a `umbral_distancia` (default `_UMBRAL_RELEVANCIA = 1.4` ≈
+coseno 0.3 con embeddings normalizados) — antes se inyectaba el top-k aunque no
+tuviera relación con la pregunta, gastando tokens del prompt.

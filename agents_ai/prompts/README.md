@@ -5,7 +5,7 @@ estos símbolos por compatibilidad — los imports viejos siguen funcionando.
 
 | Archivo | Para qué es |
 |---|---|
-| `plantillas.py` | `PROMPT_TEMPLATES` — el template maestro del agente conversacional (por idioma), con las "reglas de oro" (nunca decir que es un bot, solo datos del contexto, mensajes cortos, variación de frases) y todas las variables disponibles (`{question}`, `{context}`, `{nombre_bot}`, `{historial_contacto}`, ánimo, horario...). |
+| `plantillas.py` | `PROMPT_TEMPLATES` — el template maestro del agente conversacional (por idioma), con las "reglas de oro" (nunca decir que es un bot, solo datos del contexto, mensajes cortos, variación de frases) y todas las variables disponibles (`{question}`, `{context}`, `{nombre_bot}`, `{historial_contacto}`, ánimo, horario...). Orden crítico: los bloques estáticos por agente (persona, reglas) van PRIMERO y las variables por mensaje (momento, historial, contexto, pregunta) al FINAL — el prefijo idéntico entre mensajes activa el prompt caching de OpenAI/Claude/DeepSeek (input tokens con descuento). No mover variables dinámicas hacia arriba. |
 | `personalidades.py` | `PERSONALIDAD_PRESETS` — presets de persona (Amable/Directo/Formal/Vendedor/Soporte) que llenan de un click nombre, personalidad, tono, estilo y temperature; `PERSONALIDAD_PRESET_CHOICES` para el form; `FRASES_RELLENO` — frases rotativas de humanización. |
 
 Prompts que viven en otros archivos del paquete (a propósito, junto a su lógica):

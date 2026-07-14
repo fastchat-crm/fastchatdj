@@ -187,7 +187,18 @@ def process_incoming_message(session, event_data, channel_layer):
         contacto.fecha_ultimo_mensaje = message_date
         contacto.save()
 
-        # Guard de idempotencia: si ya procesamos este mensaje_id, no duplicar
+        # Guard de idempotencia en dos capas. Meta y Baileys REENVÍAN webhooks
+        # (reintentos, reconexiones): sin esto la IA responde dos veces y cobra
+        # tokens dobles.
+        # Capa 1 — candado atómico en cache (SET NX, TTL 60s): cierra la carrera
+        # de dos entregas simultáneas del mismo mensaje, que pasan ambas el
+        # .exists() antes de que ninguna guarde. TTL corto a propósito: si el
+        # procesamiento falla antes de guardar, el reintento de Meta debe poder
+        # procesarse — los duplicados tardíos los frena la capa 2.
+        if message_id and not cache.add(f'msg_dedup_{session.id}_{message_id}', 1, 60):
+            logger.warning(f"Mensaje duplicado ignorado (candado cache): {message_id}")
+            return
+        # Capa 2 — respaldo en BD para reenvíos tardíos (minutos u horas después).
         if message_id and MensajeWhatsApp.objects.filter(
             mensaje_id_externo=message_id, conversacion__contacto__sesion=session
         ).exists():
@@ -542,6 +553,55 @@ def process_incoming_message(session, event_data, channel_layer):
                         )
                 except Exception:
                     pass
+
+        # ────────────────────────────────────────────────────────────
+        # Secuencias drip: el contacto escribió → salir de las secuencias
+        # con salir_al_responder=True (un UPDATE, no corta el pipeline).
+        # ────────────────────────────────────────────────────────────
+        try:
+            from .funciones_secuencias import cancelar_por_respuesta
+            cancelar_por_respuesta(contacto)
+        except Exception as _ex_seq:
+            logger.exception("Salida de secuencias por respuesta falló: %s", _ex_seq)
+
+        # ────────────────────────────────────────────────────────────
+        # Growth links: si el texto trae (ref: codigo) de un enlace de
+        # captación, aplica etiqueta/secuencia. Corre DESPUÉS de la salida
+        # de secuencias para que este mismo mensaje no cancele lo que el
+        # enlace acaba de inscribir. Con respuesta fija corta el pipeline.
+        # ────────────────────────────────────────────────────────────
+        if message_type == 'texto' and message_text:
+            try:
+                from .funciones_growth import procesar_growth_link
+                _resp_growth = procesar_growth_link(contacto, message_text)
+            except Exception as _ex_growth:
+                logger.exception("Growth link falló (continúa flujo normal): %s", _ex_growth)
+                _resp_growth = None
+            if _resp_growth:
+                whatsapp_service.send_text_message(
+                    conversation.sesion.session_id, contacto.from_number,
+                    _resp_growth, simularEscritura=True,
+                )
+                return JsonResponse({'status': 'ok', 'modo': 'growth_link'})
+
+        # ────────────────────────────────────────────────────────────
+        # Respuesta a recordatorio de turno (confirmar/cancelar).
+        # Captura determinista SIN tokens LLM: el recordatorio del cron
+        # promete estas palabras y deben funcionar con cualquier modo_bot.
+        # ────────────────────────────────────────────────────────────
+        if message_type == 'texto' and message_text:
+            _resp_turno = None
+            try:
+                from agenda.respuestas_recordatorio import procesar_respuesta_recordatorio
+                _resp_turno = procesar_respuesta_recordatorio(contacto, message_text)
+            except Exception as _ex_turno:
+                logger.exception("Respuesta a recordatorio falló (continúa flujo normal): %s", _ex_turno)
+            if _resp_turno:
+                whatsapp_service.send_text_message(
+                    conversation.sesion.session_id, contacto.from_number,
+                    _resp_turno, simularEscritura=True,
+                )
+                return JsonResponse({'status': 'ok', 'modo': 'respuesta_recordatorio'})
 
         # ────────────────────────────────────────────────────────────
         # Motor del chatbot TRADICIONAL (flujo/API, estilo n8n).

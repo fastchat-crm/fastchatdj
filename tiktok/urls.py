@@ -1,10 +1,16 @@
 from django.urls import re_path
 
+from .view_centro import centroTikTokView
 from .view_comentarios import comentariosTikTokView
 from .view_conversaciones import conversacionesTikTokView
 from .view_cuentas import cuentasView
 
 tiktok_urls = (
+    {
+        "nombre": "Centro TikTok",
+        "url": 'centro/',
+        "vista": centroTikTokView,
+    },
     {
         "nombre": "Sesiones TikTok",
         "url": 'sesiones/',

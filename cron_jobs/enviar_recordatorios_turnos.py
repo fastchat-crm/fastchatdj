@@ -3,7 +3,7 @@ import sys
 from datetime import timedelta
 
 from django.core.wsgi import get_wsgi_application
-from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -16,7 +16,7 @@ from core.funciones import logCron
 from whatsapp.services import get_whatsapp_service
 
 
-CRON_WINDOW_MIN = 30
+MAX_INTENTOS = 3
 
 
 def _build_message(turno):
@@ -27,7 +27,8 @@ def _build_message(turno):
         f"- Con: {turno.recurso.nombre}\n"
         f"- Cuándo: {turno.inicio.strftime('%Y-%m-%d %H:%M')}\n"
         f"- Precio: {turno.precio_cobrado} {grupo.moneda}\n"
-        f"\nRespondé *cancelar* para cancelarlo o *reagendar* para moverlo."
+        f"\nRespondé *confirmar* para confirmarlo, *cancelar* para cancelarlo "
+        f"o *reagendar* para moverlo."
     )
 
 
@@ -48,31 +49,50 @@ def _enviar(turno):
 
 def main():
     ahora = timezone.now()
+    # Catch-up: un turno está "vencido para recordar" desde (inicio - horas_antes)
+    # hasta su inicio. Si el cron estuvo caído, el recordatorio sale igual en la
+    # próxima corrida en vez de perderse (antes había una ventana fija de 30 min).
     pendientes = (Turno.objects
-                  .filter(status=True, recordatorio_enviado=False, estado__in=ACTIVE_STATUSES)
+                  .filter(status=True, recordatorio_enviado=False,
+                          estado__in=ACTIVE_STATUSES,
+                          recordatorio_intentos__lt=MAX_INTENTOS,
+                          inicio__gt=ahora)
                   .select_related('recurso__grupo_agenda', 'servicio', 'contacto__sesion'))
     enviados = 0
     fallidos = 0
     for turno in pendientes:
-        horas = turno.recurso.grupo_agenda.recordatorio_horas_antes or 24
-        ventana_inicio = ahora + timedelta(hours=horas)
-        ventana_fin = ventana_inicio + timedelta(minutes=CRON_WINDOW_MIN)
-        if not (ventana_inicio <= turno.inicio <= ventana_fin):
+        horas = (turno.recordatorio_horas_antes
+                 or turno.recurso.grupo_agenda.recordatorio_horas_antes
+                 or 24)
+        momento_aviso = turno.inicio - timedelta(hours=horas)
+        if ahora < momento_aviso:
+            continue
+        # Reserva hecha DESPUÉS del momento de aviso (ej. turno para dentro de
+        # 2h con recordatorio de 24h): no se recuerda — el cliente acaba de
+        # agendar y ya recibió la confirmación.
+        if turno.fecha_registro and turno.fecha_registro > momento_aviso:
+            continue
+        # Claim atómico ANTES de enviar: si otro proceso ya lo tomó, update
+        # devuelve 0 y se salta — evita doble envío con crons concurrentes.
+        claimed = Turno.objects.filter(
+            pk=turno.pk, recordatorio_enviado=False,
+        ).update(recordatorio_enviado=True)
+        if not claimed:
             continue
         try:
-            with transaction.atomic():
-                ok, msg = _enviar(turno)
-                if ok:
-                    turno.recordatorio_enviado = True
-                    turno.save()
-                    enviados += 1
-                    logCron('Recordatorios', f'Recordatorio enviado para turno {turno.id}', True)
-                else:
-                    fallidos += 1
-                    logCron('Recordatorios', f'Falló el envío del recordatorio para turno {turno.id}: {msg}', False)
+            ok, msg = _enviar(turno)
         except Exception as ex:
+            ok, msg = False, str(ex)
+        if ok:
+            enviados += 1
+            logCron('Recordatorios', f'Recordatorio enviado para turno {turno.id}', True)
+        else:
             fallidos += 1
-            logCron('Recordatorios', f'Excepción al enviar recordatorio para turno {turno.id}: {ex}', False)
+            Turno.objects.filter(pk=turno.pk).update(
+                recordatorio_enviado=False,
+                recordatorio_intentos=F('recordatorio_intentos') + 1,
+            )
+            logCron('Recordatorios', f'Falló el envío del recordatorio para turno {turno.id}: {msg}', False)
     logCron('Recordatorios', f'Ejecución completada. Enviados={enviados}, fallidos={fallidos}', True)
 
 

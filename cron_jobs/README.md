@@ -1,24 +1,67 @@
 # cron_jobs — tareas programadas
 
 Todos los crons del sistema viven en esta carpeta y este es su **único** documento.
-Se ejecutan como `python cron_jobs/<script>.py` (bootstrapean Django solos) vía cron
-de Linux o Task Scheduler de Windows.
 
-Reglas comunes: todos loguean con `logCron`, respetan `sesion.activo` y los envíos
-salientes respetan `Contacto.opt_out` / `whatsapp_invalido` (salvo lo transaccional,
-ver recordatorios de turnos).
+## ¿Por qué existen?
 
-| Script | Objetivo | Frecuencia recomendada |
-|---|---|---|
-| `ejecutar_campanas.py` | Despachar campañas masivas con throttle y tope diario | Cada 1 minuto |
-| `enviar_mensajes_programados.py` | Enviar mensajes individuales agendados | Cada 1 minuto |
-| `enviar_mensaje_reconexion.py` | Nudge a conversaciones donde el cliente calló >1 h (dentro de la ventana 24 h) | Cada 15 minutos |
-| `enviar_mensaje_despedida.py` | Cerrar conversaciones expiradas con mensaje de despedida | Cada 10 minutos |
-| `reabrir_pospuestas.py` | Reabrir conversaciones cuyo snooze venció | Cada 5 minutos |
-| `reconectar_sesiones.py` | Reconectar sesiones Baileys caídas | Cada 5 minutos |
-| `enviar_recordatorios_turnos.py` | Recordatorio de turnos/citas próximos | Cada 15 minutos |
-| `aprender_conversaciones.py` | Extraer FAQs de conversaciones exitosas + resumen por contacto | 1 vez al día (madrugada) |
-| `enviar_correo_prueba.py` | Prueba manual de la configuración de email | Manual (no programar) |
+Django solo reacciona a peticiones HTTP: cuando alguien entra a una página o llega un
+webhook. **Nadie ejecuta código "a las 3 de la tarde" por sí solo.** Todo lo que el
+sistema promete hacer *más tarde* (enviar una campaña programada, el paso 2 de una
+secuencia, un recordatorio de cita 24h antes, cerrar chats muertos) queda guardado en
+la base de datos como "pendiente"… y estos scripts son el motor que revisa el reloj y
+lo ejecuta. **Sin conectarlos, esas funciones se ven en pantalla pero nunca envían nada.**
+
+## Resumen: para qué es cada uno
+
+| Script | En una frase | Si NO lo conectas | Frecuencia |
+|---|---|---|---|
+| `ejecutar_campanas.py` | Envía las campañas masivas que creas en `/whatsapp/campanas/` | Las campañas quedan en "programada" para siempre | Cada 1 min |
+| `enviar_mensajes_programados.py` | Envía los mensajes individuales agendados a fecha/hora desde la ficha del contacto | Los mensajes agendados nunca salen | Cada 1 min |
+| `ejecutar_secuencias.py` | Envía los pasos de las secuencias drip de `/whatsapp/secuencias/` cuando vence su espera | Los inscritos nunca reciben la serie de mensajes | Cada 5 min |
+| `enviar_recordatorios_turnos.py` | Recuerda las citas de agenda N horas antes (con confirmar/cancelar por respuesta) | Clientes sin recordatorio → más ausencias | Cada 15 min |
+| `enviar_mensaje_reconexion.py` | Da un empujón al cliente que dejó de responder antes de que venza la ventana 24h | Leads tibios mueren; recuperarlos costará plantilla paga | Cada 15 min |
+| `enviar_mensaje_despedida.py` | Cierra ordenadamente conversaciones expiradas o muertas (dispara resumen + sentimiento) | Bandejas infladas de zombies y sin resúmenes IA | Cada 10 min |
+| `reabrir_pospuestas.py` | Devuelve a la bandeja las conversaciones pospuestas (snooze) cuando llega su hora | Lo pospuesto nunca reaparece; el cliente queda esperando | Cada 5 min |
+| `reconectar_sesiones.py` | Levanta sesiones Baileys caídas sin intervención manual | Una caída de red deja el número mudo hasta que alguien lo note | Cada 5 min |
+| `aprender_conversaciones.py` | Minería nocturna: genera FAQs desde chats exitosos + resumen por contacto (gasta tokens LLM) | El bot no aprende solo; todo es curación manual | 1 vez/día 3am |
+| `enviar_correo_prueba.py` | Diagnóstico manual del SMTP | — (no se programa) | Manual |
+
+Regla de dedo: **los 3 primeros son el marketing**, los 5 siguientes son **la higiene
+de la operación**, y `aprender_conversaciones` es **la mejora continua**. Si solo vas a
+conectar unos pocos: `ejecutar_campanas`, `enviar_mensajes_programados` y
+`enviar_mensaje_despedida` son el mínimo para que lo visible en la UI funcione.
+
+## Cómo conectarlos
+
+Cada script se ejecuta como `python cron_jobs/<script>.py` — bootstrapean Django solos,
+no necesitan el servidor corriendo, solo el virtualenv y la BD accesibles.
+
+**Linux (crontab):**
+
+```
+* * * * *    cd /ruta/fastchatdj && /ruta/venv/bin/python cron_jobs/ejecutar_campanas.py
+* * * * *    cd /ruta/fastchatdj && /ruta/venv/bin/python cron_jobs/enviar_mensajes_programados.py
+*/5 * * * *  cd /ruta/fastchatdj && /ruta/venv/bin/python cron_jobs/ejecutar_secuencias.py
+*/5 * * * *  cd /ruta/fastchatdj && /ruta/venv/bin/python cron_jobs/reabrir_pospuestas.py
+*/5 * * * *  cd /ruta/fastchatdj && /ruta/venv/bin/python cron_jobs/reconectar_sesiones.py
+*/10 * * * * cd /ruta/fastchatdj && /ruta/venv/bin/python cron_jobs/enviar_mensaje_despedida.py
+*/15 * * * * cd /ruta/fastchatdj && /ruta/venv/bin/python cron_jobs/enviar_recordatorios_turnos.py
+*/15 * * * * cd /ruta/fastchatdj && /ruta/venv/bin/python cron_jobs/enviar_mensaje_reconexion.py
+0 3 * * *    cd /ruta/fastchatdj && /ruta/venv/bin/python cron_jobs/aprender_conversaciones.py
+```
+
+**Windows (Task Scheduler):** una tarea básica por script — Acción: iniciar programa
+`C:\ruta\venv\Scripts\python.exe`, Argumentos: `cron_jobs\<script>.py`, Iniciar en:
+`C:\DESARROLLO_PROYECTOS\fastchat\fastchatdj`, con el disparador repitiendo cada N
+minutos según la tabla.
+
+Todos son **seguros de correr en paralelo y de correr tarde**: usan claims atómicos
+anti-doble-envío y semántica catch-up (lo pendiente sale al reanudar, no se pierde).
+Toda ejecución se registra vía `logCron`.
+
+Reglas comunes: todos respetan `sesion.activo`, y los envíos salientes respetan
+`Contacto.opt_out` / `whatsapp_invalido` (salvo lo transaccional, ver recordatorios
+de turnos).
 
 ---
 
@@ -37,18 +80,56 @@ rate limits ni reventar el tier del número.
 
 **Si no corre:** las campañas quedan en `programada`/`enviando` sin avanzar; no se pierde nada, retoma al volver.
 
+## ejecutar_secuencias.py
+
+**Objetivo:** despachar los pasos vencidos de las secuencias drip (`SecuenciaWhatsApp`
+/ `PasoSecuencia` / `InscripcionSecuencia`, UI en `/whatsapp/secuencias/`).
+
+**Qué hace:** toma inscripciones `activa` con `proximo_envio <= ahora` e
+`intentos < 3` (excluye opt-out, números inválidos y sesiones inactivas), envía el
+paso pendiente y agenda el siguiente (`proximo_envio = ahora + espera_horas` del
+próximo paso). Sin más pasos → `completada`.
+
+**Anti doble envío:** claim atómico del avance de paso
+(`UPDATE ... WHERE estado='activa' AND paso_actual=<n>`); en fallo revierte el
+avance e incrementa `intentos` (al tercer fallo → estado `error`).
+
+**Meta:** ventana 24h manejada con backoff de 6 h vía cache
+(`seq_meta_bloqueado_<id>`) sin consumir `intentos`.
+
+**Salida al responder:** no la maneja el cron — cuando el contacto escribe,
+`procesar_mensaje.py` cancela sus inscripciones con `salir_al_responder=True`
+(`whatsapp/funciones_secuencias.py::cancelar_por_respuesta`). La inscripción
+automática por etiqueta disparadora vive en el signal m2m de
+`Contacto.etiquetas` (`whatsapp/signals.py`).
+
+**Frecuencia:** cada 5 minutos (`*/5 * * * *`) — las esperas son en horas, no
+necesita precisión de minuto.
+
+**Si no corre:** los pasos se acumulan y salen al reanudar (la condición es
+`proximo_envio <= ahora`, no una ventana).
+
 ## enviar_mensajes_programados.py
 
 **Objetivo:** enviar los `MensajeWhatsAppProgramado` (mensajes individuales agendados
 a fecha/hora: seguimientos, recordatorios manuales).
 
-**Qué hace:** toma los pendientes vencidos (`enviado=False`, fecha/hora ≤ ahora) de
-sesiones Baileys activas, excluyendo contactos con `opt_out` o `whatsapp_invalido`;
-envía texto (con simulación de escritura) y el archivo adjunto si existe; marca `enviado=True`.
+**Qué hace:** toma los pendientes vencidos (`enviado=False`, `intentos < 3`, fecha/hora ≤ ahora)
+de sesiones Baileys activas, excluyendo contactos con `opt_out` o `whatsapp_invalido`;
+envía texto (con simulación de escritura) y el archivo adjunto si existe.
+
+**Anti doble envío:** antes de enviar hace un claim atómico
+(`UPDATE ... WHERE enviado=False` → `enviado=True`); si otro proceso concurrente ya lo
+tomó, el update devuelve 0 filas y se salta. Si el envío falla, revierte el flag e
+incrementa `intentos`; al tercer fallo el mensaje deja de reintentarse (queda visible
+con `enviado=False` e `intentos=3` para revisión manual). Si el texto salió pero el
+adjunto falló, se mantiene `enviado=True` (no se duplica el texto) y el adjunto perdido
+queda en el log.
 
 **Meta:** soportado. Se pasa la conversación para que aplique la ventana de 24 h — si
 está vencida, el envío queda en espera (reintento cada 6 h o cuando el cliente vuelva
-a escribir); la alternativa inmediata es enviar una plantilla aprobada desde el chat.
+a escribir) sin consumir `intentos` hasta el próximo intento real; la alternativa
+inmediata es enviar una plantilla aprobada desde el chat.
 
 **Frecuencia:** cada 1 minuto (`* * * * *`) para respetar la hora agendada con precisión de minuto.
 
@@ -124,17 +205,34 @@ alguien la reconecte a mano — clientes sin respuesta y campañas frenadas.
 ## enviar_recordatorios_turnos.py
 
 **Objetivo:** recordar por WhatsApp los turnos/citas próximos (módulo agenda), con
-opción de cancelar o reagendar respondiendo.
+opción de confirmar, cancelar o reagendar respondiendo. Las respuestas *confirmar* y
+*cancelar* las captura `agenda/respuestas_recordatorio.py` de forma determinista
+(sin tokens LLM, funciona con cualquier `modo_bot`): confirma el turno
+(`pending`→`confirmed`) o lo cancela (`cancelled` + notificación interna al
+responsable del grupo). *Reagendar* sigue el pipeline normal (motor/IA con tools de
+agenda).
 
-**Qué hace:** busca turnos cuyo recordatorio cae dentro de la ventana del cron
-(`CRON_WINDOW_MIN = 30`) y envía el mensaje con servicio, recurso, fecha/hora y precio.
+**Qué hace:** selecciona turnos activos futuros con `recordatorio_enviado=False` e
+`recordatorio_intentos < 3` cuyo momento de aviso ya llegó: desde
+`inicio − horas_antes` hasta el `inicio` del turno (semántica *catch-up* — si el cron
+estuvo caído, el recordatorio sale igual en la próxima corrida en vez de perderse).
+`horas_antes` sale de `Turno.recordatorio_horas_antes` si el cliente pidió una
+anticipación propia al agendar ("avísame 2 días antes", vía tool `agenda_registrar_turno`),
+sino de `GrupoAgenda.recordatorio_horas_antes` (default 24). Reservas hechas DESPUÉS
+del momento de aviso (ej. turno para dentro de 2 h con recordatorio de 24 h) no se
+recuerdan — el cliente acaba de agendar y ya recibió la confirmación.
 Es mensajería transaccional: NO se filtra por opt-out (el opt-out es de
 masivos/promociones), pero sí respeta números inválidos a nivel de envío.
 
-**Frecuencia:** cada 15 minutos (`*/15 * * * *`) — debe ser menor que `CRON_WINDOW_MIN`
-para no saltarse recordatorios.
+**Anti doble envío:** claim atómico del flag antes de enviar
+(`UPDATE ... WHERE recordatorio_enviado=False`); dos crons concurrentes no duplican.
+En fallo revierte el flag e incrementa `recordatorio_intentos`; al tercer fallo deja
+de reintentar.
 
-**Si no corre:** clientes sin recordatorio → más ausencias a turnos.
+**Frecuencia:** cada 15 minutos (`*/15 * * * *`).
+
+**Si no corre:** los recordatorios se acumulan y salen al reanudar, siempre que el
+turno no haya empezado todavía.
 
 ## aprender_conversaciones.py
 

@@ -69,6 +69,9 @@ def _construir_audiencia(campana: Campana):
 
     Excluye contactos dados de baja (opt-out) y números inválidos en WhatsApp.
     """
+    if campana.segmento_id and campana.segmento and campana.segmento.status:
+        from whatsapp.funciones_segmentos import queryset_segmento
+        return queryset_segmento(campana.segmento, sesion=campana.sesion)
     qs = Contacto.objects.filter(
         sesion=campana.sesion, status=True,
         opt_out=False, whatsapp_invalido=False,

@@ -12,11 +12,16 @@ _GREETING_WORDS = frozenset({
     'ok', 'okay', 'si', 'sí', 'no', 'gracias', 'thanks',
 })
 
-# Mensajes de confirmación breve — se salta FAISS, solo historial
+# Mensajes de confirmación breve / smalltalk — se salta FAISS y memoria, solo historial
 _ACK_RE = re.compile(
     r'^(ok|okay|okey|entendido|perfecto|excelente|bien|claro|ya|dale|listo|genial|'
     r'super|chévere|chevere|gracias|thanks|de acuerdo|muy bien|está bien|👍|'
-    r'de acuerdo|eso es todo|nada más|nada mas)[\s!.,]*$',
+    r'de acuerdo|eso es todo|nada más|nada mas|'
+    r'vale|va|bueno|buenísimo|buenisimo|joya|bárbaro|barbaro|de nada|'
+    r'gracias\s+a\s+(ti|vos|usted)|igualmente|a\s+la\s+orden|'
+    r'(muchas|mil)\s+gracias|muchísimas\s+gracias|muchisimas\s+gracias|'
+    r'chao|chau|adi[oó]s|bye|hasta\s+luego|hasta\s+mañana|hasta\s+pronto|nos\s+vemos|'
+    r'(ja|je|ji){2,}|x?d+|👌|🙏|❤️|😊|😂|🤣|jsjs\w*)[\s!.,;:…]*$',
     re.IGNORECASE | re.UNICODE,
 )
 

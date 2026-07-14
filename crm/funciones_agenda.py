@@ -470,6 +470,7 @@ def agenda_listar_mis_citas(conversacion, variables, config, endpoint=None) -> d
         'apellidos': 'string',
         'email': 'string',
         'driver_age': 'string|int — edad',
+        'recordatorio_horas_antes': 'int opcional — horas de anticipación del recordatorio pedidas por el cliente (ej. "avísame 2 días antes" = 48)',
     },
 )
 def agenda_registrar_turno(conversacion, variables, config, endpoint=None) -> dict:
@@ -514,6 +515,10 @@ def agenda_registrar_turno(conversacion, variables, config, endpoint=None) -> di
     if variables.get('fecha_nacimiento'):
         notas_lineas.append(f'F. Nac.: {variables["fecha_nacimiento"]}')
 
+    recordatorio_horas = _to_int(variables.get('recordatorio_horas_antes'), default=None)
+    if recordatorio_horas is not None and not (1 <= recordatorio_horas <= 24 * 30):
+        recordatorio_horas = None
+
     nuevo = Turno(
         recurso=recurso,
         servicio=servicio,
@@ -525,6 +530,7 @@ def agenda_registrar_turno(conversacion, variables, config, endpoint=None) -> di
         origen='chatbot',
         conversacion=conversacion,
         notas='\n'.join(notas_lineas)[:4000],
+        recordatorio_horas_antes=recordatorio_horas,
     )
     if nuevo.overlaps_existing():
         return {'etiqueta': 'error', 'body': {}, 'status': 409,
@@ -550,7 +556,7 @@ def agenda_registrar_turno(conversacion, variables, config, endpoint=None) -> di
             cliente_nombre=(f'{nombres_cli} {apellidos_cli}').strip(),
             motivo=motivo_cli,
             moneda=variables.get('moneda') or '',
-            recordatorio_h=variables.get('recordatorio_h') or 24,
+            recordatorio_h=recordatorio_horas or variables.get('recordatorio_h') or 24,
         )
     except Exception:
         logger.exception('Notificación de turno %s falló', nuevo.id)

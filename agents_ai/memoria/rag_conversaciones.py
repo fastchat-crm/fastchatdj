@@ -26,6 +26,7 @@ _MAX_RESPUESTA_CHARS = 1200
 _MIN_RESPUESTA_CHARS = 20
 _MAX_DOCS_MEMORIA = 4000
 _UMBRAL_DUPLICADO = 0.05
+_UMBRAL_RELEVANCIA = 1.4
 _MEMORIA_K = 3
 _MAX_CHARS_BLOQUE = 900
 
@@ -127,12 +128,18 @@ def guardar_conocimiento(agente_id, embeddings, texto: str, origen: str = 'resum
 def recuperar_memoria(agente_id, embeddings, query: str, k: int = _MEMORIA_K,
                       max_chars: int = _MAX_CHARS_BLOQUE,
                       excluir_conversacion: str = None,
-                      query_vector=None) -> str:
+                      query_vector=None,
+                      umbral_distancia: float = _UMBRAL_RELEVANCIA) -> str:
     """Recupera los aprendizajes más afines como bloque compacto de contexto.
 
     Con `query_vector` no se re-embebe el query (el caller ya lo calculó para
     la búsqueda principal). Excluye lo aprendido en la conversación actual y
     corta al presupuesto de chars. Devuelve '' si no hay nada relevante.
+
+    `umbral_distancia`: distancia L2² máxima para considerar un recuerdo
+    relevante (embeddings normalizados: 1.4 ≈ coseno 0.3). Recuerdos más
+    lejanos se descartan — antes se inyectaba el top-k aunque no tuviera
+    relación con la pregunta, gastando tokens. None = sin filtro.
     """
     if embeddings is None or not (query or '').strip():
         return ''
@@ -145,9 +152,13 @@ def recuperar_memoria(agente_id, embeddings, query: str, k: int = _MEMORIA_K,
         if vs is None:
             return ''
         if query_vector is not None:
-            docs = vs.similarity_search_by_vector(query_vector, k=max(k * 2, k))
+            docs_scored = vs.similarity_search_with_score_by_vector(query_vector, k=max(k * 2, k))
         else:
-            docs = vs.similarity_search(query, k=max(k * 2, k))
+            docs_scored = vs.similarity_search_with_score(query, k=max(k * 2, k))
+        if umbral_distancia is not None:
+            docs = [d for d, score in docs_scored if score <= umbral_distancia]
+        else:
+            docs = [d for d, _ in docs_scored]
     except Exception as exc:
         logger.debug("Memoria RAG del agente %s no disponible: %s", agente_id, exc)
         return ''

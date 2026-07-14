@@ -1,0 +1,40 @@
+.seq-paso-row {
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+    background: var(--bs-tertiary-bg, #f8f9fa);
+}
+
+.seq-paso-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #0d6efd;
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.seq-resultados-busqueda .list-group-item {
+    cursor: pointer;
+}
+
+.seq-badge-estado-activa {
+    background: #198754;
+}
+
+.seq-badge-estado-completada {
+    background: #0d6efd;
+}
+
+.seq-badge-estado-error {
+    background: #dc3545;
+}
+
+.seq-badge-estado-otro {
+    background: #6c757d;
+}

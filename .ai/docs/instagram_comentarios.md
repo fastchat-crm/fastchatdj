@@ -23,7 +23,9 @@ y el asesor puede:
 | Archivo | Rol |
 |---|---|
 | `whatsapp/models.py` → `ComentarioSocial` (final del archivo) | Modelo. `canal` (`instagram`/`tiktok`), `comment_id` unique, `estado` (`nuevo`/`respondido`/`oculto`), `dm_enviado`, FK opcional a `ConversacionWhatsApp`, `payload_json` crudo. |
-| `whatsapp/funciones_comentarios.py` | Helpers: `guardar_comentario_instagram` (webhook), `responder_comentario`, `ocultar_comentario`, `enviar_dm_comentario`, `_vincular_conversacion`. |
+| `whatsapp/funciones_comentarios.py` | Helpers: `guardar_comentario_instagram` (webhook), `responder_comentario`, `ocultar_comentario`, `enviar_dm_comentario`, `_vincular_conversacion`. Desde 2026-07-14 incluye el motor de reglas: `procesar_reglas_comentario(comentario)` se dispara al final de `guardar_comentario_instagram` — evalúa las `ReglaComentario` activas de la sesión (orden asc, primera que matchea gana; keywords sin tildes/mayúsculas, vacías = todo; `media_id` opcional acota a una publicación) y ejecuta respuesta pública, DM automático y/o etiqueta (si el autor ya es Contacto por `external_id`). |
+| `whatsapp/models.py` → `ReglaComentario` | Regla comentario→DM: sesión, canal, keywords, media_id, respuesta_publica, mensaje_dm, etiqueta FK, activa, orden, usos/ultimo_uso. |
+| `whatsapp/view_reglas_comentarios.py` + `instagram/view_reglas.py` | CRUD de reglas (vista genérica por canal + wrapper IG). UI en `/instagram/reglas-comentarios/`, template `whatsapp/reglas_comentarios/listado.html` + `static/js/whatsapp/reglas_comentarios.js`. Valida que la regla tenga al menos una acción. |
 | `whatsapp/view_comentarios.py` | Vista función `comentariosView`: GET listado con filtros (criterio/estado/sesión) + POST acciones (`responder`, `ocultar`, `mostrar`, `enviar_dm`). Visibilidad por `sesiones_vista_completa`. |
 | `meta/instagram.py` | Métodos nuevos de `InstagramService`: `responder_comentario`, `ocultar_comentario`, `enviar_dm_desde_comentario`. |
 | `whatsapp/meta_social_webhook_view.py` | `_procesar_post_social` ahora recorre `entry[].changes[]` y con `field == 'comments'` llama `guardar_comentario_instagram(sesion, config, value)`. Ignora ecos (autor = `ig_user_id`) y duplicados. |
@@ -33,7 +35,7 @@ y el asesor puede:
 
 ## Pendientes del developer
 
-1. `makemigrations whatsapp` + `migrate` (modelo `ComentarioSocial`).
+1. `makemigrations whatsapp` + `migrate` (modelo `ComentarioSocial`; 2026-07-14 agrega `ReglaComentario`).
 2. En Meta App: suscribir el campo **`comments`** del producto Instagram (además de `messages`).
 3. Registrar los módulos en el sidebar: correr `python manage.py seed_modulos` (desde 2026-07-09
    resetea todo el catálogo, recrea las secciones — incluidas Instagram y TikTok con sus

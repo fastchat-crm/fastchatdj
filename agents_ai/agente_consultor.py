@@ -64,6 +64,8 @@ _USER_SNIPPET      = 150    # chars por mensaje de usuario en historial
 _AI_SNIPPET        = 400    # chars por respuesta IA en historial
 _MAX_OUTPUT_TOKENS = 3000   # tokens de salida — suficiente para menús completos con pizzas/precios
 _TOPIC_ANCHOR_CHARS = 180   # chars del primer mensaje sustantivo como ancla de tema
+_UMBRAL_DISTANCIA  = 1.4    # distancia L2² máx de un chunk relevante (embeddings normalizados: ≈ coseno 0.3)
+_TEMPERATURE_TOOLS = 0.2    # temperatura máx durante tool-calling — argumentos deterministas
 # Para consultas amplias en Modo A (sin FAISS) se envía el contexto_estatico completo sin cap
 
 # La clasificación de mensajes (saludos/acks/consultas amplias) vive en
@@ -119,6 +121,7 @@ class AgenteConsultor:
         self.cfg_ai_snippet        = _cfg('cfg_ai_snippet', _AI_SNIPPET)
         self.cfg_max_output_tokens = _cfg('cfg_max_output_tokens', _MAX_OUTPUT_TOKENS)
         self.cfg_topic_anchor_chars = _cfg('cfg_topic_anchor_chars', _TOPIC_ANCHOR_CHARS)
+        self.cfg_umbral_distancia  = _cfg('cfg_umbral_distancia', _UMBRAL_DISTANCIA)
 
         # Persona del bot — si el agente no tiene los campos (agentes viejos), defaults neutros.
         # Si el agente tiene un `personalidad_preset` distinto de 'personalizado',
@@ -599,13 +602,16 @@ class AgenteConsultor:
                 except Exception as exc:
                     logger.debug("embed_query falló — búsqueda estándar: %s", exc)
 
+            # Umbral solo en consultas específicas — en amplias (menú/catálogo)
+            # se quiere TODO el corpus aunque la distancia sea alta.
+            _umbral = None if es_consulta_amplia else self.cfg_umbral_distancia
             docs = _hybrid_search(
                 self.vectorstore, self._bm25, _query_faiss, _k, _lambda,
-                query_vector=_query_vector,
+                query_vector=_query_vector, umbral_distancia=_umbral,
             )
             docs_enlaces = _hybrid_search(
                 self.vectorstore_enlaces, self._bm25_enlaces, _query_faiss, _k, _lambda,
-                query_vector=_query_vector,
+                query_vector=_query_vector, umbral_distancia=_umbral,
             )
             logger.debug(
                 "Hybrid: %d docs + %d enlaces (amplia=%s, bm25=%s)",
@@ -690,6 +696,7 @@ class AgenteConsultor:
                 self.agente.id, self.embeddings, query,
                 excluir_conversacion=conv_id,
                 query_vector=query_vector,
+                umbral_distancia=self.cfg_umbral_distancia,
             )
         except Exception as exc:
             logger.debug("Memoria RAG no disponible: %s", exc)
@@ -1000,7 +1007,19 @@ class AgenteConsultor:
         tools = self._build_tools()
         tool_map = {t.name: t for t in tools}
         try:
-            llm_con_tools = self.llm.bind_tools(tools)
+            # Tool-calling con temperatura baja: los argumentos de las tools
+            # (fechas, cantidades, ids de servicio) necesitan determinismo;
+            # con la temperatura de charla el modelo inventa args y fuerza
+            # iteraciones extra del loop (= llamadas LLM extra).
+            _llm_tools = get_llm_cached(
+                self._provider_obj,
+                apikey=self.apikey,
+                model_name=self.model_name,
+                max_output_tokens=self.cfg_max_output_tokens,
+                temperature=min(self.cfg_temperature, _TEMPERATURE_TOOLS),
+                base_url=self.base_url,
+            )
+            llm_con_tools = _llm_tools.bind_tools(tools)
         except Exception as exc:
             logger.warning("bind_tools no soportado — fallback a consultar() estándar: %s", exc)
             return self._consultar_con_listas_legacy(pregunta, descripcion_agente)

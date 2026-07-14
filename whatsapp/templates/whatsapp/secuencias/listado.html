@@ -1,0 +1,279 @@
+{% extends 'base.html' %}
+
+{% block head %}
+    <link rel="stylesheet" href="/static/css/whatsapp/secuencias.css?v1.0">
+{% endblock %}
+
+{% block content %}
+    <div class="container-fluid p-0">
+
+        <div class="alert alert-info d-flex align-items-center gap-3 mb-3">
+            <i class="fa fa-stream fa-2x"></i>
+            <div>
+                <strong>¿Qué es una secuencia?</strong><br>
+                <small>
+                    Una secuencia (o <em>drip</em>) es una serie de mensajes que se envían solos con esperas
+                    entre pasos: <code>Bienvenida → 24h → Beneficios → 3 días → Oferta</code>.
+                    Los contactos entran al asignarles la <strong>etiqueta disparadora</strong> o inscribiéndolos
+                    manualmente. Si el contacto responde y la secuencia tiene "salir al responder",
+                    deja de recibir pasos. Los envíos respetan bajas (opt-out) y la ventana de 24h de Meta.
+                </small>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="GET" class="mb-0">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-8">
+                            <label class="form-label">Búsqueda</label>
+                            <div class="input-group">
+                                <span class="input-group-text border-end-0">
+                                    <i class="fa fa-search text-muted"></i>
+                                </span>
+                                <input type="text" class="form-control border-start-0"
+                                       placeholder="Buscar por nombre o descripción" name="criterio"
+                                       value="{{ criterio|default:'' }}">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search me-1"></i> Filtrar
+                                </button>
+                                {% if url_vars %}
+                                    <a href="{{ request.path }}" class="btn btn-default">
+                                        <i class="fas fa-times"></i> Limpiar
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h4 class="mb-0">Secuencias</h4>
+                <small class="text-muted">
+                    {{ list_count|default:0 }} secuencia{{ list_count|default:0|pluralize }}
+                    · Seguimientos automáticos por goteo
+                </small>
+            </div>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalSecuencia">
+                <i class="fa fa-plus"></i> Nueva secuencia
+            </button>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <table class="table table-striped align-middle">
+                    <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Disparador</th>
+                        <th>Pasos</th>
+                        <th>Activas</th>
+                        <th>Completadas</th>
+                        <th>Estado</th>
+                        <th style="width:220px">Acciones</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for s in listado %}
+                        <tr data-id="{{ s.id }}">
+                            <td>
+                                <strong>{{ s.nombre }}</strong>
+                                {% if s.descripcion %}<br><small class="text-muted">{{ s.descripcion|truncatechars:60 }}</small>{% endif %}
+                            </td>
+                            <td>
+                                {% if s.etiqueta_disparadora %}
+                                    <span class="badge" style="background:{{ s.etiqueta_disparadora.color }}">
+                                        {{ s.etiqueta_disparadora.nombre }}
+                                    </span>
+                                {% else %}
+                                    <small class="text-muted">Manual</small>
+                                {% endif %}
+                            </td>
+                            <td>{{ s.total_pasos }}</td>
+                            <td>{{ s.activas }}</td>
+                            <td>{{ s.completadas }}</td>
+                            <td>
+                                {% if s.activa %}
+                                    <span class="badge bg-success">Activa</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Pausada</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-secondary btn-edit" title="Editar"
+                                        data-id="{{ s.id }}" data-nombre="{{ s.nombre }}"
+                                        data-desc="{{ s.descripcion }}"
+                                        data-etiqueta="{{ s.etiqueta_disparadora_id|default:'' }}"
+                                        data-activa="{{ s.activa|yesno:'1,0' }}"
+                                        data-salir="{{ s.salir_al_responder|yesno:'1,0' }}">
+                                    <i class="fa fa-pen"></i>
+                                </button>
+                                <button class="btn btn-sm btn-primary btn-inscribir" title="Inscribir contacto"
+                                        data-id="{{ s.id }}" data-nombre="{{ s.nombre }}">
+                                    <i class="fa fa-user-plus"></i>
+                                </button>
+                                <button class="btn btn-sm btn-info btn-inscripciones" title="Ver inscripciones"
+                                        data-id="{{ s.id }}" data-nombre="{{ s.nombre }}">
+                                    <i class="fa fa-list"></i>
+                                </button>
+                                <button class="btn btn-sm btn-warning btn-toggle" title="Activar / pausar"
+                                        data-id="{{ s.id }}">
+                                    <i class="fa fa-power-off"></i>
+                                </button>
+                                <button class="btn btn-sm btn-danger btn-del" title="Eliminar"
+                                        data-id="{{ s.id }}" data-nombre="{{ s.nombre }}">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted">
+                                Aún no has creado secuencias. Crea la primera para automatizar seguimientos.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% include 'paginacion.html' %}
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalSecuencia" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <form class="modal-content" id="formSecuencia">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Nueva secuencia</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="action" value="add">
+                    <input type="hidden" name="pk" value="">
+                    <input type="hidden" name="pasos_json" value="">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Nombre *</label>
+                            <input type="text" name="nombre" class="form-control" required maxlength="120"
+                                   placeholder="Ej: Bienvenida nuevos leads">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Etiqueta disparadora</label>
+                            <select name="etiqueta_disparadora" class="form-select">
+                                <option value="">Sin disparador (inscripción manual)</option>
+                                {% for e in etiquetas_disponibles %}
+                                    <option value="{{ e.id }}">{{ e.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Descripción</label>
+                        <input type="text" name="descripcion" class="form-control" maxlength="255"
+                               placeholder="Opcional: objetivo de esta secuencia">
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="activa" id="chkActiva" checked>
+                                <label class="form-check-label" for="chkActiva">Secuencia activa</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="salir_al_responder" id="chkSalir" checked>
+                                <label class="form-check-label" for="chkSalir">Salir cuando el contacto responde</label>
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <strong>Pasos de la secuencia</strong>
+                        <button type="button" class="btn btn-sm btn-primary" id="btnAgregarPaso">
+                            <i class="fa fa-plus"></i> Agregar paso
+                        </button>
+                    </div>
+                    <div id="contenedorPasos"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalInscribir" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Inscribir contacto</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="inscribirSecuenciaId" value="">
+                    <label class="form-label">Buscar contacto (mínimo 3 caracteres)</label>
+                    <input type="text" class="form-control mb-2" id="inputBuscarContacto"
+                           placeholder="Nombre o número">
+                    <div class="list-group seq-resultados-busqueda mb-3" id="resultadosContacto"></div>
+                    <hr>
+                    <label class="form-label">O inscribir un segmento completo</label>
+                    <div class="row g-2">
+                        <div class="col-8">
+                            <select class="form-select" id="selectSegmentoInscribir">
+                                <option value="">Elegir segmento…</option>
+                                {% for s in segmentos_disponibles %}
+                                    <option value="{{ s.id }}">{{ s.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-4">
+                            <button type="button" class="btn btn-primary w-100" id="btnInscribirSegmento">
+                                <i class="fa fa-users"></i> Inscribir
+                            </button>
+                        </div>
+                    </div>
+                    <small class="text-muted">Se inscriben los contactos que cumplen hoy las condiciones del segmento. <a href="/whatsapp/segmentos/">Administrar segmentos</a></small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalInscripciones" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Inscripciones</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <table class="table table-sm align-middle">
+                        <thead>
+                        <tr>
+                            <th>Contacto</th>
+                            <th>Número</th>
+                            <th>Estado</th>
+                            <th>Pasos enviados</th>
+                            <th>Próximo envío</th>
+                            <th></th>
+                        </tr>
+                        </thead>
+                        <tbody id="tbodyInscripciones"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+    <script src="/static/js/whatsapp/secuencias.js?v1.1"></script>
+{% endblock %}

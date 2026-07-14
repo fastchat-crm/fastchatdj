@@ -547,11 +547,22 @@ POST /whatsapp/meta_webhook/  ó  /whatsapp/webhook_handler/
    ▼
 procesar_mensaje.process_incoming_message()
    │
-   ├─ idempotencia por mensaje_id_externo
+   ├─ idempotencia en dos capas: candado cache SET NX 60s (cierra la carrera de
+   │  dos entregas simultáneas del mismo id) + chequeo BD por mensaje_id_externo
+   │  (reenvíos tardíos de Meta/Baileys)
    ├─ persiste / actualiza Contacto
    ├─ persiste / actualiza ConversacionWhatsApp (recalcula fecha_hora_expira)
    ├─ persiste MensajeWhatsApp
    ├─ actualiza EstadisticasConversacion
+   ├─ secuencias drip: mensaje entrante cancela inscripciones activas con
+   │  salir_al_responder=True (funciones_secuencias.cancelar_por_respuesta)
+   ├─ growth links: texto con "(ref: codigo)" → funciones_growth aplica
+   │  etiqueta/secuencia y, si hay respuesta fija, corta el pipeline
+   │  (modo growth_link). Corre después de la cancelación de secuencias
+   │  para que el mismo mensaje no cancele lo que el enlace inscribe
+   ├─ respuesta a recordatorio de turno: "confirmar"/"cancelar" con turno
+   │  recordado vigente → agenda/respuestas_recordatorio.py resuelve sin LLM
+   │  y corta el pipeline (modo respuesta_recordatorio)
    │
    ▼
 async_to_sync(channel_layer.group_send) → ChatConsumer + SessionRoomConsumer
@@ -627,7 +638,7 @@ conversacionesView lee contactoId de session y abre la conv automáticamente
 | Snapshot de proveedor en la conv | `ConversacionWhatsApp.proveedor_atencion` | Si la sesión migra de Baileys a Meta, las conversaciones existentes mantienen su transporte original |
 | Cierre por inactividad | Cron job evalúa `fecha_hora_expira < now` y llama `cerrar()` | Liberar conversaciones colgadas; respeta `bloquear_cierre=True`. **`min_sesion=0` (default) = SIN cierre por inactividad corta**: `fecha_hora_expira=None`, la conversación la termina el asesor (2026-07-13; antes `or 10` convertía el 0 en 10 min) — con red de seguridad: el cron aplica **cierre higiénico** tras `Configuracion.dias_cierre_higienico` días sin mensajes (default 3, 0=nunca), SIN despedida, incluso asignadas, para que corran resumen/sentimiento/reglas de fin. La ventana Meta de 24h sigue gobernando el envío: pasadas 24h sin mensaje del cliente, `send` se bloquea y solo queda plantilla (`_bloqueo_ventana_meta`) |
 | Manager `expirado` | `models_querysetmanagers.py:37` filtra solo por `estado_conversacion=1` | Fuente de verdad — evita que estados inconsistentes (`conversacion_finalizada=True` pero `estado_conversacion=0`) aparezcan en finalizadas |
-| Idempotencia webhook | Unique `mensaje_id_externo` | Meta y Baileys reintentan; sin esto se duplicarían mensajes |
+| Idempotencia webhook | Candado cache SET NX 60s + chequeo BD por `mensaje_id_externo` (`procesar_mensaje.py`) | Meta y Baileys reintentan; el chequeo BD solo no cubría dos entregas SIMULTÁNEAS del mismo id (ambas pasaban el `.exists()` antes de que ninguna guardara → doble respuesta IA y tokens dobles). TTL corto a propósito: si el procesamiento falla antes de guardar, el reintento legítimo debe poder procesarse |
 | Cliente vuelve tras "resuelta" | `procesar_mensaje.py` (bloque de renovación de ventana): si `estado_atencion=='resuelta'` y escribe el cliente → `estado_atencion='abierta'` + `ai_activo=True` (con traza `reabierta_por_cliente_tras_resuelta`) | "Marcar como resuelta" NO cierra la conversación; como el asesor al escribir deja `ai_activo=False`, sin este guard el cliente que volvía quedaba en silencio total (ni bot ni asesor) |
 | Anti-duplicado de conversaciones | `obtener_o_crear_activa` (`models.py:1028`): (a) serializa con `select_for_update` sobre la fila del `Contacto`; (b) si la conv está abierta pero con ventana vencida y el cron aún no la cerró, la REUSA renovando `fecha_hora_expira` en vez de crear otra | Dos mensajes en paralelo creaban DOS conversaciones (carrera), y un mensaje llegado tras vencer `min_sesion` pero antes del cron de cierre abría una duplicada mientras la vieja seguía visible (fix 2026-07-13) |
 | Rate limit Node | Cache `wa_rate_limited_<session_id>` | Si Baileys reporta saturación, `process_incoming_message` corta antes de invocar IA |

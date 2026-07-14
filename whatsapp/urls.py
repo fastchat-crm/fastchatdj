@@ -31,6 +31,10 @@ from .tiktok_webhook_view import tiktok_webhook
 from .view_plantillas import plantillasView
 from .view_tarifas import tarifasView
 from .view_etiquetas import etiquetasView
+from .view_secuencias import secuenciasView
+from .view_segmentos import segmentosView
+from .view_centro import centroWhatsappView
+from .view_growth import growthView
 from .view_pipeline import pipelineView
 from .view_campanas import campanasView
 from .view_horarios import horariosView
@@ -39,6 +43,11 @@ from .view_supervision import supervisionView
 from . import api_rest
 
 whatsapp_urls = (
+    {
+        "nombre": "Centro WhatsApp",
+        "url": 'centro/',
+        "vista": centroWhatsappView,
+    },
     {
         "nombre": "Sesiones",
         "url": 'sesiones/',
@@ -83,6 +92,21 @@ whatsapp_urls = (
         "nombre": "Etiquetas",
         "url": 'etiquetas/',
         "vista": etiquetasView,
+    },
+    {
+        "nombre": "Secuencias",
+        "url": 'secuencias/',
+        "vista": secuenciasView,
+    },
+    {
+        "nombre": "Segmentos",
+        "url": 'segmentos/',
+        "vista": segmentosView,
+    },
+    {
+        "nombre": "Enlaces de captación",
+        "url": 'enlaces/',
+        "vista": growthView,
     },
     {
         "nombre": "Pipeline de ventas",

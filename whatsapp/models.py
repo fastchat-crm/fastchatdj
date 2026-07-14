@@ -1369,6 +1369,10 @@ class MensajeWhatsAppProgramado(ModeloBase):
     archivo = models.FileField(upload_to='whatsapp_programados/', blank=True, null=True, verbose_name='Archivo adjunto')
     enviado = models.BooleanField(default=False, verbose_name='¿Enviado?')
     fecha_envio = models.DateTimeField(blank=True, null=True, verbose_name='Fecha y hora de envío')
+    intentos = models.PositiveSmallIntegerField(
+        default=0, verbose_name='Intentos de envío',
+        help_text='Cantidad de envíos fallidos; al llegar al tope el cron deja de reintentar.'
+    )
     enviado_por = models.ForeignKey(
         Usuario, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Enviado por'
     )
@@ -2265,6 +2269,11 @@ class Campana(ModeloBase):
     )
 
     # Audiencia: filtros declarativos sobre contactos
+    segmento = models.ForeignKey(
+        'whatsapp.SegmentoContacto', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='campanas', verbose_name='Segmento guardado',
+        help_text='Si se elige un segmento, la audiencia sale de sus condiciones y se ignoran las etiquetas de abajo.',
+    )
     etiquetas_incluir = models.ManyToManyField(
         EtiquetaContacto, blank=True, related_name='campanas_incluir',
         verbose_name='Etiquetas a incluir',
@@ -2748,3 +2757,266 @@ class ComentarioSocial(ModeloBase):
     def __str__(self):
         autor = self.autor_username or self.autor_external_id
         return f"{self.get_canal_display()} · @{autor}: {(self.texto or '')[:40]}"
+
+
+class ReglaComentario(ModeloBase):
+    """Regla comentario→DM (estilo ManyChat): cuando llega un comentario que
+    matchea las keywords, responde público y/o manda private reply (DM) al
+    autor, y si el autor ya es contacto le aplica una etiqueta.
+
+    Procesada en `funciones_comentarios.procesar_reglas_comentario` al ingresar
+    cada comentario por webhook. La primera regla que matchea gana.
+    """
+    sesion = models.ForeignKey(
+        SesionWhatsApp, on_delete=models.CASCADE,
+        related_name='reglas_comentario', verbose_name='Sesión',
+    )
+    canal = models.CharField(
+        'Canal', max_length=20, choices=CANALES_COMENTARIO,
+        default='instagram', db_index=True,
+    )
+    nombre = models.CharField('Nombre', max_length=120)
+    keywords = models.TextField(
+        'Palabras clave', blank=True, default='',
+        help_text='Separadas por coma (ej: precio, info, quiero). Vacío = todos los comentarios.',
+    )
+    media_id = models.CharField(
+        'ID de publicación', max_length=120, blank=True, default='',
+        help_text='Opcional: aplicar solo a los comentarios de esta publicación.',
+    )
+    respuesta_publica = models.TextField(
+        'Respuesta pública', blank=True, default='',
+        help_text='Se responde el comentario a la vista de todos. Vacío = no responder público.',
+    )
+    mensaje_dm = models.TextField(
+        'Mensaje DM (private reply)', blank=True, default='',
+        help_text='Se envía por DM al autor del comentario. Vacío = no enviar DM.',
+    )
+    etiqueta = models.ForeignKey(
+        EtiquetaContacto, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='reglas_comentario', verbose_name='Etiqueta a aplicar',
+        help_text='Solo se aplica si el autor ya existe como contacto (o cuando responda el DM).',
+    )
+    activa = models.BooleanField('Activa', default=True, db_index=True)
+    orden = models.PositiveSmallIntegerField('Orden', default=1)
+    usos = models.PositiveIntegerField('Usos totales', default=0)
+    ultimo_uso = models.DateTimeField('Último uso', null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Regla de comentarios'
+        verbose_name_plural = 'Reglas de comentarios'
+        ordering = ['sesion', 'orden', 'id']
+
+    def __str__(self):
+        return f'{self.nombre} ({self.get_canal_display()})'
+
+    def lista_keywords(self):
+        return [k.strip().lower() for k in (self.keywords or '').split(',') if k.strip()]
+
+
+class EnlaceCrecimiento(ModeloBase):
+    """Growth link (estilo ManyChat): link wa.me con texto prellenado que trae
+    un marcador `(ref: <codigo>)`. Cuando el contacto envía ese primer mensaje,
+    `funciones_growth.procesar_growth_link` lo detecta y ejecuta las acciones
+    configuradas: aplicar etiqueta (que a su vez puede disparar una secuencia),
+    inscribir en secuencia directa y/o responder un mensaje fijo.
+
+    Sirve para medir y automatizar cada canal de captación: bio de Instagram,
+    QR en el local, volante, firma de correo — cada uno con su propio enlace.
+    """
+    nombre = models.CharField('Nombre', max_length=120)
+    descripcion = models.TextField('Descripción', blank=True, default='')
+    sesion = models.ForeignKey(
+        SesionWhatsApp, on_delete=models.CASCADE,
+        related_name='enlaces_crecimiento', verbose_name='Sesión destino',
+    )
+    codigo = models.SlugField(
+        'Código', max_length=40, unique=True,
+        help_text='Identificador del enlace; viaja en el texto prellenado como (ref: codigo).',
+    )
+    texto_prellenado = models.TextField(
+        'Texto prellenado', default='¡Hola! Quiero más información.',
+        help_text='Mensaje que el cliente enviará al abrir el link. El marcador (ref: codigo) se agrega solo.',
+    )
+    activo = models.BooleanField('Activo', default=True, db_index=True)
+    etiqueta = models.ForeignKey(
+        EtiquetaContacto, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='enlaces_crecimiento', verbose_name='Etiqueta a aplicar',
+    )
+    secuencia = models.ForeignKey(
+        'whatsapp.SecuenciaWhatsApp', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='enlaces_crecimiento', verbose_name='Secuencia a inscribir',
+    )
+    mensaje_respuesta = models.TextField(
+        'Respuesta automática', blank=True, default='',
+        help_text='Si se define, se responde este texto y el mensaje no pasa al bot/IA.',
+    )
+    usos = models.PositiveIntegerField('Usos totales', default=0)
+    ultimo_uso = models.DateTimeField('Último uso', null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Enlace de captación'
+        verbose_name_plural = 'Enlaces de captación'
+        ordering = ['nombre']
+
+    def __str__(self):
+        return f'{self.nombre} ({self.codigo})'
+
+    def texto_completo(self):
+        return f'{(self.texto_prellenado or "").strip()} (ref: {self.codigo})'
+
+    def url_whatsapp(self):
+        numero = ''.join(ch for ch in (self.sesion.numero or '') if ch.isdigit())
+        from urllib.parse import quote
+        return f'https://wa.me/{numero}?text={quote(self.texto_completo())}'
+
+
+class UsoEnlaceCrecimiento(ModeloBase):
+    """Primer uso de un enlace por contacto — evita re-disparar acciones y da
+    la métrica de leads captados por enlace."""
+    enlace = models.ForeignKey(
+        EnlaceCrecimiento, on_delete=models.CASCADE,
+        related_name='usos_detalle', verbose_name='Enlace',
+    )
+    contacto = models.ForeignKey(
+        Contacto, on_delete=models.CASCADE,
+        related_name='usos_enlaces', verbose_name='Contacto',
+    )
+
+    class Meta:
+        verbose_name = 'Uso de enlace de captación'
+        verbose_name_plural = 'Usos de enlaces de captación'
+        constraints = [
+            models.UniqueConstraint(fields=['enlace', 'contacto'], name='uq_uso_enlace_contacto'),
+        ]
+
+    def __str__(self):
+        return f'{self.contacto} vía {self.enlace.codigo}'
+
+
+class SegmentoContacto(ModeloBase):
+    """Segmento guardado: filtro reutilizable de contactos (estilo ManyChat).
+
+    Las condiciones viven en JSON y se evalúan a queryset en
+    `funciones_segmentos.queryset_segmento`. Estructura de `condiciones`:
+      {
+        "etiquetas_incluir": [ids], "modo_etiquetas": "any"|"all",
+        "etiquetas_excluir": [ids],
+        "canales": ["whatsapp", "instagram", "messenger"],
+        "campos": [{"campo_id": int, "operador": "igual|contiene|vacio|no_vacio", "valor": "..."}],
+        "actividad": {"tipo": "con_actividad"|"sin_actividad", "dias": int}
+      }
+    Todas las claves son opcionales; siempre se excluyen opt-out y números inválidos.
+    """
+    nombre = models.CharField('Nombre', max_length=120)
+    descripcion = models.TextField('Descripción', blank=True, default='')
+    condiciones = models.JSONField('Condiciones', default=dict, blank=True)
+
+    class Meta:
+        verbose_name = 'Segmento de contactos'
+        verbose_name_plural = 'Segmentos de contactos'
+        ordering = ['nombre']
+
+    def __str__(self):
+        return self.nombre
+
+
+ESTADOS_INSCRIPCION_SECUENCIA = (
+    ('activa', 'Activa'),
+    ('completada', 'Completada'),
+    ('cancelada_respuesta', 'Cancelada por respuesta del contacto'),
+    ('cancelada_manual', 'Cancelada manualmente'),
+    ('error', 'Error'),
+)
+
+
+class SecuenciaWhatsApp(ModeloBase):
+    """Secuencia drip: serie de mensajes con esperas entre pasos (estilo ManyChat).
+
+    El contacto se inscribe manualmente, al asignársele la etiqueta disparadora,
+    o vía API. El cron `ejecutar_secuencias.py` despacha los pasos vencidos.
+    Con `salir_al_responder=True`, cualquier mensaje entrante del contacto
+    cancela sus inscripciones activas (el objetivo del drip ya se cumplió).
+    """
+    nombre = models.CharField('Nombre', max_length=120)
+    descripcion = models.TextField('Descripción', blank=True, default='')
+    activa = models.BooleanField('Activa', default=True, db_index=True)
+    etiqueta_disparadora = models.ForeignKey(
+        EtiquetaContacto, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='secuencias', verbose_name='Etiqueta disparadora',
+        help_text='Al asignar esta etiqueta a un contacto, se inscribe automáticamente.',
+    )
+    salir_al_responder = models.BooleanField(
+        'Salir al responder', default=True,
+        help_text='Si el contacto escribe, se cancela su inscripción y no recibe más pasos.',
+    )
+
+    class Meta:
+        verbose_name = 'Secuencia de mensajes'
+        verbose_name_plural = 'Secuencias de mensajes'
+        ordering = ['nombre']
+
+    def __str__(self):
+        return self.nombre
+
+    def pasos_activos(self):
+        return self.pasos.filter(status=True).order_by('orden')
+
+
+class PasoSecuencia(ModeloBase):
+    """Un mensaje de la secuencia, con la espera desde el paso anterior."""
+    secuencia = models.ForeignKey(
+        SecuenciaWhatsApp, on_delete=models.CASCADE,
+        related_name='pasos', verbose_name='Secuencia',
+    )
+    orden = models.PositiveSmallIntegerField('Orden', default=1)
+    espera_horas = models.PositiveIntegerField(
+        'Espera (horas)', default=24,
+        help_text='Horas desde la inscripción (paso 1) o desde el paso anterior.',
+    )
+    mensaje = models.TextField('Mensaje')
+
+    class Meta:
+        verbose_name = 'Paso de secuencia'
+        verbose_name_plural = 'Pasos de secuencia'
+        ordering = ['secuencia', 'orden']
+
+    def __str__(self):
+        return f'{self.secuencia.nombre} · paso {self.orden}'
+
+
+class InscripcionSecuencia(ModeloBase):
+    """Estado de un contacto dentro de una secuencia."""
+    secuencia = models.ForeignKey(
+        SecuenciaWhatsApp, on_delete=models.CASCADE,
+        related_name='inscripciones', verbose_name='Secuencia',
+    )
+    contacto = models.ForeignKey(
+        Contacto, on_delete=models.CASCADE,
+        related_name='inscripciones_secuencia', verbose_name='Contacto',
+    )
+    estado = models.CharField(
+        'Estado', max_length=25, choices=ESTADOS_INSCRIPCION_SECUENCIA,
+        default='activa', db_index=True,
+    )
+    paso_actual = models.PositiveSmallIntegerField(
+        'Pasos completados', default=0,
+        help_text='Cantidad de pasos ya enviados; el próximo envío corresponde al paso siguiente.',
+    )
+    proximo_envio = models.DateTimeField('Próximo envío', null=True, blank=True, db_index=True)
+    intentos = models.PositiveSmallIntegerField(
+        'Intentos de envío', default=0,
+        help_text='Fallos del paso pendiente; al llegar al tope el cron marca la inscripción en error.',
+    )
+    finalizada_en = models.DateTimeField('Finalizada en', null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Inscripción en secuencia'
+        verbose_name_plural = 'Inscripciones en secuencias'
+        ordering = ['-id']
+        indexes = [
+            models.Index(fields=['estado', 'proximo_envio']),
+        ]
+
+    def __str__(self):
+        return f'{self.contacto} en {self.secuencia.nombre} ({self.get_estado_display()})'

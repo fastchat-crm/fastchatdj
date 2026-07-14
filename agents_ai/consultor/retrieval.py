@@ -105,7 +105,33 @@ def _get_bm25_cached(path: str, vs, k: int = 5):
     return retriever
 
 
-def _hybrid_search(vs, bm25, query: str, k: int, lambda_mult: float, query_vector=None) -> list:
+def _filtrar_por_umbral(vs, query_vector, docs_sem: list, fetch_k: int, umbral_distancia: float) -> list:
+    """Descarta chunks semánticos cuya distancia L2² al query supera el umbral.
+
+    FAISS con embeddings normalizados: distancia² = 2·(1 - coseno), o sea
+    umbral 1.4 ≈ coseno 0.3. Chunks por encima del umbral son ruido que
+    gasta tokens y empuja al modelo a alucinar. Los resultados BM25 no se
+    filtran (keyword exacta = señal fuerte por sí sola).
+    """
+    if not docs_sem or query_vector is None or umbral_distancia is None:
+        return docs_sem
+    try:
+        scored = vs.similarity_search_with_score_by_vector(query_vector, k=fetch_k)
+    except Exception as e:
+        logger.debug("Score filter error: %s", e)
+        return docs_sem
+    permitidos = {doc.page_content for doc, score in scored if score <= umbral_distancia}
+    filtrados = [d for d in docs_sem if d.page_content in permitidos]
+    if len(filtrados) < len(docs_sem):
+        logger.debug(
+            "Umbral %.2f descartó %d/%d chunks semánticos",
+            umbral_distancia, len(docs_sem) - len(filtrados), len(docs_sem),
+        )
+    return filtrados
+
+
+def _hybrid_search(vs, bm25, query: str, k: int, lambda_mult: float, query_vector=None,
+                   umbral_distancia: float = None) -> list:
     """
     Búsqueda híbrida BM25 + FAISS MMR.
     - BM25 : recupera por keywords exactas (nombres de productos, términos específicos)
@@ -116,6 +142,10 @@ def _hybrid_search(vs, bm25, query: str, k: int, lambda_mult: float, query_vecto
     `query_vector`: embedding pre-calculado del query. Cuando se pasa, la
     búsqueda usa *_by_vector y NO re-embebe — permite compartir UNA sola
     llamada de embedding entre documentos, enlaces y memoria.
+
+    `umbral_distancia`: si se pasa junto con `query_vector`, los chunks
+    semánticos con distancia mayor al umbral se descartan (ver
+    _filtrar_por_umbral). None = sin filtro (comportamiento previo).
     """
     docs_kw  = []
     docs_sem = []
@@ -133,6 +163,7 @@ def _hybrid_search(vs, bm25, query: str, k: int, lambda_mult: float, query_vecto
                 docs_sem = vs.max_marginal_relevance_search_by_vector(
                     query_vector, k=k, fetch_k=k * 3, lambda_mult=lambda_mult
                 )
+                docs_sem = _filtrar_por_umbral(vs, query_vector, docs_sem, k * 3, umbral_distancia)
             else:
                 docs_sem = vs.max_marginal_relevance_search(
                     query, k=k, fetch_k=k * 3, lambda_mult=lambda_mult

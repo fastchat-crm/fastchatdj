@@ -107,6 +107,8 @@ def campanasView(request):
     data['etiquetas'] = EtiquetaContacto.objects.filter(
         status=True, usuario_creacion=request.user,
     )
+    from .models import SegmentoContacto
+    data['segmentos'] = SegmentoContacto.objects.filter(status=True).order_by('nombre')
     # Solo exponemos proveedores que el usuario realmente tiene conectados.
     # Mapeamos proveedor → canal del form (Baileys/Meta mandan por "whatsapp";
     # Instagram/Messenger son sus propios canales).
@@ -153,6 +155,7 @@ def _manejar_post(request):
                     plantilla_id=int(request.POST['plantilla_id']) if request.POST.get('plantilla_id') else None,
                     throttle_por_minuto=int(request.POST.get('throttle_por_minuto', 20) or 20),
                     canales=request.POST.getlist('canales[]') or [],
+                    segmento_id=int(request.POST['segmento_id']) if request.POST.get('segmento_id') else None,
                     estado='borrador',
                     usuario_creacion=request.user,
                 )
