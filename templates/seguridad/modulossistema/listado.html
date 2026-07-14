@@ -176,6 +176,12 @@
                                         </li>
                                         <li>
                                             <a class="dropdown-item" href="javascript:void(0);"
+                                               onclick="gestionarRoles({{ mod.id }}, 'Habilitar roles - {{ mod.nombre }}')">
+                                                <i class="fas fa-user-shield me-2 text-warning"></i>Habilitar roles
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="javascript:void(0);"
                                                onclick="eliminarajax({{ mod.pk }}, '{{ mod.nombre }}', 'delete')">
                                                 <i class="fas fa-trash me-2 text-danger"></i>Delete
                                             </a>
@@ -321,6 +327,32 @@
             }).fail(function () {
                 setTimeout($.unblockUI, 1);
                 mensajeWarning('Server error.');
+            });
+        }
+
+        function gestionarRoles(id, text) {
+            pantallaespera();
+            $.ajax({
+                type: 'GET',
+                url: '{{ request.path }}',
+                data: {
+                    action: 'roles_modulo',
+                    id: id
+                },
+                dataType: 'json'
+            }).done(function (data) {
+                setTimeout($.unblockUI, 1);
+                if (data && data.result === true) {
+                    $('#modalNombre').html(text);
+                    $('.detalleProdModal').html(data.data);
+                    const modal = new bootstrap.Modal(document.getElementById('modalDetalle'));
+                    modal.show();
+                } else {
+                    mensajeWarning((data && data.message) || 'Módulo no encontrado.');
+                }
+            }).fail(function () {
+                setTimeout($.unblockUI, 1);
+                mensajeWarning('Error en el servidor.');
             });
         }
 

@@ -159,6 +159,41 @@ def modulossistemaView(request):
                             'message': f"Groups updated (+{len(a_agregar)} / -{len(a_quitar)}).",
                             'reload': True
                         })
+                elif action == 'guardar_roles_modulo':
+                    from django.contrib.auth.models import Group
+                    pk_modulo = int(request.POST.get('pk_modulo') or 0)
+                    roles_ids = [int(g) for g in request.POST.getlist('c_roles', []) if g.isdigit()]
+                    modulo = model.objects.filter(pk=pk_modulo, status=True).first()
+                    if not modulo:
+                        res_json.append({'error': True, 'message': 'Módulo no encontrado.'})
+                    else:
+                        roles_actuales = set(
+                            GroupModulo.objects.filter(modulos=modulo, status=True).values_list('group_id', flat=True)
+                        )
+                        roles_nuevos = set(roles_ids)
+                        a_agregar = roles_nuevos - roles_actuales
+                        a_quitar = roles_actuales - roles_nuevos
+                        for gid in a_agregar:
+                            group = Group.objects.filter(pk=gid).first()
+                            if not group:
+                                continue
+                            gm = GroupModulo.objects.filter(group=group).first()
+                            if gm is None:
+                                gm = GroupModulo.objects.create(group=group)
+                            elif not gm.status:
+                                gm.status = True
+                                gm.save(request)
+                            gm.modulos.add(modulo)
+                        for gid in a_quitar:
+                            gm = GroupModulo.objects.filter(group_id=gid, status=True).first()
+                            if gm:
+                                gm.modulos.remove(modulo)
+                        log(f"Sincronizó roles del módulo {modulo.__str__()}: +{len(a_agregar)} / -{len(a_quitar)}", request, "change")
+                        res_json.append({
+                            'error': False,
+                            'message': f"Roles actualizados (+{len(a_agregar)} / -{len(a_quitar)}).",
+                            'reload': True
+                        })
                 elif action == 'extraer_urls':
                     from fastchatdj.urls import urls_sistema
                     seleccionadas = set(request.POST.getlist('c_urls'))
@@ -299,6 +334,20 @@ def modulossistemaView(request):
                 data['grupos'] = ModuloGrupo.objects.filter(status=True).order_by('prioridad', 'nombre')
                 data['grupos_actuales_ids'] = grupos_actuales_ids
                 template = get_template('seguridad/modulossistema/form_grupos.html')
+                return JsonResponse({'result': True, 'data': template.render(data)})
+            elif action == 'roles_modulo':
+                from django.contrib.auth.models import Group
+                pk_modulo = int(request.GET.get('id') or 0)
+                modulo = model.objects.filter(pk=pk_modulo, status=True).first()
+                if not modulo:
+                    return JsonResponse({'result': False, 'message': 'Módulo no encontrado.'})
+                roles_actuales_ids = set(
+                    GroupModulo.objects.filter(modulos=modulo, status=True).values_list('group_id', flat=True)
+                )
+                data['modulo'] = modulo
+                data['roles'] = Group.objects.all().order_by('name')
+                data['roles_actuales_ids'] = roles_actuales_ids
+                template = get_template('seguridad/modulossistema/form_roles.html')
                 return JsonResponse({'result': True, 'data': template.render(data)})
 
         criterio, filtros, url_vars =  request.GET.get('criterio', ''), Q(status=True), ''
