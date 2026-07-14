@@ -20,6 +20,7 @@ from .funcionesWhatsappConversacion import (
     cambiar_nombre_contacto_post,
     historial_cliente_list,
     historial_cliente_mensajes,
+    persistir_y_difundir_automatico as _persistir_y_difundir_automatico,
     _bloqueo_reactivar,
     _control_respuestas,
     _estadisticas_conversacion,
@@ -122,59 +123,6 @@ def _prefill_ficha_cliente(conv):
     if prefill['sexo'] not in ('M', 'F'):
         prefill['sexo'] = ''
     return prefill, variables_flujo
-
-
-def _persistir_y_difundir_automatico(conversacion, texto):
-    """Persiste un mensaje saliente automático (handoff, presentación del
-    asesor) y lo difunde por WebSocket. Los envíos hechos por fuera del action
-    `send` no vuelven por el webhook: sin esto el mensaje llega al cliente
-    pero no aparece en el historial ni en el sidebar del panel."""
-    from django.db import transaction as _tx
-    from asgiref.sync import async_to_sync
-    from channels.layers import get_channel_layer
-
-    mensaje = MensajeWhatsApp.objects.create(
-        conversacion=conversacion,
-        remitente=conversacion.sesion.numero or '',
-        mensaje=texto,
-        tipo='texto',
-        fecha=timezone.now(),
-        leido=True,
-        fecha_leido=timezone.now(),
-        es_automatico=True,
-        ia_generado=False,
-        estado_envio='enviado',
-    )
-    conv_id = conversacion.id
-    sesion_id = conversacion.sesion.id
-    msg_id = mensaje.id
-    ts = mensaje.fecha.isoformat()
-
-    def _difundir():
-        try:
-            channel_layer = get_channel_layer()
-            async_to_sync(channel_layer.group_send)(f"chat_{conv_id}", {
-                'type': 'whatsapp_message',
-                'event': 'new_message',
-                'conversation_id': conv_id,
-                'message_id': msg_id,
-                'message_type': 'texto',
-                'message_text': texto,
-                'timestamp': ts,
-            })
-            async_to_sync(channel_layer.group_send)(f"whatsapp_sessionroom_{sesion_id}", {
-                'type': 'whatsapp_event',
-                'event': 'new_message',
-                'conversation_id': conv_id,
-                'from_me': True,
-                'timestamp': ts,
-            })
-        except Exception:
-            logging.getLogger(__name__).exception(
-                'No pude difundir mensaje automático conv#%s', conv_id)
-
-    _tx.on_commit(_difundir)
-    return mensaje
 
 
 def _reenviar_mensaje(request):

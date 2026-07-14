@@ -437,8 +437,37 @@ def notificar_agente_asignado(conversacion, agente, motivo='handoff', asignador=
     return True
 
 
-def auto_asignar_agente(conversacion, motivo='handoff', asignador=None):
+def _avisar_cliente_asignacion(conversacion, agente):
+    """Mensaje al CLIENTE con el nombre del asesor asignado (mismo copy que la
+    asignación manual), persistido y difundido al panel."""
+    try:
+        sesion = conversacion.contacto.sesion
+        nombre = agente.get_full_name() or agente.username
+        texto = (getattr(sesion, 'mensaje_handoff', None)
+                 or f'Hola, te atenderá {nombre}. En breve te contactamos.')
+        from whatsapp.services import get_whatsapp_service
+        respuesta = get_whatsapp_service(sesion).send_text_message(
+            sesion.session_id,
+            conversacion.contacto.from_number,
+            texto,
+            conversacion_id=conversacion.id,
+            simularEscritura=True,
+        )
+        if respuesta.get('success'):
+            from whatsapp.funcionesWhatsappConversacion import persistir_y_difundir_automatico
+            persistir_y_difundir_automatico(conversacion, texto)
+            return True
+    except Exception:
+        logger.exception('No pude avisar al cliente la asignación conv=%s', conversacion.id)
+    return False
+
+
+def auto_asignar_agente(conversacion, motivo='handoff', asignador=None, avisar_cliente=True):
     """Asigna un agente humano a la conversación si no tiene uno.
+
+    Args:
+        avisar_cliente: si True (default), el cliente recibe "te atenderá X"
+            (o el `mensaje_handoff` de la sesión), persistido en el historial.
 
     Returns:
         Usuario asignado (o ya existente) o None si no se pudo elegir.
@@ -480,4 +509,6 @@ def auto_asignar_agente(conversacion, motivo='handoff', asignador=None):
         logger.exception('No se pudo crear HistorialAsignacion conv=%s', conversacion.id)
 
     notificar_agente_asignado(conversacion, candidato, motivo=motivo, asignador=asignador)
+    if avisar_cliente:
+        _avisar_cliente_asignacion(conversacion, candidato)
     return candidato

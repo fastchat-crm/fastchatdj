@@ -29,6 +29,61 @@ HORAS_VENTANA_REACTIVAR = 23
 HORAS_VENTANA_META_CUSTOMER_SERVICE = 24
 
 
+def persistir_y_difundir_automatico(conversacion, texto):
+    """Persiste un mensaje saliente automático (handoff, presentación del
+    asesor) y lo difunde por WebSocket. Los envíos hechos por fuera del action
+    `send` no vuelven por el webhook: sin esto el mensaje llega al cliente
+    pero no aparece en el historial ni en el sidebar del panel."""
+    import logging as _logging
+    from django.db import transaction as _tx
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+    from .models import MensajeWhatsApp
+
+    mensaje = MensajeWhatsApp.objects.create(
+        conversacion=conversacion,
+        remitente=conversacion.sesion.numero or '',
+        mensaje=texto,
+        tipo='texto',
+        fecha=timezone.now(),
+        leido=True,
+        fecha_leido=timezone.now(),
+        es_automatico=True,
+        ia_generado=False,
+        estado_envio='enviado',
+    )
+    conv_id = conversacion.id
+    sesion_id = conversacion.sesion.id
+    msg_id = mensaje.id
+    ts = mensaje.fecha.isoformat()
+
+    def _difundir():
+        try:
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(f"chat_{conv_id}", {
+                'type': 'whatsapp_message',
+                'event': 'new_message',
+                'conversation_id': conv_id,
+                'message_id': msg_id,
+                'message_type': 'texto',
+                'message_text': texto,
+                'timestamp': ts,
+            })
+            async_to_sync(channel_layer.group_send)(f"whatsapp_sessionroom_{sesion_id}", {
+                'type': 'whatsapp_event',
+                'event': 'new_message',
+                'conversation_id': conv_id,
+                'from_me': True,
+                'timestamp': ts,
+            })
+        except Exception:
+            _logging.getLogger(__name__).exception(
+                'No pude difundir mensaje automático conv#%s', conv_id)
+
+    _tx.on_commit(_difundir)
+    return mensaje
+
+
 def _bloqueo_ventana_meta(conversacion):
     """Regla de Meta: solo se pueden enviar mensajes de texto libre dentro de
     las 24h desde el último mensaje entrante del cliente. Fuera de esa ventana
