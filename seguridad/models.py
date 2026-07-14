@@ -274,6 +274,15 @@ class Configuracion(ModeloBase):
                   'escaneados el servidor debe tener Tesseract (imagen docker -full).'
     )
 
+    # ── Cierre higiénico de conversaciones (min_sesion=0) ──
+    dias_cierre_higienico = models.PositiveSmallIntegerField(
+        default=3, verbose_name='Días de inactividad para cierre higiénico',
+        help_text='Conversaciones de sesiones SIN cierre automático (min_sesion=0) se cierran '
+                  'sin despedida tras estos días sin mensajes — así corren el resumen, el '
+                  'sentimiento y las reglas de fin, y el inbox no acumula zombies. '
+                  '0 = nunca cerrar automáticamente.',
+    )
+
     @staticmethod
     def get_instancia():
         from core.funciones import db_table_exists

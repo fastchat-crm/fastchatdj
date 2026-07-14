@@ -1,0 +1,37 @@
+<p class="small text-muted mb-2">{{ titulo_scope }}</p>
+<div class="table-responsive">
+    <table class="table table-sm table-bordered small align-middle mb-2">
+        <thead>
+        <tr>
+            <th>Asesor</th>
+            <th>Rol</th>
+            <th class="text-center">Conversaciones abiertas</th>
+            <th class="text-center">Asignaciones últimas 24h</th>
+            <th class="text-center">Disponible</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for f in filas %}
+            <tr>
+                <td>{{ f.nombre }}</td>
+                <td>{{ f.rol }}</td>
+                <td class="text-center"><b>{{ f.abiertas }}</b></td>
+                <td class="text-center">{{ f.asig_24h }}</td>
+                <td class="text-center">
+                    {% if f.disponible %}
+                        <span class="badge bg-success">Sí</span>
+                    {% else %}
+                        <span class="badge bg-secondary">No</span>
+                    {% endif %}
+                </td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="5" class="text-center text-muted">La sesión no tiene asesores asignados.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+<p class="small mb-0">
+    <span class="badge bg-warning text-dark me-2">Sin asignar: {{ sin_asignar }}</span>
+    <span class="badge bg-light text-dark border">Total abiertas de la sesión: {{ total_abiertas }}</span>
+</p>

@@ -721,7 +721,8 @@ class MotorFlujo:
                 )
             else:
                 # Limitar a 10 ítems (regla Meta).
-                rows = [{'id': o['id'], 'title': o.get('title', '')[:24],
+                from meta.whatsapp import titulo_boton_interactivo
+                rows = [{'id': o['id'], 'title': titulo_boton_interactivo(o.get('title'), limite=24),
                          'description': (o.get('description') or '')[:72]}
                         for o in opciones[:10] if o.get('id')]
                 resp = self.ws.send_interactive_list(

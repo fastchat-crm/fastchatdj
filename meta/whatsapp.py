@@ -105,6 +105,22 @@ _EMOJI_RE = _re.compile(
     flags=_re.UNICODE,
 )
 
+
+def titulo_boton_interactivo(titulo, limite=20):
+    """T\u00edtulo de bot\u00f3n/fila interactiva dentro del l\u00edmite de Meta (20 chars
+    en botones, 24 en filas de lista). Si excede, primero quita los emojis
+    (suelen ser el exceso) y reci\u00e9n despu\u00e9s trunca \u2014 el corte ciego [:20]
+    dejaba textos incompletos ("Hablar con aseso") o part\u00eda emojis ZWJ."""
+    titulo = str(titulo or '').strip()
+    if len(titulo) <= limite:
+        return titulo
+    sin_emojis = _EMOJI_RE.sub('', titulo).strip()
+    if sin_emojis:
+        titulo = sin_emojis
+    if len(titulo) > limite:
+        titulo = titulo[:limite].rstrip()
+    return titulo
+
 _FORMATO_MARKDOWN_RE = _re.compile(r'[\*_~`]')  # negrita / cursiva / tachado / monospace
 
 
@@ -357,7 +373,7 @@ class MetaWhatsAppService(ServicioCanalBase):
         botones_meta = []
         for b in buttons[:3]:
             bid = str(b.get('id') or '')[:256]
-            title = str(b.get('title') or '')[:20]
+            title = titulo_boton_interactivo(b.get('title'))
             if not bid or not title:
                 continue
             botones_meta.append({'type': 'reply', 'reply': {'id': bid, 'title': title}})
@@ -810,9 +826,17 @@ class MetaWhatsAppService(ServicioCanalBase):
             return {'success': False, 'error': 'config_meta_no_encontrada'}
 
         try:
+            # `rejected_reason` NO viene por defecto en Graph API — hay que
+            # pedirlo explicito en `fields`, si no el motivo de rechazo llega
+            # siempre vacio.
             r = requests.get(
                 f'{GRAPH_API_BASE}/{config.waba_id}/message_templates',
-                headers=self._headers(config), params={'limit': 200}, timeout=20,
+                headers=self._headers(config),
+                params={
+                    'limit': 200,
+                    'fields': 'id,name,language,status,category,rejected_reason,quality_score',
+                },
+                timeout=20,
             )
         except Exception as e:
             logger.exception("Error listando plantillas en Meta")
@@ -830,6 +854,8 @@ class MetaWhatsAppService(ServicioCanalBase):
             idioma = t.get('language', 'es')
             estado_meta = (t.get('status') or 'PENDING').upper()
             motivo = t.get('rejected_reason') or ''
+            if motivo.strip().upper() == 'NONE':
+                motivo = ''
             pl = PlantillaWhatsApp.objects.filter(
                 config_meta=config, nombre=nombre, idioma=idioma
             ).first()

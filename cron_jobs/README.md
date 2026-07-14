@@ -76,11 +76,18 @@ que el cliente vuelva a escribir (el webhook resetea el flag).
 
 ## enviar_mensaje_despedida.py
 
-**Objetivo:** cerrar ordenadamente las conversaciones que superaron su tiempo de
-expiración (`fecha_hora_expira`), enviando el mensaje de despedida de la sesión.
+**Objetivo:** cerrar ordenadamente las conversaciones, en dos modos (2026-07-13):
 
-**Qué hace:** selecciona conversaciones no finalizadas con `despedida_enviado=False` y
-expiración vencida, y delega el cierre en `ConversacionWhatsApp.cerrar()` (despedida +
+1. **Expiración clásica** (sesiones con `min_sesion > 0`): `fecha_hora_expira`
+   vencida → cierra CON despedida y respetando asignación humana, como siempre.
+2. **Cierre higiénico** (sesiones con `min_sesion = 0` → `fecha_hora_expira=None`,
+   el modo "solo cierra el asesor"): conversaciones con más de
+   `Configuracion.dias_cierre_higienico` días sin mensajes (default 3; 0 = nunca)
+   → cierra SIN despedida, incluso si están asignadas (3 días muertas), para que
+   corran resumen + sentimiento + reglas de fin y el inbox no acumule zombies.
+   `bloquear_cierre=True` sigue exceptuando.
+
+**Qué hace:** delega el cierre en `ConversacionWhatsApp.cerrar()` (despedida opcional +
 resumen + sentimiento + acciones de fin de conversación). Al cerrar, el resumen también
 se indexa en la memoria RAG del agente.
 

@@ -1175,6 +1175,56 @@ def sesionesView(request):
     }
     addData(request, data)
 
+    if request.GET.get('action') == 'carga_asesores':
+        from datetime import timedelta as _td
+        sesion_ca = SesionWhatsApp.objects.filter(
+            id=request.GET.get('id'), status=True,
+        ).first()
+        if not sesion_ca or not (
+            sesion_ca.usuario_id == request.user.id
+            or sesion_ca.es_participante(request.user)
+            or request.user.is_superuser
+        ):
+            return JsonResponse({'error': True, 'message': 'Sesión no encontrada o sin acceso.'})
+        from django.template.loader import get_template as _get_template
+        from .models import ConversacionWhatsApp as _Conv, HistorialAsignacion as _Hist, DisponibilidadAgente as _Disp
+
+        abiertas_q = _Conv.objects.filter(
+            contacto__sesion=sesion_ca, estado_conversacion=0,
+            conversacion_finalizada=False, status=True, contacto__status=True,
+        )
+        conteos = dict(
+            abiertas_q.values('asignado_a').annotate(c=Count('id')).values_list('asignado_a', 'c')
+        )
+        from django.utils import timezone as _tz_ca
+        desde_24h = _tz_ca.now() - _td(hours=24)
+        asig_24h = dict(
+            _Hist.objects.filter(
+                conversacion__contacto__sesion=sesion_ca, fecha__gte=desde_24h,
+            ).values('asignado_a').annotate(c=Count('id')).values_list('asignado_a', 'c')
+        )
+        perfiles_ca = sesion_ca.perfilsesionwhatsapp_set.filter(status=True).select_related('usuario')
+        offline = set(
+            _Disp.objects.filter(
+                usuario_id__in=[p.usuario_id for p in perfiles_ca], status=True, disponible=False,
+            ).values_list('usuario_id', flat=True)
+        )
+        filas = [{
+            'nombre': p.usuario.get_full_name() or p.usuario.username,
+            'rol': p.get_rol_display() if hasattr(p, 'get_rol_display') else p.rol,
+            'abiertas': conteos.get(p.usuario_id, 0),
+            'asig_24h': asig_24h.get(p.usuario_id, 0),
+            'disponible': p.usuario_id not in offline,
+        } for p in perfiles_ca]
+        filas.sort(key=lambda f: -f['abiertas'])
+        html = _get_template('whatsapp/sesiones/_modal_carga_asesores.html').render({
+            'filas': filas,
+            'sin_asignar': conteos.get(None, 0),
+            'total_abiertas': sum(conteos.values()),
+            'titulo_scope': f'Carga de asesores de "{sesion_ca.nombre or sesion_ca.numero}" — conversaciones abiertas asignadas a cada uno.',
+        })
+        return JsonResponse({'result': True, 'data': html})
+
     if request.GET.get('action') == 'logs_notificaciones':
         sesion_logs = SesionWhatsApp.objects.filter(
             id=request.GET.get('id'), status=True,

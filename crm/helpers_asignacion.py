@@ -281,16 +281,23 @@ def _log_notif(conversacion, agente, canal, motivo, destino, exito, detalle=''):
                          getattr(conversacion, 'id', None), canal)
 
 
-def _numero_whatsapp_agente(agente):
-    """Número del agente normalizado a dígitos E.164. Formato local de
-    Ecuador (09XXXXXXXX) se convierte a 5939XXXXXXXX."""
-    crudo = (getattr(agente, 'telefono', '') or getattr(agente, 'celular', '') or '')
-    numero = ''.join(filter(str.isdigit, str(crudo)))
+def _normalizar_e164_ec(crudo):
+    """Dígitos E.164. Formato local de Ecuador (09XXXXXXXX o 9XXXXXXXX)
+    se convierte a 5939XXXXXXXX."""
+    numero = ''.join(filter(str.isdigit, str(crudo or '')))
     if not numero:
         return ''
     if len(numero) == 10 and numero.startswith('0'):
         numero = '593' + numero[1:]
+    elif len(numero) == 9 and numero.startswith('9'):
+        numero = '593' + numero
     return numero
+
+
+def _numero_whatsapp_agente(agente):
+    return _normalizar_e164_ec(
+        getattr(agente, 'telefono', '') or getattr(agente, 'celular', '')
+    )
 
 
 def _avisar_agente_por_whatsapp(conversacion, agente, titulo, link_chat, motivo_label, motivo=''):
@@ -312,10 +319,25 @@ def _avisar_agente_por_whatsapp(conversacion, agente, titulo, link_chat, motivo_
         destino = telefono
         if getattr(sesion, 'es_baileys', False):
             destino = f'{telefono}@s.whatsapp.net'
+        contacto = getattr(conversacion, 'contacto', None)
+        nombre_cliente = (
+            (getattr(contacto, 'contacto_nombre', '') or '').strip()
+            or (getattr(contacto, 'contacto_numero', '') or '').strip()
+            or 'Cliente'
+        )
+        numero_cliente = _normalizar_e164_ec(
+            getattr(contacto, 'contacto_numero', '') or getattr(contacto, 'from_number', '')
+        )
+        linea_wa_cliente = (
+            f'📱 WhatsApp del cliente: https://wa.me/{numero_cliente}\n'
+            if numero_cliente else ''
+        )
         texto = (
             f'🔔 {titulo}.\n'
             f'{motivo_label}.\n'
-            f'Revisa y responde aquí: {link_chat}'
+            f'👤 Cliente: {nombre_cliente}\n'
+            f'{linea_wa_cliente}'
+            f'💬 Responder desde el panel: {link_chat}'
         )
         service = get_whatsapp_service(sesion)
         respuesta = service.send_text_message(sesion.session_id, destino, texto)

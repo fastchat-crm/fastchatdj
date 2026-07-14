@@ -281,6 +281,20 @@ def conversacionesFinalizadasView(request):
                     })
                 elif action == 'enviar_plantilla_meta':
                     return enviar_plantilla_reconexion(request)
+                elif action == 'log-wa-web':
+                    conv = ConversacionWhatsApp.objects.get(pk=int(request.POST['pk']))
+                    if not puede_ver_conversacion(request.user, conv):
+                        return JsonResponse({'error': True, 'message': 'No autorizado.'})
+                    log(f"Abrió WhatsApp Web para {conv.contacto_numero} desde finalizadas",
+                        request, "view", obj=conv.id)
+                    from .trazas import registrar as _traza_reg
+                    _traza_reg(
+                        etapa='webhook_recibido', sesion=conv.sesion, conversacion=conv,
+                        numero=conv.contacto_numero, nivel='info',
+                        detalle={'accion': 'whatsapp_web_abierto',
+                                 'usuario': request.user.get_full_name() or request.user.username},
+                    )
+                    return JsonResponse({'error': False})
                 elif action == 'cambiar-clasificacion':
                     return cambiar_clasificacion_post(request)
                 elif action == 'cambiar-nombre-contacto':

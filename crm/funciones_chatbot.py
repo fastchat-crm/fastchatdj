@@ -1004,6 +1004,24 @@ def consultar_cedula_sagest(conversacion, variables, config, endpoint=None) -> d
             'error': resp_json.get('msg') or 'Cédula no encontrada.',
         }
 
+    # Pre-registro del Cliente apenas se valida la cédula: así aparece en
+    # /crm/cliente/ aunque el contacto abandone el flujo a mitad de camino.
+    # El cliente_upsert del final del flujo completará email/ciudad/etc.
+    try:
+        from .funciones_cliente import cliente_upsert
+        datos_api = resp_json.get('data') or {}
+        vars_upsert = {
+            'cedula': cedula,
+            'nombres': str(datos_api.get('nombres') or vars_.get('nombres') or '').strip(),
+            'apellidos': str(datos_api.get('apellidos') or vars_.get('apellidos') or '').strip(),
+            'edad': str(datos_api.get('edad') or vars_.get('edad') or '').strip(),
+            'fecha_nacimiento': str(datos_api.get('fecha_nacimiento') or '').strip(),
+            'canal_origen': 'chatbot',
+        }
+        cliente_upsert(conversacion, vars_upsert, {'canal_origen': 'chatbot'})
+    except Exception:
+        logger.exception('Pre-registro de Cliente falló para cédula %s (no bloquea el flujo)', cedula)
+
     return {
         'etiqueta': 'ok',
         'body': resp_json,

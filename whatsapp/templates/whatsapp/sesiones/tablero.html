@@ -819,6 +819,26 @@
         }
     </script>
     <script>
+        function verCargaAsesores(id) {
+            if (typeof pantallaespera === 'function') pantallaespera();
+            $.get(window.location.pathname, { action: 'carga_asesores', id: id }, function (r) {
+                $.unblockUI();
+                if (r && r.result === true) {
+                    Swal.fire({
+                        title: 'Carga de asesores',
+                        html: '<div style="text-align:left;max-height:60vh;overflow:auto;">' + r.data + '</div>',
+                        width: '760px',
+                        confirmButtonText: 'Cerrar'
+                    });
+                } else {
+                    if (typeof mensajeWarning === 'function') mensajeWarning((r && r.message) || 'No se pudo cargar.');
+                }
+            }, 'json').fail(function () {
+                $.unblockUI();
+                if (typeof mensajeWarning === 'function') mensajeWarning('Error de conexión.');
+            });
+        }
+
         function verLogsNotif(id) {
             if (typeof pantallaespera === 'function') pantallaespera();
             $.get(window.location.pathname, { action: 'logs_notificaciones', id: id }, function (r) {

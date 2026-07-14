@@ -25,7 +25,11 @@ Vista: `whatsapp/view_plantillas.py` (`plantillasView`). Template:
   (cubre alta/edición manual), y `someter_a_meta` valida con mensaje claro.
 - **Estado de aprobación:** se actualiza solo vía webhook
   `message_template_status_update` (`meta_webhook_view.py:329` →
-  `_procesar_cambio_plantilla`) — la suscripción del WABA debe incluir ese
-  campo. Fallback manual: acción `sincronizar` (botón global por sesión y
-  dentro del modal Ver cuando está PENDING).
+  `_procesar_cambio_plantilla`, guarda `reason`) — la suscripción del WABA debe
+  incluir ese campo. Fallback manual: acción `sincronizar` (botón global por
+  sesión y dentro del modal Ver cuando está PENDING o REJECTED).
+- **Motivo de rechazo:** Graph API NO devuelve `rejected_reason` por defecto —
+  `sincronizar_plantillas` (`meta/whatsapp.py:805`) lo pide explícito vía
+  `fields=...,rejected_reason,quality_score` (fix 2026-07-13; antes el motivo
+  llegaba siempre vacío). Valor `NONE` de Meta se normaliza a vacío.
 - Solo plantillas `APPROVED` se listan para envío desde el chat.

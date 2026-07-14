@@ -226,12 +226,16 @@ PASOS = [
         'codigo': 'info_curso', 'nombre': 'Información del curso',
         'mensaje': (
             '⚓ *FORMACIÓN TÉCNICA EN BUCEO INDUSTRIAL & SUBACUÁTICO*\n\n'
-            '🌊 Formación presencial intensiva en Ayangue – Ecuador\n'
+            '🚀 Prepárate para ingresar a una de las profesiones técnicas mejor '
+            'pagadas y más impactantes del sector industrial y marítimo.\n\n'
+            '🔥 Formación presencial intensiva en Ayangue – Ecuador\n'
+            '🌊 Entrenamiento real en playa y mar abierto\n'
             '🛠️ Manejo de herramientas subacuáticas, rescate, seguridad y '
             'trabajos industriales bajo el agua\n'
-            '✅ Certificación de formación técnica\n'
+            '✅ Certificación internacional\n'
             '✅ Prácticas presenciales especializadas\n'
-            '✅ Entrenamiento con estándares internacionales\n'
+            '✅ Entrenamiento con estándares PDI International\n'
+            '✅ Formación guiada por expertos y personal de élite\n'
             '🎓 Evento de clausura en UNEMI\n\n'
             '📚 *Temario por niveles:*\n'
             '🔹 A1–A2: Fundamentos, física del buceo, anatomía, buceo autónomo '
@@ -263,9 +267,8 @@ PASOS = [
         'codigo': 'costos', 'nombre': 'Costos y pagos',
         'mensaje': (
             '💰 *INVERSIÓN TOTAL: $6.000*\n\n'
-            '🔹 Inscripción: $500\n'
-            '🔹 1ª cuota: $1.500\n'
-            '🔹 2 cuotas de: $2.000 c/u\n\n'
+            '🔹 Inscripción: $400\n'
+            '🔹 4 mensualidades de: $1.400 c/u\n\n'
             '✅ *Incluye:* manuales y material multimedia, uniforme completo '
             '(mameluco, botas, EPP), instructores y supervisores, equipos '
             '(cámaras hiperbáricas, herramientas hidráulicas, trajes secos, '
@@ -304,7 +307,7 @@ PASOS = [
         'opciones': [
             {'etiqueta': '✅ Sí, inscribirme',   'valor': 'si',     'siguiente': ID_DEC_CORREO},
             {'etiqueta': '❌ No por ahora',       'valor': 'no',     'siguiente': ID_DESPEDIDA_NO},
-            {'etiqueta': '👨‍💼 Hablar con asesor', 'valor': 'asesor', 'siguiente': ID_HANDOFF_ASESOR},
+            {'etiqueta': 'Hablar con asesor', 'valor': 'asesor', 'siguiente': ID_HANDOFF_ASESOR},
         ],
     },
     {
@@ -387,7 +390,7 @@ PASOS = [
         'notificar_asesor': True,
         'mensaje_asesor': (
             'Nueva pre-inscripción al curso de Buceo Industrial. Contactar al '
-            'cliente para coordinar el pago de la inscripción ($500) y el apto médico.'
+            'cliente para coordinar el pago de la inscripción ($400) y el apto médico.'
         ),
         'mensaje': (
             '✅ ¡Listo, *{{variables.nombres}} {{variables.apellidos}}*! Tu '
@@ -399,11 +402,10 @@ PASOS = [
             '🏙️ {{variables.ciudad}}\n'
             '⚓ Curso: Buceo Industrial & Subacuático\n\n'
             '💰 *Inversión total del curso: $6.000*\n'
-            '🔹 Inscripción: $500\n'
-            '🔹 1ª cuota: $1.500\n'
-            '🔹 2 cuotas de: $2.000 c/u\n\n'
+            '🔹 Inscripción: $400\n'
+            '🔹 4 mensualidades de: $1.400 c/u\n\n'
             '📞 *En un momento, uno de nuestros asesores se pondrá en contacto '
-            'contigo* para coordinar el pago de la inscripción ($500), el apto '
+            'contigo* para coordinar el pago de la inscripción ($400), el apto '
             'médico y los siguientes pasos.\n\n'
             '¡Gracias por tu interés y bienvenido a la élite del buceo! 🌊'
         ),

@@ -124,6 +124,59 @@ def _prefill_ficha_cliente(conv):
     return prefill, variables_flujo
 
 
+def _persistir_y_difundir_automatico(conversacion, texto):
+    """Persiste un mensaje saliente automático (handoff, presentación del
+    asesor) y lo difunde por WebSocket. Los envíos hechos por fuera del action
+    `send` no vuelven por el webhook: sin esto el mensaje llega al cliente
+    pero no aparece en el historial ni en el sidebar del panel."""
+    from django.db import transaction as _tx
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+
+    mensaje = MensajeWhatsApp.objects.create(
+        conversacion=conversacion,
+        remitente=conversacion.sesion.numero or '',
+        mensaje=texto,
+        tipo='texto',
+        fecha=timezone.now(),
+        leido=True,
+        fecha_leido=timezone.now(),
+        es_automatico=True,
+        ia_generado=False,
+        estado_envio='enviado',
+    )
+    conv_id = conversacion.id
+    sesion_id = conversacion.sesion.id
+    msg_id = mensaje.id
+    ts = mensaje.fecha.isoformat()
+
+    def _difundir():
+        try:
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(f"chat_{conv_id}", {
+                'type': 'whatsapp_message',
+                'event': 'new_message',
+                'conversation_id': conv_id,
+                'message_id': msg_id,
+                'message_type': 'texto',
+                'message_text': texto,
+                'timestamp': ts,
+            })
+            async_to_sync(channel_layer.group_send)(f"whatsapp_sessionroom_{sesion_id}", {
+                'type': 'whatsapp_event',
+                'event': 'new_message',
+                'conversation_id': conv_id,
+                'from_me': True,
+                'timestamp': ts,
+            })
+        except Exception:
+            logging.getLogger(__name__).exception(
+                'No pude difundir mensaje automático conv#%s', conv_id)
+
+    _tx.on_commit(_difundir)
+    return mensaje
+
+
 def _reenviar_mensaje(request):
     """Reenvía un mensaje saliente que quedó en estado 'fallido'.
     Provider-agnostic: reusa el servicio de la sesión (Baileys o Meta)."""
@@ -715,14 +768,17 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                     # mensaje de handoff de asignar-conversacion).
                     try:
                         nombre_asesor = request.user.get_full_name() or request.user.username
+                        texto_presentacion = f'Hola 👋 Soy {nombre_asesor}, tu asesor y te guiaré en este proceso.'
                         service_tomar = get_whatsapp_service(conversacion.sesion)
-                        service_tomar.send_text_message(
+                        respuesta_pres = service_tomar.send_text_message(
                             conversacion.sesion.session_id,
                             conversacion.contacto.from_number,
-                            f'Hola 👋 Soy {nombre_asesor}, tu asesor y te guiaré en este proceso.',
+                            texto_presentacion,
                             conversacion_id=conversacion.id,
                             simularEscritura=True,
                         )
+                        if respuesta_pres.get('success'):
+                            _persistir_y_difundir_automatico(conversacion, texto_presentacion)
                     except Exception:
                         logging.getLogger(__name__).exception(
                             'No pude enviar la presentación del asesor conv#%s', conversacion.id)
@@ -882,15 +938,18 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                                 if not handoff_msg:
                                     handoff_msg = f'Hola, te atenderá {nombre_asignado}. En breve te contactamos.'
                                 service = get_whatsapp_service(sesion)
-                                service.send_text_message(
+                                respuesta_handoff = service.send_text_message(
                                     sesion.session_id,
                                     filtro.contacto.from_number,
                                     handoff_msg,
                                     conversacion_id=filtro.id,
                                     simularEscritura=True,
                                 )
+                                if respuesta_handoff.get('success'):
+                                    _persistir_y_difundir_automatico(filtro, handoff_msg)
                             except Exception:
-                                pass
+                                logging.getLogger(__name__).exception(
+                                    'Fallo el mensaje de handoff conv#%s', filtro.id)
                         # JS para actualizar header sin recargar
                         if nombre_asignado:
                             js = (
@@ -991,8 +1050,18 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                     # con whisper, no habla con Node ni Meta. Usar WhatsAppService directo
                     # esta OK aqui (el dispatcher no aplica porque MetaWhatsAppService
                     # delega esta misma funcion a WhatsAppService internamente).
+                    # Candado anti-doble-click: los re-render del chat por WS
+                    # pierden el spinner y el usuario volvia a pulsar, encolando
+                    # transcripciones duplicadas del mismo audio.
+                    from django.core.cache import cache as _cache
+                    msg_id_tr = int(request.POST['id'])
+                    lock_tr = f'transcribiendo_{msg_id_tr}'
+                    if _cache.get(lock_tr):
+                        return JsonResponse({'error': True, 'en_proceso': True,
+                                             'message': 'La transcripción ya está en proceso. Aparecerá sola al terminar.'})
+                    _cache.set(lock_tr, True, 300)
                     service = WhatsAppService()
-                    msg = MensajeWhatsApp.objects.select_related('conversacion__contacto__sesion').get(id=request.POST['id'])
+                    msg = MensajeWhatsApp.objects.select_related('conversacion__contacto__sesion').get(id=msg_id_tr)
                     service.transcribe_audio(msg, 'small', msg.conversacion.contacto.sesion.language.split('-')[0])
                     return JsonResponse({})
 

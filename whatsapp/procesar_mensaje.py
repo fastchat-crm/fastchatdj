@@ -249,15 +249,35 @@ def process_incoming_message(session, event_data, channel_layer):
             )
             raise
 
-        # Renovar ventana de expiración con cada mensaje entrante del cliente
+        # Renovar ventana de expiración con cada mensaje entrante del cliente.
+        # min_sesion == 0 → sin cierre automático (fecha_hora_expira=None):
+        # la conversación solo la termina el usuario o el cliente al reescribir
+        # tras un cierre manual.
         if from_number != session.numero:  # sólo mensajes del cliente
-            min_sesion = int(getattr(session, 'min_sesion', None) or 10)
-            conversation.fecha_hora_expira = timezone.now() + timedelta(minutes=min_sesion)
+            min_sesion = int(getattr(session, 'min_sesion', None) or 0)
+            conversation.fecha_hora_expira = (
+                timezone.now() + timedelta(minutes=min_sesion)
+            ) if min_sesion > 0 else None
             campos_conv = ['fecha_hora_expira']
             # El cliente respondió: habilitar de nuevo el nudge de reconexión.
             if getattr(conversation, 'reconexion_enviada', False):
                 conversation.reconexion_enviada = False
                 campos_conv.append('reconexion_enviada')
+            # El asesor la marcó RESUELTA y el cliente volvió a escribir:
+            # se reabre y el bot retoma la palabra (el ai_activo=False que
+            # dejó el asesor al responder ya cumplió su función). Si el
+            # cliente necesita humano, el flujo hará handoff de nuevo.
+            if getattr(conversation, 'estado_atencion', '') == 'resuelta':
+                conversation.estado_atencion = 'abierta'
+                campos_conv.append('estado_atencion')
+                if not conversation.ai_activo:
+                    conversation.ai_activo = True
+                    campos_conv.append('ai_activo')
+                _traza(
+                    etapa='webhook_recibido', sesion=session, conversacion=conversation,
+                    numero=from_number, nivel='info',
+                    detalle={'accion': 'reabierta_por_cliente_tras_resuelta', 'bot_reactivado': True},
+                )
             conversation.save(update_fields=campos_conv)
 
         # Crear el mensaje

@@ -48,6 +48,8 @@
         <tr><th class="bg-light">Estado</th><td><span class="badge bg-{{ p.color_estado }}">{{ p.get_estado_meta_display }}</span></td></tr>
         {% if p.motivo_rechazo %}
             <tr><th class="bg-light">Motivo de rechazo</th><td class="text-danger">{{ p.motivo_rechazo }}</td></tr>
+        {% elif p.estado_meta == 'REJECTED' %}
+            <tr><th class="bg-light">Motivo de rechazo</th><td class="text-muted">Meta no reportó el motivo — pulsa "Sincronizar estado ahora" (ya pedimos el detalle) o revísalo en Meta Business con el botón de abajo.</td></tr>
         {% endif %}
         <tr><th class="bg-light">Fecha de aprobación</th><td>{{ p.fecha_aprobacion|date:'d/m/Y H:i'|default:'—' }}</td></tr>
         <tr><th class="bg-light">Última sincronización</th><td>{{ p.ultima_sincronizacion|date:'d/m/Y H:i'|default:'—' }}</td></tr>
@@ -64,7 +66,7 @@
             <i class="fab fa-facebook me-1"></i>Abrir en Meta Business
         </a>
     {% endif %}
-    {% if p.estado_meta == 'PENDING' %}
+    {% if p.estado_meta == 'PENDING' or p.estado_meta == 'REJECTED' %}
         <button type="button" class="btn btn-sm btn-warning"
                 onclick="sincronizarPlantillas({{ p.config_meta.sesion_id }})">
             <i class="fa fa-sync me-1"></i>Sincronizar estado ahora

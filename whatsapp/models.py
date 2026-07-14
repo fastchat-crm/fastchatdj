@@ -83,7 +83,11 @@ class SesionWhatsApp(ModeloBase):
         help_text='Se envía automáticamente (cron horario) a las conversaciones abiertas '
                   'cuyo último mensaje es nuestro y llevan más de 1 hora sin respuesta del '
                   'cliente, siempre dentro de la ventana de 24h. Requiere el check activo.')
-    min_sesion = models.IntegerField(default=0, verbose_name='Minutos de sesión')
+    min_sesion = models.IntegerField(
+        default=0, verbose_name='Minutos de sesión',
+        help_text='0 = la conversación NO se cierra sola (solo cierre manual del asesor). '
+                  'Mayor a 0 = minutos de inactividad antes del cierre automático con despedida.',
+    )
     departamentos = models.ManyToManyField('crm.DepartamentoChatBot', verbose_name='Departamentos', blank=True)
     modo_bot = models.CharField(
         max_length=15, choices=MODOS_BOT, default='ia',
@@ -1030,34 +1034,68 @@ class ConversacionWhatsApp(ModeloBase):
         Devuelve (conversacion, created). Busca una conversación activa del
         contacto (no expirada, no finalizada, estado 0); si no existe, crea
         una nueva con fecha_hora_expira según session.min_sesion.
+
+        Concurrencia: dos mensajes del mismo contacto llegando en paralelo
+        (ráfaga del cliente, reintento del webhook) pasaban ambos el filter()
+        y creaban DOS conversaciones. Se serializa con select_for_update
+        sobre la fila del Contacto — el segundo request espera al primero y
+        ya encuentra la conversación creada.
         """
-        conv = cls.objects.sin_expirar.filter(contacto=contacto).first()
-        if conv:
-            return conv, False
-        min_sesion = int(getattr(contacto.sesion, 'min_sesion', None) or 10)
-        proveedor_snapshot = getattr(contacto.sesion, 'proveedor', '') or ''
-        # Si el contacto tiene una sonda de reconexión pendiente (plantilla
-        # enviada a una conversación finalizada), esta nueva conversación es la
-        # reconexión: la enlazamos y cerramos la sonda.
-        pendiente = (
-            cls.objects
-            .filter(contacto=contacto, estado_conversacion=1,
-                    pendiente_reconexion=True, reconectada=False)
-            .order_by('-fecha_fin_conversacion', '-id')
-            .first()
-        )
-        conv = cls.objects.create(
-            contacto=contacto,
-            fecha_hora_expira=timezone.now() + relativedelta(minutes=min_sesion),
-            proveedor_atencion=proveedor_snapshot,
-            iniciada_por_plantilla=bool(pendiente),
-            conv_origen=pendiente,
-        )
-        if pendiente:
-            pendiente.pendiente_reconexion = False
-            pendiente.reconectada = True
-            pendiente.save(update_fields=['pendiente_reconexion', 'reconectada'])
-        return conv, True
+        from django.db import transaction
+
+        with transaction.atomic():
+            contacto_bloqueado = (
+                type(contacto).objects.select_for_update().filter(pk=contacto.pk).first()
+            )
+            if contacto_bloqueado is None:
+                contacto_bloqueado = contacto
+            conv = cls.objects.sin_expirar.filter(contacto=contacto).first()
+            if conv:
+                return conv, False
+            # min_sesion == 0 → SIN cierre automático: la conversación solo la
+            # termina el usuario (fecha_hora_expira=None nunca matchea el cron
+            # de cierre ni la anotación `expirado`). min_sesion > 0 mantiene la
+            # ventana de inactividad clásica.
+            min_sesion = int(getattr(contacto.sesion, 'min_sesion', None) or 0)
+            expira = (timezone.now() + relativedelta(minutes=min_sesion)) if min_sesion > 0 else None
+            # Conversación abierta pero con la ventana vencida y que el cron
+            # AÚN no cerró: el cliente volvió a escribir antes de la despedida
+            # → es la misma conversación. Se reusa y se renueva la ventana en
+            # vez de abrir una duplicada (quedaban dos abiertas en el inbox).
+            conv = (
+                cls.objects
+                .filter(contacto=contacto, estado_conversacion=0,
+                        conversacion_finalizada=False, status=True)
+                .order_by('-id')
+                .first()
+            )
+            if conv:
+                conv.fecha_hora_expira = expira
+                conv.save(update_fields=['fecha_hora_expira'])
+                return conv, False
+            proveedor_snapshot = getattr(contacto.sesion, 'proveedor', '') or ''
+            # Si el contacto tiene una sonda de reconexión pendiente (plantilla
+            # enviada a una conversación finalizada), esta nueva conversación es la
+            # reconexión: la enlazamos y cerramos la sonda.
+            pendiente = (
+                cls.objects
+                .filter(contacto=contacto, estado_conversacion=1,
+                        pendiente_reconexion=True, reconectada=False)
+                .order_by('-fecha_fin_conversacion', '-id')
+                .first()
+            )
+            conv = cls.objects.create(
+                contacto=contacto,
+                fecha_hora_expira=expira,
+                proveedor_atencion=proveedor_snapshot,
+                iniciada_por_plantilla=bool(pendiente),
+                conv_origen=pendiente,
+            )
+            if pendiente:
+                pendiente.pendiente_reconexion = False
+                pendiente.reconectada = True
+                pendiente.save(update_fields=['pendiente_reconexion', 'reconectada'])
+            return conv, True
 
 
 TIPO_MENSAJE_CHOICES = (

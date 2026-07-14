@@ -216,13 +216,13 @@ que crea el `ClienteOrigen` amarrado a la conversación (unique `cliente+convers
 | `enviar_plantilla_meta` | 403 | Persiste mensaje renderizado con placeholders sustituidos | Solo Meta + plantilla `APPROVED`. También setea `ai_activo=False` (envío humano desde plataforma desactiva IA + flujo tradicional); idem el `send` de finalizadas. La plantilla de RECONEXIÓN (`enviar_plantilla_reconexion` en `funcionesWhatsappConversacion.py`) NO lo hace — su flujo pendiente_reconexion se maneja aparte |
 | `cambiar-clasificacion` | 483 | `clasificacion` | Form save + log |
 | `cambiar-nombre-contacto` | 497 | `Contacto.contacto_nombre` | Form save + log |
-| `asignar-conversacion` | 512 | `asignado_a`, `fecha_asignacion`, **`ai_activo=False`**, `nota_interna` | Crea `HistorialAsignacion` + `Notificacion` al agente; envía mensaje de handoff vía service con `simularEscritura=True` |
+| `asignar-conversacion` | 512 | `asignado_a`, `fecha_asignacion`, **`ai_activo=False`**, `nota_interna` | Crea `HistorialAsignacion` + `Notificacion` al agente; envía mensaje de handoff vía service con `simularEscritura=True` y lo **persiste + difunde por WS** (`_persistir_y_difundir_automatico` — sin eso el mensaje llegaba al cliente pero no aparecía en el historial del panel, sobre todo en Meta que no rebota por webhook). Idem la presentación de `tomar-conversacion` |
 | `toggle-bot` | 594 | Invierte `ai_activo` | — |
 | `toggle-bloquear-cierre` | 601 | Invierte `bloquear_cierre` | — |
 | `reiniciar-flujo` | 608 | Llama `crm.motor_flujo_chatbot.reiniciar_flujo_tradicional()` | Solo si `sesion.modo_bot='tradicional'` |
 | `marcar-resuelto` | 633 | `conversacion.cerrar(enviar_despedida=True)` | Resume IA + envía despedida + cierra |
 | `terminar-sin-despedida` | 655 | `conversacion.cerrar(enviar_despedida=False)` | Cierra silenciosamente |
-| `transcribe_audio` | 665 | Llama `WhatsAppService.transcribe_audio(msg, 'small', lang)` | Whisper local; al terminar broadcast WS |
+| `transcribe_audio` | 665 | Llama `WhatsAppService.transcribe_audio(msg, 'small', lang)` | Whisper local en background; al terminar broadcast WS. Candado en cache `transcribiendo_<msg_id>` (TTL 5 min) contra doble-click — el re-render del chat por WS pierde el spinner y el usuario re-pulsaba, duplicando transcripciones. El modelo Whisper se cachea en memoria por tamaño (`transcribe_whatsapp_audio._MODELOS_WHISPER`) — antes se recargaba en CADA audio (10-60s extra) |
 | `feedback-mensaje` | 675 | Crea `FeedbackMensajeBot`. Si incorrecto + corrección → crea `FaqAgente` aprobada y la agrega al vectorstore FAISS | — |
 
 ### Listado (`view_conversaciones.py:762-867`)
@@ -385,6 +385,7 @@ Sin `canal_fijo` todo queda igual (verde WhatsApp).
 | `#dropdowns-btn`, `#btn-estadisticas`, `#btn-control-respuestas`, `#ver-resumen-btn` | ambas | Acciones secundarias |
 | `#bot-toggle-container`, `#resolver-btn`, `#asignado-container`, `#tokens-container`, `#referral-container` | abiertas | Solo durante chat activo |
 | `#reactivar-btn` | finalizadas | Reset de estado |
+| `#btn-wa-web` | finalizadas | Link `https://wa.me/<numero>` con `target="_blank"` — abre el chat del contacto en WhatsApp Web; se hidrata/oculta en `cargarMensajes`/`_resetChat` |
 
 ### Paneles colapsables (toggle desde el dropdown)
 
@@ -624,9 +625,11 @@ conversacionesView lee contactoId de session y abre la conv automáticamente
 | Sustitución `{{N}}` server-side | `_render_cuerpo()` antes de persistir | Garantiza que el historial muestre el texto final, no el template |
 | Auto-pausa IA al asignar humano | `asignar-conversacion` setea `ai_activo=False` | Evita que la IA pise la respuesta del agente |
 | Snapshot de proveedor en la conv | `ConversacionWhatsApp.proveedor_atencion` | Si la sesión migra de Baileys a Meta, las conversaciones existentes mantienen su transporte original |
-| Cierre por inactividad | Cron job evalúa `fecha_hora_expira < now` y llama `cerrar()` | Liberar conversaciones colgadas; respeta `bloquear_cierre=True` |
+| Cierre por inactividad | Cron job evalúa `fecha_hora_expira < now` y llama `cerrar()` | Liberar conversaciones colgadas; respeta `bloquear_cierre=True`. **`min_sesion=0` (default) = SIN cierre por inactividad corta**: `fecha_hora_expira=None`, la conversación la termina el asesor (2026-07-13; antes `or 10` convertía el 0 en 10 min) — con red de seguridad: el cron aplica **cierre higiénico** tras `Configuracion.dias_cierre_higienico` días sin mensajes (default 3, 0=nunca), SIN despedida, incluso asignadas, para que corran resumen/sentimiento/reglas de fin. La ventana Meta de 24h sigue gobernando el envío: pasadas 24h sin mensaje del cliente, `send` se bloquea y solo queda plantilla (`_bloqueo_ventana_meta`) |
 | Manager `expirado` | `models_querysetmanagers.py:37` filtra solo por `estado_conversacion=1` | Fuente de verdad — evita que estados inconsistentes (`conversacion_finalizada=True` pero `estado_conversacion=0`) aparezcan en finalizadas |
 | Idempotencia webhook | Unique `mensaje_id_externo` | Meta y Baileys reintentan; sin esto se duplicarían mensajes |
+| Cliente vuelve tras "resuelta" | `procesar_mensaje.py` (bloque de renovación de ventana): si `estado_atencion=='resuelta'` y escribe el cliente → `estado_atencion='abierta'` + `ai_activo=True` (con traza `reabierta_por_cliente_tras_resuelta`) | "Marcar como resuelta" NO cierra la conversación; como el asesor al escribir deja `ai_activo=False`, sin este guard el cliente que volvía quedaba en silencio total (ni bot ni asesor) |
+| Anti-duplicado de conversaciones | `obtener_o_crear_activa` (`models.py:1028`): (a) serializa con `select_for_update` sobre la fila del `Contacto`; (b) si la conv está abierta pero con ventana vencida y el cron aún no la cerró, la REUSA renovando `fecha_hora_expira` en vez de crear otra | Dos mensajes en paralelo creaban DOS conversaciones (carrera), y un mensaje llegado tras vencer `min_sesion` pero antes del cron de cierre abría una duplicada mientras la vieja seguía visible (fix 2026-07-13) |
 | Rate limit Node | Cache `wa_rate_limited_<session_id>` | Si Baileys reporta saturación, `process_incoming_message` corta antes de invocar IA |
 | Dispatcher único | Siempre `get_whatsapp_service(sesion)` | Nunca hardcodear `if sesion.proveedor=='meta'` — esparce lógica de transporte |
 | `select_related` obligatorio en listado | `view_conversaciones.py:830-841` | El partial `conversacion_item.html` toca `sesion.config_meta`, `sesion.config_baileys`, `asignado_a.foto` — sin `select_related` son N+1 |
