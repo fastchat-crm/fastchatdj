@@ -1,19 +1,25 @@
 {% extends 'base.html' %}
 {% load templatefunctions %}
 {% block head %}
-    <link rel="stylesheet" href="/static/css/whatsapp/comentarios_listado.css?v1.0">
+    <link rel="stylesheet" href="/static/css/whatsapp/comentarios_listado.css?v1.1">
 {% endblock %}
 
 {% block content %}
     <div class="container-fluid p-0">
 
         <div class="alert alert-info d-flex align-items-center gap-3 mb-3">
-            <i class="fab fa-instagram fa-2x"></i>
+            {% if canal_fijo == 'facebook' %}
+                <i class="fab fa-facebook fa-2x"></i>
+            {% elif canal_fijo == 'tiktok' %}
+                <i class="fab fa-tiktok fa-2x"></i>
+            {% else %}
+                <i class="fab fa-instagram fa-2x"></i>
+            {% endif %}
             <div>
                 <strong>¿Para qué sirve este inbox?</strong><br>
                 <small>
-                    Aquí llegan los <strong>comentarios de tus publicaciones</strong> de Instagram (y TikTok cuando se
-                    integre). Puedes <strong>responder públicamente</strong>, <strong>ocultar</strong> comentarios
+                    Aquí llegan los <strong>comentarios de tus publicaciones</strong> de Instagram y Facebook (y TikTok
+                    cuando se integre). Puedes <strong>responder públicamente</strong>, <strong>ocultar</strong> comentarios
                     inapropiados o <strong>enviar un DM privado</strong> al autor: cuando responda, la conversación
                     aparecerá en <a href="/whatsapp/conversaciones/">Conversaciones</a> y seguirá el pipeline normal
                     (IA, asignación de asesores, etiquetas). El DM privado solo puede enviarse dentro de los

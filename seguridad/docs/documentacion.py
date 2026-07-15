@@ -44,7 +44,7 @@ DOCS_SIDEBAR = [
         'titulo': 'Funciones por plataforma',
         'items': [
             {'nombre': 'WhatsApp Business API', 'slug': 'conectar-whatsapp-business'},
-            {'nombre': 'Instagram y TikTok — conexión y tokens', 'slug': 'conectar-instagram-tiktok'},
+            {'nombre': 'Instagram, Facebook y TikTok — conexión y tokens', 'slug': 'conectar-instagram-tiktok'},
         ],
     },
     {
@@ -122,7 +122,7 @@ def _hoja_conectar_instagram_tiktok(request):
     data = _ctx_sidebar(
         request,
         slug_actual='conectar-instagram-tiktok',
-        titulo_pagina='Instagram y TikTok — conexión y tokens',
+        titulo_pagina='Instagram, Facebook y TikTok — conexión y tokens',
     )
     return render(request, 'docs/conexion_instagram_tiktok.html', data)
 

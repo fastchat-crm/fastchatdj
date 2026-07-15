@@ -112,6 +112,7 @@ INSTALLED_APPS = [
     'public.apps.PublicConfig',
     'whatsapp.apps.WhatsappConfig',
     'instagram.apps.InstagramConfig',
+    'facebook.apps.FacebookConfig',
     'tiktok.apps.TiktokConfig',
     'crm.apps.CrmConfig',
     'agents_ai.apps.AgentsAiConfig',

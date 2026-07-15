@@ -16,10 +16,10 @@
          role="alert" aria-live="assertive" aria-atomic="true">
         <div class="d-flex">
             <div class="toast-body d-flex align-items-center gap-2">
-                <i class="fab fa-whatsapp fs-5"></i>
+                <i class="{{ canal_branding.icono }} fs-5"></i>
                 <div>
                     <div class="fw-semibold" id="toast-nombre" style="font-size:.88rem;">Nuevo mensaje</div>
-                    <div class="text-white-75" id="toast-sub" style="font-size:.78rem;opacity:.85;">WhatsApp</div>
+                    <div class="text-white-75" id="toast-sub" style="font-size:.78rem;opacity:.85;">{{ canal_branding.nombre }}</div>
                 </div>
             </div>
             <button type="button" class="btn-close btn-close-white me-2 m-auto"
@@ -37,7 +37,7 @@
                     <b>{{ sesion_seleccionada.nombre|default:sesion_seleccionada.numero }}</b> no procesa mensajes
                     entrantes ni envía respuestas (no consume API ni IA). Selecciona otra sesión del combo o
                     reactívala desde
-                    <a href="/whatsapp/sesiones/" class="alert-sp-link">Sesiones</a>.
+                    <a href="{{ canal_branding.url_sesiones }}" class="alert-sp-link">Sesiones</a>.
                 </div>
             </div>
             <button type="button" class="alert-sp-cta" id="btn-cambiar-sesion-pausada">
@@ -551,13 +551,12 @@
                     <div class="mb-3">
                         <i class="fa fa-satellite-dish fa-3x text-primary"></i>
                     </div>
-                    <h5 class="mb-2">Aún no hay sesiones de WhatsApp</h5>
+                    <h5 class="mb-2">{{ canal_branding.vacio_titulo }}</h5>
                     <p class="text-muted mb-4">
-                        Para ver conversaciones primero necesitás conectar al menos
-                        un canal (WhatsApp, Instagram o Messenger).
+                        {{ canal_branding.vacio_texto }}
                     </p>
-                    <a href="/whatsapp/sesiones/" class="btn btn-primary">
-                        <i class="fa fa-plus me-1"></i> Crear o conectar una sesión
+                    <a href="{{ canal_branding.url_sesiones }}" class="btn btn-primary">
+                        <i class="fa fa-plus me-1"></i> {{ canal_branding.vacio_boton }}
                     </a>
                 </div>
             </div>
@@ -3174,7 +3173,7 @@
             // tag por conversación: si llega otro mensaje de la misma conv,
             // reemplaza la notif anterior en lugar de apilar.
             var n = new Notification(nombre || 'Nuevo mensaje', {
-                body: (body || 'Mensaje entrante de WhatsApp').slice(0, 140),
+                body: (body || 'Mensaje entrante de {{ canal_branding.nombre }}').slice(0, 140),
                 icon: '/static/assets/img/avatar.png',
                 tag:  'wa-conv-' + (conversacionId || 'x'),
                 renotify: true,
@@ -3219,7 +3218,7 @@
     function _mostrarToast(nombre) {
         if (!_bsToast) return;
         document.getElementById('toast-nombre').textContent = nombre || 'Nuevo mensaje';
-        document.getElementById('toast-sub').textContent = 'Mensaje entrante de WhatsApp';
+        document.getElementById('toast-sub').textContent = 'Mensaje entrante de {{ canal_branding.nombre }}';
         _bsToast.show();
     }
 

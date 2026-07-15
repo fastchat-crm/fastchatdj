@@ -1,6 +1,16 @@
-# Comentarios de redes sociales (Instagram) — módulo implementado
+# Comentarios de redes sociales (Instagram y Facebook) — módulo implementado
 
 > Fecha: 2026-07-08. Fase 1 de moderación de comentarios: Instagram vía webhook `comments`.
+> 2026-07-14: se sumó **Facebook** (canal `facebook`, proveedor `messenger`): comentarios del
+> feed de página vía webhook `feed` (`guardar_comentario_facebook`), acciones vía
+> `MessengerService` (responder = `POST /{comment_id}/comments`, ocultar = `is_hidden`,
+> private reply igual que IG) y app de control `facebook/` (ver `facebook/README.md`).
+> El resolver de sender por canal vive en `funciones_comentarios.service_por_canal`
+> (dict explícito; canal sin soporte → dict de error, no excepción); el mapeo
+> canal↔proveedor en `whatsapp/models.py::PROVEEDOR_POR_CANAL`. La grilla de
+> publicaciones es una vista genérica compartida:
+> `whatsapp/view_publicaciones_social.py` + `funciones_publicaciones.py`
+> (2026-07-15; `instagram/view_posts.py` y `facebook/view_posts.py` son wrappers).
 > TikTok reutilizará este mismo módulo (campo `canal`) cuando su API esté aprobada — ver `.ai/docs/tiktok_integracion.md`.
 
 ## Qué hace
@@ -110,5 +120,10 @@ Doc de servicios Meta: `meta/README.md` (para qué es cada archivo del paquete).
    de todos los proveedores con chips de filtro por canal (WhatsApp/Instagram/TikTok, los 3 activos
    por defecto) e ícono TikTok propio. `whatsapp/context_processors.py::selector_sesion` ya era
    multicanal (no filtra por proveedor).
-2. **App `facebook/`** (Messenger) espejo de `instagram/` — `ConfigMessenger` ya existe.
+2. ~~App `facebook/` (Messenger) espejo de `instagram/`~~ **HECHO 2026-07-14**: app completa
+   (`/facebook/sesiones|conversaciones|comentarios|reglas-comentarios|publicaciones|centro/`),
+   comentarios del feed por webhook, reglas comentario→DM, publicaciones en vivo, card de
+   primera clase en el tablero, pane propio en "Nueva conexión", chip Facebook en el selector
+   global y sección en `seed_modulos`. Pendientes del developer en `facebook/README.md`
+   (migración por choice `facebook`, suscribir campo `feed`, re-correr seed).
 3. **TikTok**: aprobación beta + OAuth + refresh de tokens (cron) + comentarios por polling.

@@ -32,6 +32,7 @@ SECCIONES = [
         'icono':     'fab fa-whatsapp',
         'prioridad': 10,
         'modulos': [
+            ('/whatsapp/centro/',                    'Centro del canal',          5),
             ('/whatsapp/sesiones/',                  'Sesiones',                 10),
             ('/whatsapp/conversaciones/',            'Conversaciones',           20),
             ('/whatsapp/conversaciones-finalizadas/','Conversaciones cerradas',  30),
@@ -49,10 +50,25 @@ SECCIONES = [
         'icono':     'fab fa-instagram',
         'prioridad': 20,
         'modulos': [
-            ('/instagram/sesiones/',       'Sesiones',       10),
-            ('/instagram/conversaciones/', 'Conversaciones', 20),
-            ('/instagram/comentarios/',    'Comentarios',    30),
-            ('/instagram/publicaciones/',  'Publicaciones',  40),
+            ('/instagram/centro/',              'Centro del canal',       5),
+            ('/instagram/sesiones/',            'Sesiones',              10),
+            ('/instagram/conversaciones/',      'Conversaciones',        20),
+            ('/instagram/comentarios/',         'Comentarios',           30),
+            ('/instagram/reglas-comentarios/',  'Reglas de comentarios', 35),
+            ('/instagram/publicaciones/',       'Publicaciones',         40),
+        ],
+    },
+    {
+        'nombre':    'Facebook',
+        'icono':     'fab fa-facebook',
+        'prioridad': 25,
+        'modulos': [
+            ('/facebook/centro/',              'Centro del canal',       5),
+            ('/facebook/sesiones/',            'Sesiones',              10),
+            ('/facebook/conversaciones/',      'Conversaciones',        20),
+            ('/facebook/comentarios/',         'Comentarios',           30),
+            ('/facebook/reglas-comentarios/',  'Reglas de comentarios', 35),
+            ('/facebook/publicaciones/',       'Publicaciones',         40),
         ],
     },
     {
@@ -60,6 +76,7 @@ SECCIONES = [
         'icono':     'fab fa-tiktok',
         'prioridad': 30,
         'modulos': [
+            ('/tiktok/centro/',         'Centro del canal', 5),
             ('/tiktok/sesiones/',       'Sesiones',       10),
             ('/tiktok/conversaciones/', 'Conversaciones', 20),
             ('/tiktok/comentarios/',    'Comentarios',    30),

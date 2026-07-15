@@ -30,6 +30,7 @@ from core.consultas import consultas
 from seguridad.view_notificaciones import notificacionesView
 from whatsapp.urls import whatsapp_urls
 from instagram.urls import instagram_urls
+from facebook.urls import facebook_urls
 from tiktok.urls import tiktok_urls
 from agenda.urls import agenda_urls
 
@@ -74,6 +75,14 @@ urls_sistema = (
         "url": 'instagram/',
         "sub_urls": instagram_urls,
         "include": include('instagram.urls'),
+        "name": None,
+        "vista": None
+    },
+    {
+        "nombre": "Facebook",
+        "url": 'facebook/',
+        "sub_urls": facebook_urls,
+        "include": include('facebook.urls'),
         "name": None,
         "vista": None
     },

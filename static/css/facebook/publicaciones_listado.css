@@ -1,0 +1,93 @@
+.post-card {
+    height: 100%;
+}
+
+.post-card .post-media {
+    width: 100%;
+    height: 220px;
+    object-fit: cover;
+    border-radius: .375rem .375rem 0 0;
+    background: #f1f3f5;
+}
+
+.post-card .post-media-texto {
+    width: 100%;
+    height: 220px;
+    border-radius: .375rem .375rem 0 0;
+    background: linear-gradient(135deg, #1877f2 0%, #0a5dc2 100%);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    font-size: .9rem;
+    text-align: center;
+    overflow: hidden;
+}
+
+.post-card .post-caption {
+    font-size: .8rem;
+    color: #495057;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 3.6em;
+}
+
+.post-card .post-metricas {
+    font-size: .8rem;
+    color: #6c757d;
+}
+
+.post-card .badge-nuevos {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 2;
+}
+
+.comentario-post {
+    border: 1px solid #e9ecef;
+    border-radius: .5rem;
+    padding: .75rem;
+    margin-bottom: .75rem;
+    background: #fff;
+}
+
+.comentario-post .comentario-autor i {
+    color: #1877f2;
+    margin-right: .25rem;
+}
+
+.comentario-post .comentario-texto {
+    margin: .35rem 0;
+    font-size: .9rem;
+}
+
+.comentario-post .comentario-respuesta {
+    background: #f8f9fa;
+    border-left: 3px solid #1877f2;
+    border-radius: 0 .375rem .375rem 0;
+    padding: .4rem .6rem;
+    font-size: .85rem;
+    margin-bottom: .35rem;
+}
+
+.comentario-post .comentario-acciones {
+    display: flex;
+    gap: .4rem;
+    flex-wrap: wrap;
+}
+
+.badge.comentario-estado-nuevo {
+    background: #0d6efd;
+}
+
+.badge.comentario-estado-respondido {
+    background: #198754;
+}
+
+.badge.comentario-estado-oculto {
+    background: #6c757d;
+}

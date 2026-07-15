@@ -27,6 +27,11 @@
     color: #fff;
 }
 
+.conex-canal .ic.ic-fb {
+    background: #e7f0fe;
+    color: #1877f2;
+}
+
 #formCuenta .pane-actions {
     display: flex;
     justify-content: flex-end;

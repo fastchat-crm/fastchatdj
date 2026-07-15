@@ -1,0 +1,454 @@
+{% extends 'base.html' %}
+{% block head %}
+    <link rel="stylesheet" href="/static/stylenew/sesiones.css?v2.0">
+    <link rel="stylesheet" href="/static/css/facebook/cuentas_listado.css?v1.0">
+{% endblock %}
+
+{% block content %}
+    <div class="conex-page">
+
+        <div class="conex-header">
+            <div class="conex-header-left">
+                <div>
+                    <h3 class="conex-title">Sesiones Facebook</h3>
+                    <p class="conex-subtitle">Conecta páginas de Facebook y controla su estado desde un solo
+                        lugar.</p>
+                </div>
+            </div>
+            <div class="conex-header-right">
+                <form method="GET" class="conex-search mb-0">
+                    <i class="fa fa-search"></i>
+                    <input type="text" name="criterio" placeholder="Buscar por nombre o página..."
+                           value="{{ criterio|default:'' }}">
+                </form>
+                <button type="button" class="conex-btn conex-btn-primary" id="btn-abrir-modal">
+                    <i class="fa fa-plus me-1"></i> Nueva conexión
+                </button>
+            </div>
+        </div>
+
+        <div class="alert alert-info guia-conexion mb-3">
+            <div class="row">
+                <div class="col-md-8">
+                    <strong><i class="fab fa-facebook"></i> ¿Cómo conectar una página?</strong>
+                    <ol class="small mt-2">
+                        <li>Necesitas ser administrador de la <b>página de Facebook</b>.</li>
+                        <li>Genera un <b>Page Access Token</b> de larga duración con los permisos
+                            <code>pages_messaging</code>, <code>pages_show_list</code>,
+                            <code>pages_manage_metadata</code> y <code>pages_manage_engagement</code>.</li>
+                        <li>Pulsa <b>Nueva conexión</b>, pega el token y usa <b>Detectar automáticamente</b>.</li>
+                        <li>Configura el webhook en tu App de Meta con la URL y el verify token de la tarjeta,
+                            suscribiendo los campos <code>messages</code> y <code>feed</code>.</li>
+                    </ol>
+                </div>
+                <div class="col-md-4">
+                    <div class="small">
+                        <b>Webhook (App de Meta):</b><br>
+                        <code>{{ webhook_url }}</code><br><br>
+                        <a href="/seguridad/documentacion/?pagina=conectar-instagram-tiktok"
+                           class="btn btn-sm btn-primary">
+                            <i class="fa fa-book"></i> Guía completa de tokens
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="conex-grid" id="conex-grid">
+            {% for s in listado %}
+                <div class="conex-card{% if not s.activo %} conex-card-pausada{% endif %}" data-sesion-id="{{ s.id }}">
+                    <div class="card-top">
+                        <div class="card-avatar">
+                            <span class="avatar-fallback fb-avatar"><i class="fab fa-facebook"></i></span>
+                            <span class="avatar-status status-{{ s.estado }}"
+                                  title="{{ s.get_estado_display|default:s.estado }}"></span>
+                        </div>
+                        <div class="card-head">
+                            <div class="card-nombre">
+                                {{ s.nombre }}
+                                {% if not s.activo %}
+                                    <span class="badge-pausada" title="Sesión suspendida — no procesa mensajes">
+                                        <i class="fa fa-pause-circle"></i> SUSPENDIDA
+                                    </span>
+                                {% endif %}
+                            </div>
+                            <div class="card-num">{{ s.config_messenger.page_name|default:"sin página" }}</div>
+                        </div>
+                        <label class="conex-toggle"
+                               title="{% if s.activo %}Suspender la sesión{% else %}Reactivar la sesión{% endif %}">
+                            <input type="checkbox" class="conex-toggle-input btn-toggle" data-id="{{ s.id }}"
+                                   {% if s.activo %}checked{% endif %}>
+                            <span class="conex-toggle-slider"></span>
+                            <span class="conex-toggle-label">{% if s.activo %}Activa{% else %}Suspendida{% endif %}</span>
+                        </label>
+                        <div class="card-kebab-wrap">
+                            <button type="button" class="btn-kebab" aria-label="Opciones" data-kebab-toggle>
+                                <i class="fa fa-ellipsis-vertical"></i>
+                            </button>
+                            <div class="kebab-menu" data-kebab-menu>
+                                <div class="kebab-heading">Acciones de sesión</div>
+                                <button type="button" class="kebab-item btn-probar" data-id="{{ s.id }}">
+                                    <i class="fa fa-plug text-success"></i> Probar conexión
+                                </button>
+                                <button type="button" class="kebab-item btn-edit"
+                                        data-id="{{ s.id }}" data-nombre="{{ s.nombre }}"
+                                        data-page="{{ s.config_messenger.page_id }}"
+                                        data-pagename="{{ s.config_messenger.page_name }}">
+                                    <i class="fa fa-pen"></i> Modificar
+                                </button>
+                                <div class="kebab-sep"></div>
+                                <div class="kebab-heading">Canal Facebook</div>
+                                <a href="/facebook/conversaciones/" class="kebab-item">
+                                    <i class="fa fa-comments"></i> Conversaciones
+                                </a>
+                                <a href="/facebook/comentarios/" class="kebab-item">
+                                    <i class="fa fa-comment-dots"></i> Comentarios
+                                </a>
+                                <a href="/facebook/publicaciones/" class="kebab-item">
+                                    <i class="fa fa-images"></i> Publicaciones
+                                </a>
+                                <div class="kebab-sep"></div>
+                                <div class="kebab-heading">Acciones críticas</div>
+                                <button type="button" class="kebab-item kebab-danger btn-del"
+                                        data-id="{{ s.id }}" data-nombre="{{ s.nombre }}">
+                                    <i class="fa fa-trash"></i> Eliminar sesión
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="card-tags">
+                            <span class="canal-badge canal-facebook"><i class="fab fa-facebook"></i> Facebook</span>
+                            <span class="estado-badge estado-{{ s.estado }}">
+                                <span class="dot"></span> {{ s.get_estado_display|default:s.estado }}
+                            </span>
+                        </div>
+                        <div class="card-subinfo"><i class="fa fa-flag"></i> Page ID:
+                            <b>{{ s.config_messenger.page_id|default:"—" }}</b></div>
+                        <div class="card-subinfo"><i class="fa fa-file-signature"></i> Página:
+                            <b>{{ s.config_messenger.page_name|default:"—" }}</b></div>
+                        <div class="card-subinfo"><i class="fa fa-key"></i> Verify token:
+                            <code class="token-truncado"
+                                  title="{{ s.config_messenger.webhook_verify_token }}">{{ s.config_messenger.webhook_verify_token|default:"—" }}</code>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <a href="/facebook/conversaciones/" class="btn-quick">
+                            <i class="fa fa-comments"></i> Conversaciones
+                        </a>
+                        <a href="/facebook/comentarios/" class="btn-quick">
+                            <i class="fa fa-comment-dots"></i> Comentarios
+                        </a>
+                        <a href="/facebook/publicaciones/" class="btn-quick">
+                            <i class="fa fa-images"></i> Publicaciones
+                        </a>
+                    </div>
+                </div>
+            {% empty %}
+                <div class="conex-empty">
+                    <i class="fab fa-facebook"></i>
+                    <h4>Aún no has conectado ninguna página de Facebook</h4>
+                    <p>Pulsa <b>Nueva conexión</b>, pega el Page Access Token y deja que la detección automática haga el
+                        resto.</p>
+                </div>
+            {% endfor %}
+        </div>
+        {% include 'paginacion.html' %}
+    </div>
+
+    <div class="conex-modal-backdrop" id="conex-modal" aria-hidden="true">
+        <div class="conex-modal" role="dialog" aria-label="Nueva conexión">
+            <div class="conex-modal-header">
+                <h4>Enlazar un nuevo canal</h4>
+                <button type="button" class="conex-modal-close" id="btn-cerrar-modal" aria-label="Cerrar">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <div class="conex-modal-body">
+                <aside class="conex-sidebar">
+                    <button class="conex-canal" type="button"
+                            onclick="window.location.href='/whatsapp/sesiones/'">
+                        <span class="ic ic-wa"><i class="fab fa-whatsapp"></i></span>
+                        WhatsApp Business
+                    </button>
+                    <button class="conex-canal" type="button"
+                            onclick="window.location.href='/instagram/sesiones/'">
+                        <span class="ic ig-grad"><i class="fab fa-instagram"></i></span>
+                        Instagram
+                    </button>
+                    <button class="conex-canal active" data-canal="facebook">
+                        <span class="ic ic-fb"><i class="fab fa-facebook"></i></span>
+                        Facebook
+                    </button>
+                    <button class="conex-canal" type="button"
+                            onclick="window.location.href='/tiktok/sesiones/'">
+                        <span class="ic ic-tk"><i class="fab fa-tiktok"></i></span>
+                        TikTok
+                    </button>
+                </aside>
+                <section class="conex-panel">
+                    <div class="pane" data-pane="facebook">
+                        <div class="pane-hero">
+                            <div class="pane-hero-icon fb-grad"><i class="fab fa-facebook"></i></div>
+                            <div class="pane-hero-body">
+                                <h5 class="pane-title mb-1">Conectar página de Facebook</h5>
+                                <p class="pane-hero-text mb-0">
+                                    Recibe los mensajes de Messenger y los comentarios de tus publicaciones en el
+                                    inbox, responde con IA y convierte seguidores en clientes.
+                                </p>
+                            </div>
+                        </div>
+                        <a href="/seguridad/documentacion/?pagina=conectar-instagram-tiktok" class="pane-link">
+                            <i class="fa fa-book-open me-1"></i> Aprende cómo conectar
+                        </a>
+                        <details class="guia-inline">
+                            <summary><i class="fa fa-circle-question"></i> ¿Cómo obtengo las credenciales? Pasos detallados</summary>
+                            <div class="guia-steps">
+                                <div class="guia-step">
+                                    <span class="guia-step-num">1</span>
+                                    <div class="guia-step-body">
+                                        <b>Sé administrador de la página</b>
+                                        <span>La cuenta que genera el token debe administrar la página de Facebook que vas a conectar.</span>
+                                    </div>
+                                </div>
+                                <div class="guia-step">
+                                    <span class="guia-step-num">2</span>
+                                    <div class="guia-step-body">
+                                        <b>Genera un token de usuario en Graph API Explorer</b>
+                                        <span>Entra a developers.facebook.com/tools/explorer, elige tu App y pide un User Access Token con los permisos pages_messaging, pages_show_list, pages_manage_metadata y pages_manage_engagement.</span>
+                                    </div>
+                                </div>
+                                <div class="guia-step">
+                                    <span class="guia-step-num">3</span>
+                                    <div class="guia-step-body">
+                                        <b>Conviértelo en token de larga duración</b>
+                                        <span>Intercámbialo con fb_exchange_token usando el App ID y App Secret; el Page Access Token que devuelve /me/accounts con ese token ya no expira.</span>
+                                    </div>
+                                </div>
+                                <div class="guia-step">
+                                    <span class="guia-step-num">4</span>
+                                    <div class="guia-step-body">
+                                        <b>Pega el token abajo y pulsa "Detectar automáticamente"</b>
+                                        <span>El sistema consulta /me/accounts y llena solos el Page ID y el nombre de la página.</span>
+                                    </div>
+                                </div>
+                                <div class="guia-step">
+                                    <span class="guia-step-num">5</span>
+                                    <div class="guia-step-body">
+                                        <b>Configura el webhook en tu App de Meta</b>
+                                        <span>En Webhooks → Page usa la URL {{ webhook_url }} con el verify token que genera la tarjeta y suscribe los campos messages y feed.</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
+                        <form id="formCuenta" novalidate>
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="add">
+                            <input type="hidden" name="pk" value="">
+                            <div class="mb-3">
+                                <label class="form-label">Nombre interno *</label>
+                                <input type="text" name="nombre" class="form-control" required maxlength="150"
+                                       placeholder="Ej: Facebook Ventas">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Access Token (Page) *</label>
+                                <div class="input-group">
+                                    <textarea name="access_token" class="form-control" rows="2" required
+                                              placeholder="Pega aquí el Page Access Token de larga duración"></textarea>
+                                    <button type="button" class="btn btn-primary" id="btnDetectar">
+                                        <i class="fa fa-magic"></i> Detectar automáticamente
+                                    </button>
+                                </div>
+                                <small class="text-muted">Con el token pegado, la detección llena solos los campos de
+                                    abajo.</small>
+                            </div>
+                            <div class="mb-3 candidatos-detectados" id="zonaCandidatos">
+                                <label class="form-label">Páginas encontradas</label>
+                                <select class="form-select" id="selectCandidato"></select>
+                            </div>
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Page ID *</label>
+                                    <input type="text" name="page_id" class="form-control" required maxlength="100">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Nombre de la página</label>
+                                    <input type="text" name="page_name" class="form-control" maxlength="200">
+                                </div>
+                            </div>
+                            <div class="alert alert-light small">
+                                Al guardar se probará la conexión automáticamente y se generará el
+                                <b>verify token</b> del webhook. Luego configura el webhook en tu App de Meta con la URL
+                                <code>{{ webhook_url }}</code> y suscribe los campos <code>messages</code> y
+                                <code>feed</code>.
+                            </div>
+                            <div class="pane-actions">
+                                <button type="button" class="conex-btn conex-btn-light" id="btn-cancelar-modal">
+                                    Cancelar
+                                </button>
+                                <button type="submit" class="conex-btn conex-btn-primary">
+                                    Guardar y conectar <i class="fa fa-arrow-right ms-1"></i>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+    <script>
+        (function () {
+            const backdrop = document.getElementById('conex-modal');
+            const form = document.getElementById('formCuenta');
+            const zona = document.getElementById('zonaCandidatos');
+            const selectCand = document.getElementById('selectCandidato');
+            let candidatos = [];
+
+            function csrf() {
+                return form.querySelector('[name=csrfmiddlewaretoken]').value;
+            }
+
+            function abrirModal(titulo) {
+                backdrop.querySelector('.conex-modal-header h4').textContent = titulo || 'Enlazar un nuevo canal';
+                backdrop.classList.add('open');
+                backdrop.setAttribute('aria-hidden', 'false');
+            }
+
+            function cerrarModal() {
+                backdrop.classList.remove('open');
+                backdrop.setAttribute('aria-hidden', 'true');
+            }
+
+            document.getElementById('btn-abrir-modal').addEventListener('click', () => {
+                form.reset();
+                form.action.value = 'add';
+                form.pk.value = '';
+                zona.style.display = 'none';
+                abrirModal('Enlazar un nuevo canal');
+            });
+            document.getElementById('btn-cerrar-modal').addEventListener('click', cerrarModal);
+            document.getElementById('btn-cancelar-modal').addEventListener('click', cerrarModal);
+            backdrop.addEventListener('click', (e) => {
+                if (e.target === backdrop) cerrarModal();
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && backdrop.classList.contains('open')) cerrarModal();
+            });
+
+            document.addEventListener('click', (e) => {
+                const toggle = e.target.closest('[data-kebab-toggle]');
+                document.querySelectorAll('[data-kebab-menu].open').forEach(m => {
+                    if (!toggle || m !== toggle.parentElement.querySelector('[data-kebab-menu]')) m.classList.remove('open');
+                });
+                if (toggle) {
+                    const menu = toggle.parentElement.querySelector('[data-kebab-menu]');
+                    menu.classList.toggle('open');
+                }
+            });
+
+            document.getElementById('btnDetectar').addEventListener('click', async () => {
+                const token = form.access_token.value.trim();
+                if (!token) {
+                    mensajeWarning('Pega primero el Access Token.');
+                    return;
+                }
+                const fd = new FormData();
+                fd.append('action', 'autodetectar');
+                fd.append('access_token', token);
+                fd.append('csrfmiddlewaretoken', csrf());
+                const r = await fetch('', {method: 'POST', body: fd});
+                const j = await r.json();
+                if (j.error) {
+                    mensajeWarning(j.message || 'No se pudo detectar.');
+                    return;
+                }
+                candidatos = j.candidatos || [];
+                if (!candidatos.length) {
+                    mensajeWarning('No se encontraron páginas de Facebook con ese token.');
+                    return;
+                }
+                selectCand.innerHTML = '';
+                candidatos.forEach((c, i) => {
+                    const opt = document.createElement('option');
+                    opt.value = i;
+                    opt.textContent = (c.page_name || c.page_id) + ' · ' + c.page_id;
+                    selectCand.appendChild(opt);
+                });
+                zona.style.display = candidatos.length > 1 ? 'block' : 'none';
+                aplicarCandidato(0);
+            });
+
+            function aplicarCandidato(i) {
+                const c = candidatos[i];
+                if (!c) return;
+                form.page_id.value = c.page_id || '';
+                form.page_name.value = c.page_name || '';
+                if (c.page_access_token) form.access_token.value = c.page_access_token;
+                if (!form.nombre.value && c.page_name) form.nombre.value = 'Facebook ' + c.page_name;
+            }
+
+            selectCand.addEventListener('change', () => aplicarCandidato(parseInt(selectCand.value, 10)));
+
+            document.querySelectorAll('.btn-edit').forEach(btn => btn.addEventListener('click', () => {
+                form.reset();
+                form.action.value = 'change';
+                form.pk.value = btn.dataset.id;
+                form.nombre.value = btn.dataset.nombre;
+                form.page_id.value = btn.dataset.page;
+                form.page_name.value = btn.dataset.pagename;
+                zona.style.display = 'none';
+                abrirModal('Editar sesión Facebook');
+            }));
+
+            form.addEventListener('submit', async (ev) => {
+                ev.preventDefault();
+                const fd = new FormData(form);
+                const r = await fetch('', {method: 'POST', body: fd, headers: {'X-Requested-With': 'XMLHttpRequest'}});
+                const j = await r.json();
+                if (j.error) {
+                    mensajeWarning(j.message || 'Error');
+                    return;
+                }
+                location.reload();
+            });
+
+            async function accion(accionNombre, id) {
+                const fd = new FormData();
+                fd.append('action', accionNombre);
+                fd.append('pk', id);
+                fd.append('csrfmiddlewaretoken', csrf());
+                const r = await fetch('', {method: 'POST', body: fd});
+                const j = await r.json();
+                if (j.error) {
+                    mensajeWarning(j.message || 'Error');
+                    return;
+                }
+                if (j.message) {
+                    Swal.fire({title: j.message, type: 'success', timer: 1800, showConfirmButton: false});
+                }
+                setTimeout(() => location.reload(), 900);
+            }
+
+            document.querySelectorAll('.btn-probar').forEach(btn =>
+                btn.addEventListener('click', () => accion('probar', btn.dataset.id)));
+            document.querySelectorAll('.btn-toggle').forEach(btn =>
+                btn.addEventListener('change', () => accion('toggle_activo', btn.dataset.id)));
+            document.querySelectorAll('.btn-del').forEach(btn =>
+                btn.addEventListener('click', () => {
+                    Swal.fire({
+                        title: `¿Eliminar la sesión "${btn.dataset.nombre}"?`,
+                        text: 'Sus conversaciones se conservan.',
+                        type: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Sí, eliminar',
+                        cancelButtonText: 'Cancelar'
+                    }).then((res) => {
+                        if (res.value) accion('delete', btn.dataset.id);
+                    });
+                }));
+        })();
+    </script>
+{% endblock %}

@@ -380,7 +380,7 @@ class Contacto(ModeloBase):
     def save(self, *args, **kwargs):
         if not self.numero_telefono:
             self.numero_telefono = self.contacto_numero
-        else:
+        elif (self.canal or 'whatsapp') == 'whatsapp':
             self.contacto_numero = "".join([x for x in self.numero_telefono if x.isdigit()])
             self.from_number = f"{self.contacto_numero}@s.whatsapp.net"
         super().save(*args, **kwargs)
@@ -2695,13 +2695,22 @@ class PerfilSesionWhatsApp(ModeloBase):
 
 
 # ----------------------------------------------------------------------------
-# Comentarios de redes sociales (Instagram hoy; TikTok cuando se integre)
+# Comentarios de redes sociales (Instagram y Facebook hoy; TikTok cuando se integre)
 # ----------------------------------------------------------------------------
 
 CANALES_COMENTARIO = (
     ('instagram', 'Instagram'),
+    ('facebook', 'Facebook'),
     ('tiktok', 'TikTok'),
 )
+
+PROVEEDOR_POR_CANAL = {
+    'instagram': 'instagram',
+    'facebook': 'messenger',
+    'tiktok': 'tiktok',
+}
+
+CANALES_CON_ACCIONES = ('instagram', 'facebook')
 
 ESTADOS_COMENTARIO = (
     ('nuevo', 'Nuevo'),

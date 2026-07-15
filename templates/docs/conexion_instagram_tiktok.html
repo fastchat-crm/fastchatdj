@@ -49,7 +49,7 @@
         <article class="docs-article">
 
             <header class="docs-hero">
-                <h1><i class="fab fa-instagram me-2 text-danger"></i> Instagram y TikTok — conexión y tokens</h1>
+                <h1><i class="fab fa-instagram me-2 text-danger"></i> Instagram, Facebook y TikTok — conexión y tokens</h1>
                 <p class="docs-hero-lead">
                     Guía técnica: cómo funciona la integración por dentro, cómo obtener los tokens de acceso
                     de cada plataforma y cómo registrar la cuenta para recibir DMs y comentarios.
@@ -58,9 +58,10 @@
 
             <section class="docs-section">
                 <h2>Cómo funciona por dentro</h2>
-                <p>Instagram, Messenger y (a futuro) TikTok <b>no son módulos separados</b>: son proveedores de la
+                <p>Instagram, Facebook Messenger y (a futuro) TikTok <b>no son módulos separados</b>: son proveedores de la
                     misma infraestructura de sesiones de WhatsApp. Una cuenta conectada es una
-                    <b>sesión</b> con <code>proveedor='instagram'</code> y una configuración propia con sus credenciales.</p>
+                    <b>sesión</b> con <code>proveedor='instagram'</code> o <code>proveedor='messenger'</code> y una
+                    configuración propia con sus credenciales (<code>ConfigInstagram</code> / <code>ConfigMessenger</code>).</p>
                 <table class="table table-sm small mb-3">
                     <thead><tr><th style="width:240px;">Pieza</th><th>Qué hace</th></tr></thead>
                     <tbody>
@@ -82,7 +83,7 @@
                         </tr>
                         <tr>
                             <td><b>Inbox de comentarios</b></td>
-                            <td><a href="/instagram/comentarios/">Instagram → Comentarios</a> y <a href="/tiktok/comentarios/">TikTok → Comentarios</a> — los comentarios de publicaciones llegan por el mismo webhook y se moderan en el inbox de cada canal: responder, ocultar o pasar a DM.</td>
+                            <td><a href="/instagram/comentarios/">Instagram → Comentarios</a>, <a href="/facebook/comentarios/">Facebook → Comentarios</a> y <a href="/tiktok/comentarios/">TikTok → Comentarios</a> — los comentarios de publicaciones llegan por el mismo webhook y se moderan en el inbox de cada canal: responder, ocultar o pasar a DM.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -182,6 +183,39 @@
             </section>
 
             <section class="docs-section">
+                <h2>Facebook (página) — conexión</h2>
+                <p>La conexión de una página de Facebook habilita <b>Messenger</b> (DMs) y los
+                    <b>comentarios del feed</b> de la página. Usa la misma App de Meta que Instagram.</p>
+                <h5>Requisitos previos</h5>
+                <ol>
+                    <li>Ser <b>administrador de la página</b> de Facebook.</li>
+                    <li>La misma App de Meta de tipo Negocios con los productos <b>Messenger</b> y <b>Webhooks</b>.</li>
+                </ol>
+                <h5>Permisos del token</h5>
+                <p>El token es un <b>Page Access Token</b> de larga duración (mismo procedimiento que Instagram:
+                    Graph API Explorer → token de usuario → <code>fb_exchange_token</code> → <code>/me/accounts</code>)
+                    con estos permisos:</p>
+                <ul>
+                    <li><code>pages_messaging</code> — enviar y recibir mensajes de Messenger.</li>
+                    <li><code>pages_show_list</code> — listar tus páginas (detección automática).</li>
+                    <li><code>pages_manage_metadata</code> — suscripciones del webhook.</li>
+                    <li><code>pages_manage_engagement</code> — responder y ocultar comentarios del feed.</li>
+                </ul>
+                <h5>Registro y webhook</h5>
+                <ol>
+                    <li>Entra a <a href="/facebook/sesiones/">Facebook → Sesiones</a>, pulsa <b>Nueva conexión</b>,
+                        pega el token y usa <b>Detectar automáticamente</b>: llena solo el Page ID y el nombre de la página.</li>
+                    <li>En la App de Meta (Webhooks → Page) apunta a
+                        <code>/whatsapp/messenger_webhook/</code> con el verify token de la tarjeta y suscribe los campos
+                        <code>messages</code> (Messenger) y <code>feed</code> (comentarios de publicaciones).</li>
+                    <li>Asigna asesores, agente IA y horarios igual que a cualquier sesión. Los DMs entran a
+                        <a href="/facebook/conversaciones/">Facebook → Conversaciones</a>, los comentarios a
+                        <a href="/facebook/comentarios/">Facebook → Comentarios</a> y las
+                        <a href="/facebook/reglas-comentarios/">reglas comentario→DM</a> funcionan igual que en Instagram.</li>
+                </ol>
+            </section>
+
+            <section class="docs-section">
                 <h2>TikTok — estado y cómo se conectará</h2>
                 <div class="alert alert-secondary small">
                     <b>Estado:</b> integración planificada, aún no disponible. La API de mensajes de TikTok
@@ -235,6 +269,14 @@
                             <td>Ver tus posts con likes/comentarios y cuántos comentarios nuevos tienes por post en el CRM.</td>
                         </tr>
                         <tr>
+                            <td><a href="/facebook/sesiones/">Facebook → Sesiones</a></td>
+                            <td>Conectar páginas de Facebook (token + detección automática). Messenger y comentarios del feed entran al mismo pipeline.</td>
+                        </tr>
+                        <tr>
+                            <td><a href="/facebook/publicaciones/">Facebook → Publicaciones</a></td>
+                            <td>Ver los posts de la página con likes/comentarios y moderarlos sin salir del panel.</td>
+                        </tr>
+                        <tr>
                             <td><a href="/tiktok/sesiones/">TikTok → Sesiones</a></td>
                             <td>Pre-registrar cuentas Business para dejarlas listas mientras se aprueba la API.</td>
                         </tr>
@@ -256,17 +298,19 @@
             <section class="docs-section">
                 <h2>Checklist del administrador</h2>
                 <ol>
-                    <li><b>Activar los canales</b>: Seguridad → Configuración → switches
-                        <code>canal_instagram_activo</code> / <code>canal_tiktok_activo</code> (controlan las cards
-                        del modal "Agregar conexión" del tablero).</li>
+                    <li><b>Activar los canales</b>: Seguridad → Configuración → switches de Instagram, Messenger y
+                        TikTok (controlan las cards del modal "Agregar conexión" del tablero).</li>
                     <li><b>Credenciales Meta App</b> (una sola vez): App ID + App Secret en Seguridad →
                         Credenciales Meta — con eso se valida la firma de los webhooks de Instagram/Messenger.</li>
                     <li><b>Módulos y permisos</b>: Seguridad → Módulos del sistema → "extraer URLs" para que
-                        aparezcan los bloques <code>/instagram/...</code> y <code>/tiktok/...</code>; asignarlos a un
-                        grupo del sidebar y a los roles que corresponda.</li>
+                        aparezcan los bloques <code>/instagram/...</code>, <code>/facebook/...</code> y
+                        <code>/tiktok/...</code>; asignarlos a un grupo del sidebar y a los roles que corresponda.</li>
                     <li><b>Webhook de Instagram</b>: en la App de Meta suscribir los campos
                         <code>messages</code> y <code>comments</code> apuntando a
                         <code>/whatsapp/instagram_webhook/</code>.</li>
+                    <li><b>Webhook de Facebook</b>: en la App de Meta (producto Webhooks → Page) suscribir
+                        <code>messages</code> y <code>feed</code> apuntando a
+                        <code>/whatsapp/messenger_webhook/</code>.</li>
                     <li><b>TikTok</b>: aplicar a la Business Messaging API (beta) en
                         business-api.tiktok.com/portal — es el único bloqueante externo del canal.</li>
                 </ol>

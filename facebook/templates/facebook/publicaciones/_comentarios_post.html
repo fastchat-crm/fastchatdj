@@ -1,0 +1,62 @@
+{% load templatefunctions %}
+{% if comentarios_post %}
+    <div class="lista-comentarios-post">
+        {% for c in comentarios_post %}
+            <div class="comentario-post" data-pk="{{ c.id }}">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="comentario-autor">
+                        <i class="fab fa-facebook"></i>
+                        <b>{{ c.autor_username|default:"usuario" }}</b>
+                        <span class="text-muted small ms-1">{{ c.fecha_comentario|date:"Y-m-d H:i" }}</span>
+                    </div>
+                    <span class="badge comentario-estado-{{ c.estado }}">{{ c.get_estado_display }}</span>
+                </div>
+                <div class="comentario-texto">{{ c.texto|default:"(sin texto)" }}</div>
+                {% if c.respuesta_texto %}
+                    <div class="comentario-respuesta">
+                        <i class="fa fa-reply"></i>
+                        <span>{{ c.respuesta_texto }}</span>
+                        {% if c.respondido_por %}
+                            <span class="text-muted small">— {{ c.respondido_por.full_name|default:c.respondido_por.username }}</span>
+                        {% endif %}
+                    </div>
+                {% endif %}
+                <div class="comentario-acciones">
+                    <button type="button" class="btn btn-sm btn-primary btn-com-responder"
+                            data-pk="{{ c.id }}" data-autor="{{ c.autor_username }}">
+                        <i class="fa fa-reply"></i> Responder
+                    </button>
+                    {% if c.estado == 'oculto' %}
+                        <button type="button" class="btn btn-sm btn-secondary btn-com-accion"
+                                data-pk="{{ c.id }}" data-accion="mostrar">
+                            <i class="fa fa-eye"></i> Mostrar
+                        </button>
+                    {% else %}
+                        <button type="button" class="btn btn-sm btn-warning btn-com-accion"
+                                data-pk="{{ c.id }}" data-accion="ocultar">
+                            <i class="fa fa-eye-slash"></i> Ocultar
+                        </button>
+                    {% endif %}
+                    {% if c.conversacion %}
+                        <a href="/whatsapp/conversaciones/?conv={{ c.conversacion.id|encrypt_id }}"
+                           class="btn btn-sm btn-success">
+                            <i class="fa fa-comments"></i> Ver conversación
+                        </a>
+                    {% elif not c.dm_enviado %}
+                        <button type="button" class="btn btn-sm btn-success btn-com-dm"
+                                data-pk="{{ c.id }}" data-autor="{{ c.autor_username }}">
+                            <i class="fa fa-paper-plane"></i> DM privado
+                        </button>
+                    {% else %}
+                        <span class="badge bg-light text-dark border align-self-center">DM enviado</span>
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="alert alert-light text-center text-muted mb-0">
+        Esta publicación aún no tiene comentarios registrados en el CRM.
+        Los comentarios entran en vivo por el webhook de Facebook.
+    </div>
+{% endif %}

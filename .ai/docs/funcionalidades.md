@@ -8,7 +8,8 @@ GoHighLevel y ManyChat.
 Rutas de montaje: `whatsapp/` → `/whatsapp/`, `crm/` → `/crm/`, `agenda/` → `/agenda/`,
 `voz/` → `/voz/`, `autenticacion/` → `/autenticacion/`, `seguridad/` → `/seguridad/`,
 `area_geografica/` → `/area-geografica/`, `instagram/` → `/instagram/`,
-`tiktok/` → `/tiktok/`, `public/` → `/`. `meta/` y `core/` son librerías sin URLs propias.
+`facebook/` → `/facebook/`, `tiktok/` → `/tiktok/`, `public/` → `/`.
+`meta/` y `core/` son librerías sin URLs propias.
 
 ---
 
@@ -98,8 +99,8 @@ Rutas de montaje: `whatsapp/` → `/whatsapp/`, `crm/` → `/crm/`, `agenda/` �
 ### Trazas / debug IA (`/whatsapp/trazas/`)
 - Trazado end-to-end del pipeline (webhook→LLM→envío) con filtros por etapa/nivel/sesión/API key, timeline por mensaje y resumen en vivo con tokens/costo. Modelo `TrazaMensajeIA`.
 
-### Comentarios sociales (`view_comentarios.py`, expuesto vía `/instagram/comentarios/` y `/tiktok/comentarios/`)
-- Inbox de comentarios de publicaciones (`ComentarioSocial`): responder público, ocultar/mostrar, convertir en DM (private reply) → entra al pipeline de conversaciones.
+### Comentarios sociales (`view_comentarios.py`, expuesto vía `/instagram/comentarios/`, `/facebook/comentarios/` y `/tiktok/comentarios/`)
+- Inbox de comentarios de publicaciones (`ComentarioSocial`, canales instagram/facebook/tiktok): responder público, ocultar/mostrar, convertir en DM (private reply) → entra al pipeline de conversaciones. Acciones habilitadas para Instagram y Facebook (sender por canal en `funciones_comentarios._service_por_canal`).
 
 ### Reglas comentario→DM (`/instagram/reglas-comentarios/`, `view_reglas_comentarios.py`)
 - `ReglaComentario`: automatización por keywords (sin tildes/mayúsculas; vacío = todo comentario), opcionalmente limitada a una publicación. Al matchear (primera regla por orden gana, motor en `funciones_comentarios.procesar_reglas_comentario`, disparado al ingresar el comentario por webhook): respuesta pública automática, DM (private reply, ventana Meta 7 días) y/o etiqueta al contacto si existe. Contador de usos. Canal instagram hoy; tiktok cuando se apruebe su API.
@@ -204,9 +205,10 @@ Rutas de montaje: `whatsapp/` → `/whatsapp/`, `crm/` → `/crm/`, `agenda/` �
 
 ---
 
-## instagram/ y tiktok/ — capas de control por canal (sin modelos propios)
+## instagram/, facebook/ y tiktok/ — capas de control por canal (sin modelos propios)
 
-- Instagram: sesiones IG (autodetección con Access Token, verify token, prueba), conversaciones DM (inbox compartido con branding IG), comentarios, publicaciones en vivo con moderación y private reply.
+- Instagram: sesiones IG (autodetección con Access Token, verify token, prueba), conversaciones DM (inbox compartido con branding IG), comentarios, reglas comentario→DM, publicaciones en vivo con moderación y private reply.
+- Facebook (2026-07-14): sesiones de página (`SesionWhatsApp(proveedor='messenger')` + `ConfigMessenger`, autodetección de páginas por token), conversaciones Messenger (inbox compartido con branding FB), comentarios del feed de la página (webhook `feed`), reglas comentario→DM y publicaciones en vivo (`/{page_id}/posts`). Ver `facebook/README.md`.
 - TikTok: pre-registro de cuentas Business (beta), inbox y comentarios listos para cuando se apruebe la Business Messaging API; `TikTokService` ya enchufado al dispatcher de canales.
 
 ---

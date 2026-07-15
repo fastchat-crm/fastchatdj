@@ -107,12 +107,15 @@
                                 <button type="button" class="wa-canal-chip active" data-canal="instagram">
                                     <i class="fab fa-instagram"></i> Instagram
                                 </button>
+                                <button type="button" class="wa-canal-chip active" data-canal="facebook">
+                                    <i class="fab fa-facebook"></i> Facebook
+                                </button>
                                 <button type="button" class="wa-canal-chip active" data-canal="tiktok">
                                     <i class="fab fa-tiktok"></i> TikTok
                                 </button>
                             </li>
                             {% for s in wa_selector_sesiones %}
-                                <li data-canal="{% if s.proveedor == 'instagram' or s.proveedor == 'messenger' %}instagram{% elif s.proveedor == 'tiktok' %}tiktok{% else %}whatsapp{% endif %}">
+                                <li data-canal="{% if s.proveedor == 'instagram' %}instagram{% elif s.proveedor == 'messenger' %}facebook{% elif s.proveedor == 'tiktok' %}tiktok{% else %}whatsapp{% endif %}">
                                     <button type="button"
                                             class="dropdown-item wa-sesion-item {% if wa_selector_activa_id == s.id %}is-active{% endif %} {% if not s.activo %}is-paused{% endif %}"
                                             data-sesion-id="{{ s.id }}">

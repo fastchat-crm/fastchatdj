@@ -325,25 +325,29 @@ Bajo `whatsapp/templates/whatsapp/conversaciones/`. Ambas vistas extienden
 <link rel="stylesheet" href="/static/stylenew/conversaciones.css">
 ```
 
-### Tema y template por canal (2026-07-09)
+### Tema y template por canal (2026-07-09; unificado 2026-07-15)
 
-Cada canal tiene **su propio template de inbox** (pedido del usuario: no reutilizar
-el mismo HTML). `conversacionesView(request, canal_fijo=None, template=...)` acepta
-el template a renderizar; los wrappers pasan el suyo:
+Historia: el 2026-07-09 cada canal tuvo su copia completa del template de inbox
+(pedido del usuario de entonces). El 2026-07-15, en la revisión clean-code, el
+usuario pidió revertirlo: las 4 copias (whatsapp/IG/TikTok/FB) diferían solo en
+8 puntos de branding y cada fix del chat había que replicarlo a mano.
 
-| Vista | Template |
+Hoy existe **un único template**: `whatsapp/templates/whatsapp/conversaciones/listado.html`,
+parametrizado por el dict `canal_branding` que arma `BRANDING_INBOX_CANAL` en
+`whatsapp/view_conversaciones.py` (ícono, nombre del canal para toasts, URL de
+sesiones y textos del modal sin-sesiones). Los wrappers solo pasan `canal_fijo`:
+
+| Vista | `canal_fijo` |
 |---|---|
-| `/whatsapp/conversaciones/` | `whatsapp/conversaciones/listado.html` (branding WhatsApp fijo) |
-| `/instagram/conversaciones/` | `instagram/templates/instagram/conversaciones/listado.html` |
-| `/tiktok/conversaciones/` | `tiktok/templates/tiktok/conversaciones/listado.html` |
+| `/whatsapp/conversaciones/` | `None` (default WhatsApp) |
+| `/instagram/conversaciones/` | `instagram` |
+| `/facebook/conversaciones/` | `messenger` |
+| `/tiktok/conversaciones/` | `tiktok` |
 
-Las copias IG/TikTok nacieron como copia completa del listado de WhatsApp con el
-branding baked-in (ícono/toast del canal, "Mensaje entrante de Instagram/TikTok",
-link de sesión pausada y modal sin-sesiones apuntando a `/instagram/sesiones/` o
-`/tiktok/sesiones/`). Los partials `_modal_*` / `_ci_kebab_portal` y todo el JS
-embebido siguen siendo los mismos: **un cambio de lógica compartida (acciones,
-WebSocket, composer) hay que replicarlo en las tres copias**; un cambio de diseño
-de un canal se hace solo en su copia.
+El tema de color por canal sigue viniendo de `base_chat.html`
+(`body.canal-{{ canal_fijo }}` + `chat_tema_canal.css`). Para agregar un canal:
+entrada en `BRANDING_INBOX_CANAL` + bloque de tema en el CSS — sin copiar HTML.
+Un cambio de lógica del inbox ahora se hace **una sola vez**.
 
 Identidad visual (aplica a las tres, vía layout compartido):
 

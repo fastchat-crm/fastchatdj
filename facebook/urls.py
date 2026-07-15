@@ -1,0 +1,45 @@
+from django.urls import re_path
+
+from .view_centro import centroFacebookView
+from .view_comentarios import comentariosFacebookView
+from .view_reglas import reglasComentariosFacebookView
+from .view_conversaciones import conversacionesFacebookView
+from .view_cuentas import cuentasView
+from .view_posts import publicacionesView
+
+facebook_urls = (
+    {
+        "nombre": "Centro Facebook",
+        "url": 'centro/',
+        "vista": centroFacebookView,
+    },
+    {
+        "nombre": "Sesiones Facebook",
+        "url": 'sesiones/',
+        "vista": cuentasView,
+    },
+    {
+        "nombre": "Conversaciones Facebook",
+        "url": 'conversaciones/',
+        "vista": conversacionesFacebookView,
+    },
+    {
+        "nombre": "Comentarios Facebook",
+        "url": 'comentarios/',
+        "vista": comentariosFacebookView,
+    },
+    {
+        "nombre": "Reglas de comentarios Facebook",
+        "url": 'reglas-comentarios/',
+        "vista": reglasComentariosFacebookView,
+    },
+    {
+        "nombre": "Publicaciones Facebook",
+        "url": 'publicaciones/',
+        "vista": publicacionesView,
+    },
+)
+
+urlpatterns = []
+for u in facebook_urls:
+    urlpatterns.append(re_path(r'^{}$'.format(u["url"]), u["vista"]))

@@ -6,15 +6,48 @@ Incluye el motor de reglas comentario→DM (`procesar_reglas_comentario`).
 """
 import logging
 import unicodedata
+from datetime import datetime, timezone as dt_timezone
 
 from django.db.models import F
 from django.utils import timezone
 
-from meta.instagram import InstagramService
+from meta.instagram import InstagramService, MessengerService
 
 from .models import ComentarioSocial, Contacto, ReglaComentario
 
 logger = logging.getLogger(__name__)
+
+
+_SERVICIOS_COMENTARIO = {
+    'instagram': InstagramService,
+    'facebook': MessengerService,
+}
+
+
+def service_por_canal(canal):
+    """Sender Graph para las acciones del canal, o None si no está soportado."""
+    clase = _SERVICIOS_COMENTARIO.get(canal)
+    return clase() if clase else None
+
+
+def _error_canal_no_soportado(canal):
+    return {'success': False, 'error': f'El canal {canal} aún no soporta acciones de comentarios.'}
+
+
+def _persistir_comentario(sesion, canal, comment_id, campos):
+    """Crea el ComentarioSocial (si no es duplicado) y dispara el motor de reglas."""
+    if not comment_id:
+        return None
+    if ComentarioSocial.objects.filter(comment_id=str(comment_id)).exists():
+        return None
+    comentario = ComentarioSocial.objects.create(
+        sesion=sesion, canal=canal, comment_id=str(comment_id), **campos,
+    )
+    try:
+        procesar_reglas_comentario(comentario)
+    except Exception:
+        logger.exception('Reglas de comentario fallaron para %s', comentario.comment_id)
+    return comentario
 
 
 def guardar_comentario_instagram(sesion, config, value):
@@ -24,32 +57,50 @@ def guardar_comentario_instagram(sesion, config, value):
     {id, text, parent_id, from:{id, username}, media:{id, media_product_type}}.
     Ignora ecos (comentarios hechos por la propia cuenta) y duplicados.
     """
-    comment_id = value.get('id')
-    if not comment_id:
-        return None
     autor = value.get('from') or {}
     if str(autor.get('id') or '') == str(getattr(config, 'ig_user_id', '') or ''):
         return None
-    if ComentarioSocial.objects.filter(comment_id=str(comment_id)).exists():
-        return None
     media = value.get('media') or {}
-    comentario = ComentarioSocial.objects.create(
-        sesion=sesion,
-        canal='instagram',
-        comment_id=str(comment_id),
-        parent_id=str(value.get('parent_id') or ''),
-        media_id=str(media.get('id') or ''),
-        autor_external_id=str(autor.get('id') or ''),
-        autor_username=autor.get('username') or '',
-        texto=value.get('text') or '',
-        fecha_comentario=timezone.now(),
-        payload_json=value,
-    )
-    try:
-        procesar_reglas_comentario(comentario)
-    except Exception:
-        logger.exception('Reglas de comentario fallaron para %s', comentario.comment_id)
-    return comentario
+    return _persistir_comentario(sesion, 'instagram', value.get('id'), {
+        'parent_id': str(value.get('parent_id') or ''),
+        'media_id': str(media.get('id') or ''),
+        'autor_external_id': str(autor.get('id') or ''),
+        'autor_username': autor.get('username') or '',
+        'texto': value.get('text') or '',
+        'fecha_comentario': timezone.now(),
+        'payload_json': value,
+    })
+
+
+def guardar_comentario_facebook(sesion, config, value):
+    """Persiste un comentario del feed de una página de Facebook.
+
+    `value` es el shape del campo `feed` con `item == 'comment'`:
+    {item, verb, comment_id, post_id, parent_id, from:{id, name}, message,
+    created_time (epoch)}. Solo procesa `verb == 'add'`; ignora ecos
+    (comentarios de la propia página) y duplicados.
+    """
+    if (value.get('item') or '') != 'comment' or (value.get('verb') or 'add') != 'add':
+        return None
+    autor = value.get('from') or {}
+    if str(autor.get('id') or '') == str(getattr(config, 'page_id', '') or ''):
+        return None
+    fecha = timezone.now()
+    created = value.get('created_time')
+    if created:
+        try:
+            fecha = datetime.fromtimestamp(int(created), tz=dt_timezone.utc)
+        except (TypeError, ValueError, OSError):
+            pass
+    return _persistir_comentario(sesion, 'facebook', value.get('comment_id'), {
+        'parent_id': str(value.get('parent_id') or ''),
+        'media_id': str(value.get('post_id') or ''),
+        'autor_external_id': str(autor.get('id') or ''),
+        'autor_username': autor.get('name') or '',
+        'texto': value.get('message') or '',
+        'fecha_comentario': fecha,
+        'payload_json': value,
+    })
 
 
 def _normalizar(texto):
@@ -112,7 +163,9 @@ def procesar_reglas_comentario(comentario):
 
 def responder_comentario(comentario, texto, usuario):
     """Respuesta pública al comentario vía Graph API y actualiza estado local."""
-    service = InstagramService()
+    service = service_por_canal(comentario.canal)
+    if service is None:
+        return _error_canal_no_soportado(comentario.canal)
     res = service.responder_comentario(
         comentario.sesion.session_id, comentario.comment_id, texto
     )
@@ -127,7 +180,9 @@ def responder_comentario(comentario, texto, usuario):
 
 def ocultar_comentario(comentario, ocultar=True):
     """Oculta o vuelve a mostrar el comentario en la publicación."""
-    service = InstagramService()
+    service = service_por_canal(comentario.canal)
+    if service is None:
+        return _error_canal_no_soportado(comentario.canal)
     res = service.ocultar_comentario(
         comentario.sesion.session_id, comentario.comment_id, ocultar
     )
@@ -147,7 +202,9 @@ def enviar_dm_comentario(comentario, texto, usuario):
     Contacto/Conversación por el pipeline normal; aquí solo se marca el envío
     y se intenta vincular la conversación si el contacto ya existe.
     """
-    service = InstagramService()
+    service = service_por_canal(comentario.canal)
+    if service is None:
+        return _error_canal_no_soportado(comentario.canal)
     res = service.enviar_dm_desde_comentario(
         comentario.sesion.session_id, comentario.comment_id, texto
     )

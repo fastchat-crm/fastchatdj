@@ -1,4 +1,4 @@
-"""Reglas comentario→DM — CRUD por canal (Instagram hoy, TikTok cuando se apruebe)."""
+"""Reglas comentario→DM — CRUD por canal (Instagram y Facebook hoy, TikTok cuando se apruebe)."""
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Q
@@ -6,9 +6,14 @@ from django.http import JsonResponse
 from django.shortcuts import render
 
 from core.funciones import addData, paginador, secure_module, log
-from .models import EtiquetaContacto, ReglaComentario, SesionWhatsApp
+from .models import (
+    PROVEEDOR_POR_CANAL,
+    EtiquetaContacto,
+    ReglaComentario,
+    SesionWhatsApp,
+)
 
-NOMBRES_CANAL = {'instagram': 'Instagram', 'tiktok': 'TikTok'}
+NOMBRES_CANAL = {'instagram': 'Instagram', 'facebook': 'Facebook', 'tiktok': 'TikTok'}
 
 
 def _aplicar_campos(regla, request):
@@ -103,7 +108,8 @@ def reglasComentariosView(request, canal='instagram'):
     data['list_count'] = listado.count()
     data['url_vars'] = url_vars
     data['sesiones'] = SesionWhatsApp.objects.filter(
-        usuario=request.user, status=True, proveedor=canal,
+        usuario=request.user, status=True,
+        proveedor=PROVEEDOR_POR_CANAL.get(canal, canal),
     ).order_by('nombre')
     data['etiquetas_disponibles'] = EtiquetaContacto.objects.filter(
         status=True, usuario_creacion=request.user,

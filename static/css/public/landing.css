@@ -352,3 +352,17 @@ nav.top{position:sticky;top:0;z-index:50;backdrop-filter:saturate(140%) blur(14p
     .nav-cta .btn{padding:8px 10px;font-size:12.5px;border-radius:9px}
     .nav-cta .btn-primary{padding:8px 12px}
 }
+
+.badge.canal-ig{background:linear-gradient(45deg,#f09433,#dc2743,#bc1888);color:#fff}
+.badge.canal-fb{background:linear-gradient(135deg,#1877f2,#0a5dc2);color:#fff}
+.badge.canal-tk{background:#161823;color:#fff}
+
+.compare-wrap{overflow-x:auto;border-radius:var(--radius-lg);border:1px solid var(--ink-100);box-shadow:var(--shadow-md);background:#fff;margin-top:34px}
+.compare{width:100%;border-collapse:collapse;font-size:14px;min-width:640px}
+.compare th,.compare td{padding:13px 16px;text-align:center;border-bottom:1px solid var(--ink-100)}
+.compare th{background:#fbfcfb;font-weight:700;font-size:13px;letter-spacing:.02em;color:var(--ink-700)}
+.compare td:first-child,.compare th:first-child{text-align:left;font-weight:500;color:var(--ink-700)}
+.compare tbody tr:last-child td{border-bottom:0}
+.compare tbody tr:hover{background:#fafcfa}
+.compare .compare-us{background:rgba(31,170,84,.07);font-weight:700;color:var(--green-700)}
+.compare th.compare-us{background:var(--green-500);color:#fff}

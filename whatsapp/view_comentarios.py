@@ -15,7 +15,12 @@ from .funciones_comentarios import (
     ocultar_comentario,
     responder_comentario,
 )
-from .models import CANALES_COMENTARIO, ComentarioSocial
+from .models import (
+    CANALES_COMENTARIO,
+    CANALES_CON_ACCIONES,
+    PROVEEDOR_POR_CANAL,
+    ComentarioSocial,
+)
 from .permisos_sesion import sesiones_vista_completa
 
 
@@ -41,7 +46,7 @@ def comentariosView(request, canal_fijo=None):
     ).select_related('sesion', 'respondido_por', 'conversacion')
     if canal_fijo:
         qs = qs.filter(canal=canal_fijo)
-        sesiones = sesiones.filter(proveedor=canal_fijo)
+        sesiones = sesiones.filter(proveedor=PROVEEDOR_POR_CANAL.get(canal_fijo, canal_fijo))
 
     url_vars = ''
     criterio = (request.GET.get('criterio') or '').strip()
@@ -70,7 +75,7 @@ def comentariosView(request, canal_fijo=None):
     data['list_count'] = listado.count()
     data['url_vars'] = url_vars
     data['sesiones_sociales'] = sesiones.filter(
-        proveedor__in=('instagram', 'tiktok')
+        proveedor__in=('instagram', 'messenger', 'tiktok')
     ).order_by('nombre')
     base_qs = ComentarioSocial.objects.filter(status=True, sesion__in=sesiones)
     data['total_nuevos'] = base_qs.filter(estado='nuevo').count()
@@ -89,7 +94,7 @@ def _procesar_accion(request, sesiones):
     except (ComentarioSocial.DoesNotExist, ValueError, TypeError):
         return JsonResponse({'error': True, 'message': 'Comentario no encontrado.'})
 
-    if comentario.canal != 'instagram':
+    if comentario.canal not in CANALES_CON_ACCIONES:
         return JsonResponse({'error': True, 'message': 'Canal aún no soportado para esta acción.'})
 
     if action == 'responder':

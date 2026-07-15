@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block head %}
     <link rel="stylesheet" href="/static/stylenew/sesiones.css?v2.0">
-    <link rel="stylesheet" href="/static/css/instagram/cuentas_listado.css?v1.2">
+    <link rel="stylesheet" href="/static/css/instagram/cuentas_listado.css?v1.3">
 {% endblock %}
 
 {% block content %}
@@ -174,6 +174,11 @@
                     <button class="conex-canal active" data-canal="instagram">
                         <span class="ic ig-grad"><i class="fab fa-instagram"></i></span>
                         Instagram
+                    </button>
+                    <button class="conex-canal" type="button"
+                            onclick="window.location.href='/facebook/sesiones/'">
+                        <span class="ic ic-fb"><i class="fab fa-facebook"></i></span>
+                        Facebook
                     </button>
                     <button class="conex-canal" type="button"
                             onclick="window.location.href='/tiktok/sesiones/'">

@@ -1,8 +1,8 @@
-"""Centro de canal — guía instructiva de módulos por canal (WhatsApp/Instagram/TikTok).
+"""Centro de canal — guía instructiva de módulos por canal (WhatsApp/Instagram/Facebook/TikTok).
 
 Página de orientación: qué es cada módulo, para qué sirve, cuándo usarlo y en
 qué orden conviene configurarlo. Los wrappers por canal viven en
-`instagram/view_centro.py` y `tiktok/view_centro.py`.
+`instagram/view_centro.py`, `facebook/view_centro.py` y `tiktok/view_centro.py`.
 """
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
@@ -30,7 +30,7 @@ GUIAS_CANAL = {
                      'cuando': 'Es el punto de partida — sin sesión conectada ningún otro módulo funciona. Aquí también eliges el modo de bot (IA, flujo tradicional, híbrido o solo humanos) y asignas asesores.'},
                     {'nombre': 'Credenciales Meta', 'url': '/seguridad/credencial-meta/', 'icono': 'fa fa-key', 'nivel': 'esencial',
                      'para_que': 'Registrar las credenciales de tu Meta App (App ID, Secret, token) para usar la API oficial.',
-                     'cuando': 'Solo si vas a conectar números por API oficial de Meta o Instagram. Con QR/Baileys no hace falta.'},
+                     'cuando': 'Solo si vas a conectar números por API oficial de Meta, Instagram o Facebook. Con QR/Baileys no hace falta.'},
                     {'nombre': 'Horarios de atención', 'url': '/whatsapp/horarios/', 'icono': 'fa fa-clock', 'nivel': 'recomendado',
                      'para_que': 'Definir franjas de atención por día, feriados y el mensaje automático fuera de horario.',
                      'cuando': 'Apenas conectes la sesión, para que los clientes que escriben de madrugada reciban respuesta y expectativa clara.'},
@@ -166,6 +166,58 @@ GUIAS_CANAL = {
                      'cuando': 'Reactivación de audiencia IG dentro de las ventanas permitidas.'},
                     {'nombre': 'Analytics', 'url': '/whatsapp/analytics/', 'icono': 'fa fa-chart-line', 'nivel': 'recomendado',
                      'para_que': 'Las métricas incluyen el canal de origen — filtra conversaciones y leads que llegaron por Instagram.',
+                     'cuando': 'Revisión semanal.'},
+                ],
+            },
+        ],
+    },
+    'facebook': {
+        'titulo': 'Centro Facebook',
+        'icono': 'fa-brands fa-facebook',
+        'descripcion': 'Guía del canal Facebook: conecta tu página, atiende Messenger, modera los comentarios de tus publicaciones y convierte seguidores en clientes.',
+        'fases': [
+            {
+                'titulo': '1. Conexión',
+                'descripcion': 'Credenciales de Meta y tu página de Facebook.',
+                'modulos': [
+                    {'nombre': 'Credenciales Meta', 'url': '/seguridad/credencial-meta/', 'icono': 'fa fa-key', 'nivel': 'esencial',
+                     'para_que': 'Registrar la Meta App (App ID, Secret, token) que da acceso a la API de páginas y Messenger.',
+                     'cuando': 'Primero de todo — Facebook siempre requiere la API oficial de Meta.'},
+                    {'nombre': 'Sesiones Facebook', 'url': '/facebook/sesiones/', 'icono': 'fa fa-plug', 'nivel': 'esencial',
+                     'para_que': 'Conectar tu página: con el Access Token se autodetecta el Page ID y el nombre de la página.',
+                     'cuando': 'Después de las credenciales. Aquí también asignas el agente IA y el modo de bot.'},
+                ],
+            },
+            {
+                'titulo': '2. Atención y moderación',
+                'descripcion': 'Messenger y comentarios del feed en un solo lugar.',
+                'modulos': [
+                    {'nombre': 'Conversaciones Facebook', 'url': '/facebook/conversaciones/', 'icono': 'fa fa-comments', 'nivel': 'esencial',
+                     'para_que': 'La bandeja de Messenger con el mismo motor que WhatsApp: bot IA, asignación de asesores, tiempo real.',
+                     'cuando': 'Todos los días — cada mensaje de Messenger entra aquí y el bot responde según el modo configurado.'},
+                    {'nombre': 'Comentarios', 'url': '/facebook/comentarios/', 'icono': 'fa fa-comment-dots', 'nivel': 'recomendado',
+                     'para_que': 'Moderar los comentarios de los posts de tu página: responder público, ocultar, o llevar al autor a Messenger (private reply).',
+                     'cuando': 'Cuando publicas contenido con interacción — cada comentario es un lead potencial que puedes convertir en conversación.'},
+                    {'nombre': 'Reglas de comentarios', 'url': '/facebook/reglas-comentarios/', 'icono': 'fa fa-wand-magic-sparkles', 'nivel': 'recomendado',
+                     'para_que': 'Automatizar los comentarios: si contiene una keyword (ej. "precio"), responde público, manda DM al autor por Messenger y lo etiqueta — sin intervención humana.',
+                     'cuando': 'Cuando lanzas posts tipo "comenta INFO y te escribo" — el growth tool clásico, ahora en tu página.'},
+                    {'nombre': 'Publicaciones', 'url': '/facebook/publicaciones/', 'icono': 'fa fa-images', 'nivel': 'recomendado',
+                     'para_que': 'Ver los posts de tu página en vivo con likes y comentarios, y moderarlos sin salir del panel.',
+                     'cuando': 'Para trabajar los comentarios post por post.'},
+                ],
+            },
+            {
+                'titulo': '3. Automatización y marketing',
+                'descripcion': 'El mismo cerebro que WhatsApp, aplicado a tu página.',
+                'modulos': [
+                    {'nombre': 'Entrenamiento IA', 'url': '/crm/entrenamiento/', 'icono': 'fa fa-robot', 'nivel': 'recomendado',
+                     'para_que': 'El agente IA que responde Messenger es el mismo que entrenas para WhatsApp — un solo entrenamiento, todos los canales.',
+                     'cuando': 'Al conectar la sesión, asígnale un agente entrenado.'},
+                    {'nombre': 'Campañas', 'url': '/whatsapp/campanas/', 'icono': 'fa fa-bullhorn', 'nivel': 'avanzado',
+                     'para_que': 'Los envíos masivos soportan canal Messenger para contactos que ya te escribieron.',
+                     'cuando': 'Reactivación de audiencia dentro de las ventanas permitidas por Meta.'},
+                    {'nombre': 'Analytics', 'url': '/whatsapp/analytics/', 'icono': 'fa fa-chart-line', 'nivel': 'recomendado',
+                     'para_que': 'Las métricas incluyen el canal de origen — filtra conversaciones y leads que llegaron por Messenger.',
                      'cuando': 'Revisión semanal.'},
                 ],
             },

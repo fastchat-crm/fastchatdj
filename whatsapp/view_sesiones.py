@@ -1262,7 +1262,7 @@ def sesionesView(request):
     _ahora_conv = _tz.now()
     sesiones = (
         SesionWhatsApp.objects.filter(filtros)
-        .select_related('config_meta', 'config_instagram', 'config_tiktok', 'agente_ia', 'departamento_default')
+        .select_related('config_meta', 'config_instagram', 'config_messenger', 'config_tiktok', 'agente_ia', 'departamento_default')
         .prefetch_related('departamentos', 'perfilsesionwhatsapp_set__usuario')
         .annotate(
             conv_abiertas=Count(

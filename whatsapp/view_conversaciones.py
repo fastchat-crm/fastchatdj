@@ -289,22 +289,57 @@ def _gestionar_atencion(request, action):
     return JsonResponse({'error': False})
 
 
-_TITULOS_INBOX_CANAL = {
-    'instagram': 'Conversaciones Instagram',
-    'tiktok': 'Conversaciones TikTok',
-    'messenger': 'Conversaciones Messenger',
+BRANDING_INBOX_CANAL = {
+    None: {
+        'titulo': 'Conversaciones WhatsApp',
+        'nombre': 'WhatsApp',
+        'icono': 'fab fa-whatsapp',
+        'url_sesiones': '/whatsapp/sesiones/',
+        'vacio_titulo': 'Aún no hay sesiones de WhatsApp',
+        'vacio_texto': 'Para ver conversaciones primero necesitás conectar al menos un canal (WhatsApp, Instagram o Messenger).',
+        'vacio_boton': 'Crear o conectar una sesión',
+    },
+    'instagram': {
+        'titulo': 'Conversaciones Instagram',
+        'nombre': 'Instagram',
+        'icono': 'fab fa-instagram',
+        'url_sesiones': '/instagram/sesiones/',
+        'vacio_titulo': 'Aún no hay sesiones de Instagram',
+        'vacio_texto': 'Para ver conversaciones primero necesitás conectar al menos una cuenta de Instagram.',
+        'vacio_boton': 'Conectar cuenta de Instagram',
+    },
+    'messenger': {
+        'titulo': 'Conversaciones Messenger',
+        'nombre': 'Facebook',
+        'icono': 'fab fa-facebook',
+        'url_sesiones': '/facebook/sesiones/',
+        'vacio_titulo': 'Aún no hay páginas de Facebook',
+        'vacio_texto': 'Para ver conversaciones primero necesitás conectar al menos una página de Facebook.',
+        'vacio_boton': 'Conectar página de Facebook',
+    },
+    'tiktok': {
+        'titulo': 'Conversaciones TikTok',
+        'nombre': 'TikTok',
+        'icono': 'fab fa-tiktok',
+        'url_sesiones': '/tiktok/sesiones/',
+        'vacio_titulo': 'Aún no hay sesiones de TikTok',
+        'vacio_texto': 'Para ver conversaciones primero necesitás registrar al menos una cuenta de TikTok.',
+        'vacio_boton': 'Registrar cuenta de TikTok',
+    },
 }
 
 
 @login_required
 @secure_module
 def conversacionesView(request, canal_fijo=None, template='whatsapp/conversaciones/listado.html'):
-    titulo = _TITULOS_INBOX_CANAL.get(canal_fijo, 'Conversaciones WhatsApp')
+    branding = BRANDING_INBOX_CANAL.get(canal_fijo, BRANDING_INBOX_CANAL[None])
+    titulo = branding['titulo']
     data = {
         'titulo': titulo,
         'modulo': titulo,
         'ruta': request.path,
         'canal_fijo': canal_fijo or '',
+        'canal_branding': branding,
     }
     addData(request, data)
 

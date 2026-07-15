@@ -1,0 +1,57 @@
+# App `facebook/` — capa de control del canal Facebook (Messenger + página)
+
+> Creada 2026-07-14 como espejo de `instagram/` (ver plan en
+> `.ai/docs/propuestas/megaestudio_omnicanal.md`, fases F1-F3). **No tiene
+> modelos propios**: una página de Facebook se materializa como
+> `SesionWhatsApp(proveedor='messenger', session_id='messenger-<page_id>')` +
+> `ConfigMessenger` (OneToOne, `whatsapp/models.py`), reusando todo el motor
+> compartido (conversaciones, IA, asignación, webhooks, secuencias, campañas).
+
+## Mapa de archivos
+
+| Archivo | Rol |
+|---|---|
+| `apps.py` | Registro `FacebookConfig` (en `INSTALLED_APPS` de `fastchatdj/settings.py`). |
+| `urls.py` | Tupla `facebook_urls` (6 rutas) montada en `/facebook/` desde `fastchatdj/urls.py`. |
+| `view_centro.py` | `/facebook/centro/` → `whatsapp.view_centro._render_centro(request, 'facebook')` (guía en `GUIAS_CANAL`). |
+| `view_cuentas.py` | `/facebook/sesiones/` — conectar páginas: autodetección desde token (`/me/accounts`), probar conexión, activar/suspender, eliminar (soft). |
+| `funciones_cuentas.py` | Helpers: `autodetectar_desde_token`, `guardar_cuenta` (crea sesión + `ConfigMessenger`), `probar_conexion` (via `MessengerService.obtener_perfil`), `generar_verify_token`. |
+| `view_conversaciones.py` | `/facebook/conversaciones/` — wrapper `conversacionesView(canal_fijo='messenger')`; el template es el único compartido de whatsapp, con branding vía `BRANDING_INBOX_CANAL`. |
+| `view_comentarios.py` | `/facebook/comentarios/` — wrapper `comentariosView(canal_fijo='facebook')`. |
+| `view_reglas.py` | `/facebook/reglas-comentarios/` — wrapper `reglasComentariosView(canal='facebook')`. |
+| `view_posts.py` | `/facebook/publicaciones/` — wrapper de la vista genérica `whatsapp/view_publicaciones_social.py::publicacionesSocialView(canal='facebook')` (grilla live GET `/{page_id}/posts` normalizado al shape IG + modal de moderación). |
+| `templates/facebook/` | `cuentas/listado.html`, `publicaciones/listado.html`, `publicaciones/_comentarios_post.html`. El inbox de conversaciones usa el template compartido de whatsapp. |
+| CSS | `static/css/facebook/cuentas_listado.css`, `static/css/facebook/publicaciones_listado.css`. |
+
+## Mapeo canal ↔ proveedor
+
+El **proveedor** de la sesión es `messenger` (ya existía en `PROVEEDORES_SESION`);
+el **canal de comentarios** es `facebook` (`CANALES_COMENTARIO`). El mapeo vive en
+`whatsapp/models.py::PROVEEDOR_POR_CANAL` (junto a `CANALES_CON_ACCIONES`). No
+crear un proveedor `facebook` nuevo.
+
+## Flujo de datos
+
+- **DMs Messenger**: webhook `/whatsapp/messenger_webhook/`
+  (`whatsapp/meta_social_webhook_view.py`) → `process_incoming_message` →
+  pipeline completo (ya existía antes de esta app).
+- **Comentarios del feed**: mismo webhook, `field == 'feed'` con
+  `item == 'comment'` → `funciones_comentarios.guardar_comentario_facebook`
+  (usa `created_time` real del payload) → motor de reglas
+  `procesar_reglas_comentario` (respuesta pública / DM privado / etiqueta).
+- **Acciones de moderación**: `MessengerService` (`meta/instagram.py`) —
+  responder (`POST /{comment_id}/comments`), ocultar (`is_hidden`), private
+  reply (`POST /{page_id}/messages` con `recipient.comment_id`, ventana 7 días).
+- **Envío saliente**: dispatcher `get_whatsapp_service` → `MessengerService`
+  (ya estaba registrado).
+
+## Checklist del administrador (pendientes del developer)
+
+1. `makemigrations whatsapp` + `migrate` — el choice `facebook` en
+   `CANALES_COMENTARIO` (ComentarioSocial/ReglaComentario) genera migración.
+2. En la Meta App: suscribir el campo **`feed`** del producto Webhooks de la
+   página (además de `messages` para Messenger).
+3. `python manage.py seed_modulos` para registrar la sección Facebook del
+   sidebar (resetea el catálogo y re-vincula roles).
+4. Activar el switch del canal Messenger en la configuración global
+   (`canales_activos.messenger`) si no lo está.

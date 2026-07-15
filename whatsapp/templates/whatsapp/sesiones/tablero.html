@@ -4,7 +4,7 @@
 {% block head %}
     <link rel="stylesheet" href="/static/stylenew/sesiones.css?v2.0">
     <link rel="stylesheet" href="/static/css/whatsapp/respuestas_rapidas.css?v1.3">
-    <link rel="stylesheet" href="/static/css/whatsapp/tablero_canales.css?v1.0">
+    <link rel="stylesheet" href="/static/css/whatsapp/tablero_canales.css?v1.1">
 {% endblock %}
 
 {% block content %}
@@ -652,8 +652,8 @@
                         </div>
                     {% endif %}
                     {% if canales_activos.messenger %}
-                        <div class="pane pane-hidden pane-proximamente" data-pane="facebook">
-                            {% include 'whatsapp/sesiones/_proximamente.html' with nombre='Facebook' icono='fab fa-facebook' color='#1877f2' %}
+                        <div class="pane pane-hidden" data-pane="facebook">
+                            {% include 'whatsapp/sesiones/_pane_facebook.html' %}
                         </div>
                     {% endif %}
                     {% if canales_activos.tiktok %}

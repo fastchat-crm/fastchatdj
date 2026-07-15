@@ -6,6 +6,20 @@
     background: #000;
 }
 
+.pane-hero-fb {
+    background: linear-gradient(135deg, #1877f2, #0a5dc2);
+}
+
+.canal-badge.canal-facebook {
+    background: linear-gradient(135deg, #1877f2, #0a5dc2);
+    color: #fff;
+}
+
+.avatar-fallback.avatar-fb {
+    background: linear-gradient(135deg, #1877f2, #0a5dc2);
+    color: #fff;
+}
+
 .canal-badge.canal-instagram {
     background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
     color: #fff;

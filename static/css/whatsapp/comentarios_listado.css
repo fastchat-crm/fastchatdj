@@ -39,6 +39,11 @@
     color: #fff;
 }
 
+.badge-canal-facebook {
+    background: linear-gradient(135deg, #1877f2, #0a5dc2);
+    color: #fff;
+}
+
 .badge-canal-tiktok {
     background: #010101;
     color: #fff;
