@@ -432,7 +432,28 @@ def listar_plantillas_meta(request):
             'botones':   p.botones_json or [],
             'veces_enviada': p.veces_enviada,
         } for p in plantillas]
-        return JsonResponse({'error': False, 'plantillas': data_plantillas})
+
+        # Contexto del contacto para precargar variables {{N}} en el form del
+        # panel: nombre del contacto + campos personalizados (por clave y por
+        # nombre, normalizados a minúsculas). El JS matchea contra el `nombre`
+        # de cada variable en variables_json.
+        contacto = conversacion.contacto
+        campos = {}
+        if contacto:
+            for v in contacto.valores_personalizados.filter(status=True).select_related('campo'):
+                if not v.campo or not (v.valor or '').strip():
+                    continue
+                valor = v.valor.strip()
+                for key in ((v.campo.clave or ''), (v.campo.nombre or '')):
+                    key = key.strip().lower()
+                    if key:
+                        campos[key] = valor
+        contexto = {
+            'nombre': (conversacion.contacto_nombre or '').strip(),
+            'numero': conversacion.contacto_numero or '',
+            'campos': campos,
+        }
+        return JsonResponse({'error': False, 'plantillas': data_plantillas, 'contexto': contexto})
     except Exception as ex:
         return JsonResponse({'error': True, 'message': str(ex)})
 

@@ -664,6 +664,7 @@ $(document).ready(function() {
     const _convPath = '{{ request.path }}';
     {% verbatim %}
     let _plantillasCache = {};
+    let _plantillasCtx = {};
     let _plantillaSeleccionada = null;
 
     window.mostrarPlantillasSiMeta = function(esMeta, convId) {
@@ -699,6 +700,7 @@ $(document).ready(function() {
                 }
                 const plantillas = r.plantillas || [];
                 _plantillasCache[conversacionId] = plantillas;
+                _plantillasCtx[conversacionId] = r.contexto || {};
                 callback && callback(null, plantillas);
             })
             .fail(function(xhr) {
@@ -807,9 +809,10 @@ $(document).ready(function() {
                 const info = meta[idx - 1] || {};
                 const nombre = info.nombre ? ' · ' + _esc(info.nombre) : '';
                 const placeholder = info.ejemplo ? 'Ej: ' + _esc(info.ejemplo) : '';
+                const valor = _valorPorDefecto(info, idx);
                 return `<div class="pp-var-row">
                     <label class="pp-var-label">${abre}${idx}${cierra}${nombre}</label>
-                    <input type="text" class="pp-var-input" data-body-var="${idx}" placeholder="${placeholder}">
+                    <input type="text" class="pp-var-input" data-body-var="${idx}" value="${_esc(valor)}" placeholder="${placeholder}">
                 </div>`;
             }).join('');
         }
@@ -817,6 +820,20 @@ $(document).ready(function() {
         $('#plantillas-form-vars').html(previewHtml + (total || '<div class="text-muted" style="font-size:.78rem;">Esta plantilla no requiere variables. Solo confirma el envío.</div>'));
         $('#plantillas-list').hide();
         $('#plantillas-form').addClass('open');
+    }
+
+    function _valorPorDefecto(info, idx) {
+        const ctx = _plantillasCtx[$('#conversacion-id').val()] || {};
+        const n = ((info && info.nombre) || '').toLowerCase().trim();
+        if (idx === 1 && !n && ctx.nombre) return ctx.nombre;
+        if (!n) return '';
+        if (['nombre', 'cliente', 'contacto', 'name'].some(k => n.includes(k))) return ctx.nombre || '';
+        if (['telefono', 'teléfono', 'numero', 'número', 'celular', 'phone'].some(k => n.includes(k))) return ctx.numero || '';
+        const campos = ctx.campos || {};
+        if (campos[n]) return campos[n];
+        const clave = n.replace(/\s+/g, '_');
+        if (campos[clave]) return campos[clave];
+        return '';
     }
 
     function _cerrarFormulario() {
@@ -899,22 +916,31 @@ $(document).ready(function() {
         _enviarPlantilla(_plantillaSeleccionada, paramsCuerpo, paramsHeader);
     });
 
+    function _avisarError(msg) {
+        if (typeof alertaWarning === 'function') { alertaWarning(msg); }
+        else if (typeof mensajeWarning === 'function') { mensajeWarning(msg); }
+        else { alert(msg); }
+    }
+
     function _enviarPlantilla(plantilla, paramsCuerpo, paramsHeader) {
         const convId = $('#conversacion-id').val();
-        if (!convId) { console.error('[plantillas] sin conversacion'); return; }
-        const $btn = $('#plantillas-form-enviar');
-        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i>Enviando...');
-        $.post(_convPath, {
+        if (!convId) { console.error('[plantillas] sin conversacion seleccionada'); return; }
+        const payload = {
             action: 'enviar_plantilla_meta',
             pk: convId,
             plantilla_id: plantilla.id,
             params_cuerpo_json: JSON.stringify(paramsCuerpo || []),
             params_header_json: JSON.stringify(paramsHeader || []),
             csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val(),
-        }).done(function(r) {
+        };
+        console.log('[plantillas] enviando', { url: _convPath, plantilla: plantilla.nombre, payload: payload });
+        const $btn = $('#plantillas-form-enviar');
+        $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i>Enviando...');
+        $.post(_convPath, payload).done(function(r) {
+            console.log('[plantillas] respuesta servidor', r);
             if (r.error) {
-                console.error('[plantillas] envio error', r);
-                alertaWarning(r.message || 'Error al enviar plantilla.');
+                console.error('[plantillas] envio error', r.message, r);
+                _avisarError(r.message || 'Error al enviar plantilla.');
                 return;
             }
             $('#mensajes-container').append(r.mensaje_html);
@@ -925,8 +951,8 @@ $(document).ready(function() {
                 alertaSuccess(r.message || 'Plantilla enviada. Cuando el cliente responda, esta misma conversación se reanudará automáticamente.');
             }
         }).fail(function(xhr) {
-            console.error('[plantillas] envio fail', xhr.status, xhr.responseText);
-            alertaWarning('Error: ' + (xhr.responseText || xhr.status));
+            console.error('[plantillas] envio fail', { status: xhr.status, responseText: xhr.responseText });
+            _avisarError('Error de servidor al enviar plantilla (HTTP ' + xhr.status + '). Revisa la consola para el detalle.');
         }).always(function() {
             $btn.prop('disabled', false).text('Enviar plantilla');
         });
