@@ -483,7 +483,9 @@ def pipelineView(request):
                 conv = ca.conversacion
                 token = encrypt_sesion_id(conv.id)
                 ca.url_ir = _url_ir_conversacion(conv, token)
-                info_canal = CANAL_PIPELINE[_canal_de_conversacion(conv)]
+                canal_slug = _canal_de_conversacion(conv)
+                info_canal = CANAL_PIPELINE[canal_slug]
+                ca.canal_slug = canal_slug
                 ca.canal_label = info_canal['label']
                 ca.canal_icono = info_canal['icono']
                 if conv.conversacion_finalizada:

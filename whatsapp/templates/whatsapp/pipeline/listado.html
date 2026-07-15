@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block head %}
-    <link rel="stylesheet" href="/static/css/whatsapp/pipeline.css?v1.5">
+    <link rel="stylesheet" href="/static/css/whatsapp/pipeline.css?v1.6">
     <link rel="stylesheet" href="/static/css/whatsapp/ficha_cliente.css?v1.1">
 {% endblock %}
 
@@ -89,7 +89,10 @@
                             <span class="kanban-card-avatar">{{ ct.contacto_nombre|default:ct.contacto_numero|slice:":1" }}</span>
                             <div style="flex:1; min-width:0;">
                                 <div class="kanban-card-name">{{ ct.contacto_nombre|default:"(sin nombre)" }}</div>
-                                <div class="kanban-card-phone" title="Canal: {{ card.canal_label }}"><i class="{{ card.canal_icono }}"></i> {{ ct.contacto_numero }}</div>
+                                <div class="kanban-card-phone" title="Origen del lead: {{ card.canal_label }}">
+                                    <span class="pipe-canal pipe-canal-{{ card.canal_slug }}"><i class="{{ card.canal_icono }}"></i> {{ card.canal_label }}</span>
+                                    <span class="pipe-canal-num">{{ ct.contacto_numero }}</span>
+                                </div>
                             </div>
                             {% if c.conversacion_finalizada %}
                                 <span class="kanban-card-state ended" title="Conversacion finalizada"><i class="fa fa-check"></i> Finalizada</span>

@@ -87,7 +87,7 @@ Rutas de montaje: `whatsapp/` → `/whatsapp/`, `crm/` → `/crm/`, `agenda/` �
 
 ### Pipeline / Kanban de ventas (`/crm/pipeline/`, alias legado `/whatsapp/pipeline/`, `view_pipeline.py`)
 - Tableros con etapas (color, orden, probabilidad, ganado/perdido), cards ligadas a conversaciones **de cualquier canal** con valor y moneda, drag&drop con historial, comentarios; mover a "ganado" dispara Purchase a Meta CAPI; generación de pipeline con IA.
-- Multicanal: cada card muestra icono/label del canal de origen (`CANAL_PIPELINE`, `Contacto.canal`) y el deep-link "Ir" abre el inbox del canal (`/whatsapp|instagram|facebook|tiktok/conversaciones/?conv=`); finalizadas siempre en `/whatsapp/conversaciones-finalizadas/`.
+- Multicanal: cada card muestra el origen del lead como badge de color por red (`.pipe-canal-<slug>` en `pipeline.css`: WhatsApp verde, Instagram degradado, Messenger azul, TikTok negro) con icono+nombre (`CANAL_PIPELINE`, `Contacto.canal`, slug en `ca.canal_slug`) y el deep-link "Ir" abre el inbox del canal (`/whatsapp|instagram|facebook|tiktok/conversaciones/?conv=`); finalizadas siempre en `/whatsapp/conversaciones-finalizadas/`.
 
 ### Horarios de atención (`/whatsapp/horarios/`)
 - Franjas semanales + excepciones/feriados + mensaje fuera de horario + zona horaria; duplicar entre sesiones; sincronización del perfil de negocio con Meta (leer/actualizar); generación con IA.

@@ -351,9 +351,38 @@
 .kanban-card-phone {
     font-size: 0.72rem;
     color: var(--pipe-text-muted);
-    margin-top: 1px;
+    margin-top: 2px;
     font-variant-numeric: tabular-nums;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
 }
+.pipe-canal-num {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.pipe-canal {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.64rem;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 8px;
+    line-height: 1.5;
+    color: #ffffff;
+    flex-shrink: 0;
+    letter-spacing: .01em;
+}
+.pipe-canal i { font-size: 0.7rem; }
+.pipe-canal-whatsapp { background: #25d366; }
+.pipe-canal-instagram { background: linear-gradient(45deg, #f09433, #dc2743, #bc1888); }
+.pipe-canal-messenger { background: linear-gradient(135deg, #1877f2, #0a5dc2); }
+.pipe-canal-tiktok { background: #161823; }
+.pipe-canal-otro { background: #6b6964; }
 .kanban-card-state {
     display: inline-flex;
     align-items: center;
