@@ -495,6 +495,18 @@ $(document).on('click', '.cargar-conversacion', function() {
   `params_header_json`. La respuesta trae `{pendiente: true, mensaje_html}`: el
   JS inyecta el mensaje y muestra el toast; no hay redirect.
 - Mismo patrón en `listado_pendiente_reconexion.html` (reenvío de sonda).
+- Precarga de variables: `listar_plantillas_meta` devuelve `contexto`
+  ({nombre, numero, campos: {clave/nombre → valor de campos personalizados}});
+  `_valorPorDefecto(info, idx)` precarga cada `{{N}}` matcheando el `nombre` de
+  la variable (nombre/cliente → contacto, teléfono/número → número, resto →
+  campo personalizado). Editable siempre.
+- Logging: `_enviarPlantilla` loguea payload (`[plantillas] enviando`),
+  respuesta completa (`[plantillas] respuesta servidor`) y errores
+  (`[plantillas] envio error|fail`) en console; avisos vía `_avisarError`
+  (alertaWarning → mensajeWarning → alert).
+- Header de finalizadas: botón `#btn-trazas` → `/whatsapp/trazas/?conversacion=<id>`
+  (target _blank) para ver toda la trazabilidad/errores de la conversación
+  (incluye etapa `envio_fallido` con código Meta y detalle).
 - **Gotcha delegación:** `#plantillas-panel` tiene un handler directo con
   `e.stopPropagation()` (evita que el click dentro cierre el panel). Por eso los
   clicks de `.pp-item` DEBEN delegarse desde `#plantillas-list`
