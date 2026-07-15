@@ -495,6 +495,12 @@ $(document).on('click', '.cargar-conversacion', function() {
   `params_header_json`. La respuesta trae `{pendiente: true, mensaje_html}`: el
   JS inyecta el mensaje y muestra el toast; no hay redirect.
 - Mismo patrón en `listado_pendiente_reconexion.html` (reenvío de sonda).
+- **Gotcha delegación:** `#plantillas-panel` tiene un handler directo con
+  `e.stopPropagation()` (evita que el click dentro cierre el panel). Por eso los
+  clicks de `.pp-item` DEBEN delegarse desde `#plantillas-list`
+  (`$('#plantillas-list').on('click', '.pp-item', ...)`) — delegarlos desde
+  `document` nunca dispara (el evento no llega; bug fix 2026-07-15, aplicado en
+  las 3 vistas).
 
 ---
 

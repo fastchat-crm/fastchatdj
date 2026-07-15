@@ -2963,7 +2963,7 @@
             e.stopPropagation();
         });
 
-        $(document).on('click', '#plantillas-list .pp-item', function() {
+        $('#plantillas-list').on('click', '.pp-item', function() {
             const id = $(this).data('id');
             const convId = $('#conversacion-id').val();
             const lista = _plantillasCache[convId] || [];

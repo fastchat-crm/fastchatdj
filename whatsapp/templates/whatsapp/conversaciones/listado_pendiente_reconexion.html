@@ -846,7 +846,7 @@ $(document).ready(function() {
     });
     $('#plantillas-panel').on('click', function(e) { e.stopPropagation(); });
 
-    $(document).on('click', '#plantillas-list .pp-item', function() {
+    $('#plantillas-list').on('click', '.pp-item', function() {
         const id = $(this).data('id');
         const convId = $('#conversacion-id').val();
         const lista = _plantillasCache[convId] || [];
