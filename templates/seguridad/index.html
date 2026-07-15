@@ -6,9 +6,40 @@
 {% block head %}
   <link rel="stylesheet" href="{% static 'stylenew/panel_principal.css' %}?v1.0">
   <link rel="stylesheet" href="/static/stylenew/sesiones.css?v2.0">
+  <link rel="stylesheet" href="/static/css/seguridad/panel_canales.css?v1.0">
 {% endblock %}
 
 {% block content %}
+  <div class="row g-2 mb-3 panel-canales-row">
+    <div class="col-6 col-md-3">
+      <a href="/whatsapp/conversaciones/" class="canal-conv-btn canal-whatsapp">
+        <i class="fab fa-whatsapp"></i>
+        <span>Ir a conversaciones<br><b>WhatsApp</b></span>
+        <i class="fa fa-arrow-right canal-arrow"></i>
+      </a>
+    </div>
+    <div class="col-6 col-md-3">
+      <a href="/facebook/conversaciones/" class="canal-conv-btn canal-facebook">
+        <i class="fab fa-facebook-messenger"></i>
+        <span>Ir a conversaciones<br><b>Facebook</b></span>
+        <i class="fa fa-arrow-right canal-arrow"></i>
+      </a>
+    </div>
+    <div class="col-6 col-md-3">
+      <a href="/instagram/conversaciones/" class="canal-conv-btn canal-instagram">
+        <i class="fab fa-instagram"></i>
+        <span>Ir a conversaciones<br><b>Instagram</b></span>
+        <i class="fa fa-arrow-right canal-arrow"></i>
+      </a>
+    </div>
+    <div class="col-6 col-md-3">
+      <a href="/tiktok/conversaciones/" class="canal-conv-btn canal-tiktok">
+        <i class="fab fa-tiktok"></i>
+        <span>Ir a conversaciones<br><b>TikTok</b></span>
+        <i class="fa fa-arrow-right canal-arrow"></i>
+      </a>
+    </div>
+  </div>
   {% if PERFIL_EXISTE %}
     <div class="pp-page">
 

@@ -337,3 +337,39 @@ body:has(#plantillas-panel.open)::after {
     font-size: .8rem;
     cursor: pointer;
 }
+
+#plantillas-panel .pp-envio-preview {
+    background: #e7f6ec;
+    border: 1px solid #c9e8d4;
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: .78rem;
+    color: #1c2b33;
+    white-space: pre-wrap;
+    margin-bottom: 8px;
+    max-height: 140px;
+    overflow-y: auto;
+}
+
+#plantillas-panel .pp-envio-preview .pp-envio-header {
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+#plantillas-panel .pp-envio-preview .pp-envio-footer {
+    color: #65676b;
+    font-style: italic;
+    font-size: .72rem;
+    margin-top: 6px;
+}
+
+#plantillas-panel .pp-envio-info {
+    background: #eef4ff;
+    border: 1px solid #d5e2fb;
+    border-radius: 8px;
+    padding: 7px 9px;
+    font-size: .72rem;
+    color: #35507a;
+    line-height: 1.35;
+    margin-bottom: 8px;
+}

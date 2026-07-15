@@ -441,10 +441,11 @@ def enviar_plantilla_reconexion(request):
     """POST: envía una plantilla Meta a una conversación finalizada como sonda
     de reconexión.
 
-    La conversación NO se reactiva: queda finalizada (estado 1) marcada con
-    `pendiente_reconexion=True`. Si el cliente responde, el webhook entrante
-    crea una conversación nueva enlazada por `conv_origen` (ver
-    `ConversacionWhatsApp.obtener_o_crear_activa`). Compartido por las vistas de
+    La conversación NO se reactiva de inmediato: queda finalizada (estado 1)
+    marcada con `pendiente_reconexion=True`. Cuando el cliente responde, el
+    webhook entrante REABRE esta misma conversación (ver
+    `ConversacionWhatsApp.obtener_o_crear_activa`), conservando historial,
+    plantillas enviadas y asesor asignado. Compartido por las vistas de
     finalizadas y pendiente-reconexión.
     """
     import json as _json
@@ -461,15 +462,15 @@ def enviar_plantilla_reconexion(request):
 
     sesion = conversacion.sesion
     if not getattr(sesion, 'es_meta', False):
-        return JsonResponse({'error': True, 'message': 'The session is not Meta.'})
+        return JsonResponse({'error': True, 'message': 'La sesión no es Meta.'})
     config = getattr(sesion, 'config_meta', None)
     if not config:
-        return JsonResponse({'error': True, 'message': 'Meta configuration not found.'})
+        return JsonResponse({'error': True, 'message': 'No se encontró la configuración Meta de la sesión.'})
     plantilla = PlantillaWhatsApp.objects.filter(
         pk=plantilla_id, config_meta=config, status=True, estado_meta='APPROVED'
     ).first()
     if not plantilla:
-        return JsonResponse({'error': True, 'message': 'Template unavailable or not approved.'})
+        return JsonResponse({'error': True, 'message': 'Plantilla no disponible o no aprobada.'})
 
     service = get_whatsapp_service(sesion)
     response = service.send_template(
@@ -483,7 +484,7 @@ def enviar_plantilla_reconexion(request):
     if not response.get('success'):
         return JsonResponse({
             'error': True,
-            'message': f"Error sending template: {response.get('error', 'Unknown error')}",
+            'message': f"Error al enviar la plantilla: {response.get('error', 'Error desconocido')}",
         })
 
     def _render_cuerpo(body, params):
@@ -521,14 +522,14 @@ def enviar_plantilla_reconexion(request):
         conversacion.save(update_fields=['primer_agente'])
 
     log(
-        f"Reconnection template '{plantilla.nombre}' sent on conversation {conversacion.id}; marked pending reconnection",
+        f"Plantilla de reconexión '{plantilla.nombre}' enviada en la conversación {conversacion.id}; marcada pendiente de reconexión",
         request, "add", obj=conversacion.id,
     )
 
     return JsonResponse({
         'error': False,
         'pendiente': True,
-        'message': 'Template sent. Conversation marked as pending reconnection.',
+        'message': 'Plantilla enviada. Cuando el cliente responda, esta misma conversación se reanudará automáticamente.',
         'mensaje_html': render_to_string(
             'whatsapp/conversaciones/mensaje_enviado_partial.html',
             {'mensaje': mensaje}, request=request,

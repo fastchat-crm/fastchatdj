@@ -1,7 +1,7 @@
 {% extends 'base_chat.html' %}
 {% load templatefunctions %}
 {% block head %}
-<link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css?v1.1">
+<link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css?v1.2">
 <link rel="stylesheet" href="/static/stylenew/conversaciones.css?v1.8">
 <link rel="stylesheet" href="/static/css/whatsapp/historial_cliente.css?v1.0">
 <link rel="stylesheet" href="/static/css/whatsapp/ficha_cliente.css?v1.1">
@@ -933,16 +933,17 @@ $(document).ready(function() {
         return Array.from(ids).sort((a, b) => a - b);
     }
 
-    function _plantillaNecesitaFormulario(p) {
-        if (_detectarVarsEnCuerpo(p.cuerpo).length > 0) return true;
-        if (p.header_tipo === 'TEXT' && _detectarVarsEnCuerpo(p.header_contenido).length > 0) return true;
-        if (['IMAGE', 'VIDEO', 'DOCUMENT'].indexOf(p.header_tipo) !== -1) return true;
-        return false;
-    }
-
     function _abrirFormulario(plantilla) {
         _plantillaSeleccionada = plantilla;
         $('#plantillas-form-nombre').text(plantilla.nombre);
+        let previewHtml = '<div class="pp-envio-preview">';
+        if (plantilla.header_tipo === 'TEXT' && plantilla.header_contenido) {
+            previewHtml += '<div class="pp-envio-header">' + _esc(plantilla.header_contenido) + '</div>';
+        }
+        previewHtml += _esc(plantilla.cuerpo || '');
+        if (plantilla.footer) previewHtml += '<div class="pp-envio-footer">' + _esc(plantilla.footer) + '</div>';
+        previewHtml += '</div>';
+        previewHtml += '<div class="pp-envio-info"><i class="fa fa-circle-info me-1"></i>Al enviar, el cliente recibirá este mensaje de inmediato. La conversación pasará a <b>Pendientes de reconexión</b> y, cuando el cliente responda, <b>esta misma conversación se reanudará automáticamente</b> con todo su historial, incluida la plantilla enviada.</div>';
         let headerHtml = '';
         const ht = plantilla.header_tipo || 'NONE';
         const abre = '{' + '{';
@@ -986,7 +987,7 @@ $(document).ready(function() {
             }).join('');
         }
         const total = headerHtml + bodyHtml;
-        $('#plantillas-form-vars').html(total || '<div class="text-muted" style="font-size:.78rem;">Esta plantilla no requiere variables.</div>');
+        $('#plantillas-form-vars').html(previewHtml + (total || '<div class="text-muted" style="font-size:.78rem;">Esta plantilla no requiere variables. Solo confirma el envío.</div>'));
         $('#plantillas-list').hide();
         $('#plantillas-form').addClass('open');
     }
@@ -1024,8 +1025,7 @@ $(document).ready(function() {
         const lista = _plantillasCache[convId] || [];
         const p = lista.find(x => x.id === id);
         if (!p) { console.error('[plantillas] no encontrada', id); return; }
-        if (_plantillaNecesitaFormulario(p)) { _abrirFormulario(p); }
-        else { _enviarPlantilla(p, [], null); }
+        _abrirFormulario(p);
     });
 
     $('#plantillas-search').on('input', function() {
@@ -1095,7 +1095,7 @@ $(document).ready(function() {
             _cerrarFormulario();
             setTimeout(scrollToBottom, 200);
             if (typeof alertaSuccess === 'function') {
-                alertaSuccess(r.message || 'Plantilla enviada. Conversación marcada como pendiente de reconexión.');
+                alertaSuccess(r.message || 'Plantilla enviada. Cuando el cliente responda, esta misma conversación se reanudará automáticamente.');
             }
             $('#reactivar-btn').addClass('d-none').hide();
             cargarConversaciones();

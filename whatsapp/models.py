@@ -604,10 +604,13 @@ class ConversacionWhatsApp(ModeloBase):
     )
 
     # Reconexión por plantilla. Cuando un agente envía una plantilla Meta a una
-    # conversación finalizada, esta NO se reactiva: queda en estado 1 marcada
-    # como sonda (pendiente_reconexion=True) hasta que el cliente responda. Al
-    # responder, el webhook crea una conversación nueva (iniciada_por_plantilla)
-    # enlazada por conv_origen, y esta sonda pasa a reconectada=True.
+    # conversación finalizada, esta NO se reactiva de inmediato: queda en estado 1
+    # marcada como sonda (pendiente_reconexion=True) hasta que el cliente responda.
+    # Al responder, el webhook REABRE esta misma conversación (ver
+    # obtener_o_crear_activa) y la marca reconectada=True — así el historial
+    # conserva las plantillas enviadas y el asesor asignado. Los campos
+    # iniciada_por_plantilla/conv_origen quedan para datos históricos del flujo
+    # anterior (que creaba una conversación nueva enlazada).
     pendiente_reconexion = models.BooleanField('Pendiente de reconexión', default=False, db_index=True)
     reconectada = models.BooleanField('Reconectada', default=False)
     iniciada_por_plantilla = models.BooleanField('Iniciada por plantilla', default=False)
@@ -1075,8 +1078,9 @@ class ConversacionWhatsApp(ModeloBase):
                 return conv, False
             proveedor_snapshot = getattr(contacto.sesion, 'proveedor', '') or ''
             # Si el contacto tiene una sonda de reconexión pendiente (plantilla
-            # enviada a una conversación finalizada), esta nueva conversación es la
-            # reconexión: la enlazamos y cerramos la sonda.
+            # enviada a una conversación finalizada), NO se crea una conversación
+            # nueva: se REABRE esa misma conversación para conservar el historial
+            # (incluida la plantilla enviada) y al asesor que la atendía.
             pendiente = (
                 cls.objects
                 .filter(contacto=contacto, estado_conversacion=1,
@@ -1084,17 +1088,27 @@ class ConversacionWhatsApp(ModeloBase):
                 .order_by('-fecha_fin_conversacion', '-id')
                 .first()
             )
+            if pendiente:
+                pendiente.estado_conversacion = 0
+                pendiente.conversacion_finalizada = False
+                pendiente.fecha_fin_conversacion = None
+                pendiente.despedida_enviado = False
+                pendiente.duracion_conversacion = None
+                pendiente.fecha_hora_expira = expira
+                pendiente.pendiente_reconexion = False
+                pendiente.reconectada = True
+                pendiente.save(update_fields=[
+                    'estado_conversacion', 'conversacion_finalizada',
+                    'fecha_fin_conversacion', 'despedida_enviado',
+                    'duracion_conversacion', 'fecha_hora_expira',
+                    'pendiente_reconexion', 'reconectada',
+                ])
+                return pendiente, False
             conv = cls.objects.create(
                 contacto=contacto,
                 fecha_hora_expira=expira,
                 proveedor_atencion=proveedor_snapshot,
-                iniciada_por_plantilla=bool(pendiente),
-                conv_origen=pendiente,
             )
-            if pendiente:
-                pendiente.pendiente_reconexion = False
-                pendiente.reconectada = True
-                pendiente.save(update_fields=['pendiente_reconexion', 'reconectada'])
             return conv, True
 
 

@@ -167,6 +167,39 @@
                         {% endfor %}
                     </ul>
                 </div>
+                <div class="dropdown">
+                    <button class="btn btn-info text-white dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="fab fa-facebook me-1"></i> Ver en Facebook/Meta
+                    </button>
+                    <ul class="dropdown-menu shadow-sm">
+                        {% for s in sesiones_meta %}
+                        {% if s.config_meta.waba_id %}
+                        <li><h6 class="dropdown-header">{{ s.nombre|default:s.numero }}</h6></li>
+                        <li>
+                            <a class="dropdown-item" target="_blank" rel="noopener"
+                               href="https://business.facebook.com/wa/manage/message-templates/?waba_id={{ s.config_meta.waba_id }}{% if s.config_meta.business_account_id %}&business_id={{ s.config_meta.business_account_id }}{% endif %}">
+                                <i class="fa fa-file-lines me-2 text-primary"></i> Ver plantillas en Meta
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" target="_blank" rel="noopener"
+                               href="https://business.facebook.com/wa/manage/insights/?waba_id={{ s.config_meta.waba_id }}{% if s.config_meta.business_account_id %}&business_id={{ s.config_meta.business_account_id }}{% endif %}">
+                                <i class="fa fa-chart-line me-2 text-success"></i> Ver costos y consumo
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" target="_blank" rel="noopener"
+                               href="https://business.facebook.com/billing_hub/accounts{% if s.config_meta.business_account_id %}?business_id={{ s.config_meta.business_account_id }}{% endif %}">
+                                <i class="fa fa-credit-card me-2 text-warning"></i> Facturación en Meta
+                            </a>
+                        </li>
+                        {% if not forloop.last %}<li><hr class="dropdown-divider"></li>{% endif %}
+                        {% else %}
+                        <li><span class="dropdown-item-text small text-muted">{{ s.nombre|default:s.numero }}: sin WABA ID configurado</span></li>
+                        {% endif %}
+                        {% endfor %}
+                    </ul>
+                </div>
                 {% endif %}
             </div>
         </div>
