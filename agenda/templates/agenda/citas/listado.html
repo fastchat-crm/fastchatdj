@@ -35,7 +35,7 @@
                             <select name="recurso" class="form-select">
                                 <option value="">Todos</option>
                                 {% for r in recursos %}
-                                    <option value="{{ r.id }}" {% if recurso_actual and recurso_actual.id == r.id %}selected{% endif %}>{{ r.nombre }}</option>
+                                    <option value="{{ r.id }}" {% if recurso_actual and recurso_actual.id == r.id %}selected{% endif %}>{{ r.nombre }}{% if r.usuario %} — {{ r.usuario.get_full_name|default:r.usuario.username }}{% endif %}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -221,6 +221,7 @@
                                                 <dt class="col-5">ID cita</dt><dd class="col-7">#{{ t.id }}</dd>
                                                 <dt class="col-5">Servicio</dt><dd class="col-7">{{ t.servicio.nombre }} ({{ t.servicio.duracion_min }} min)</dd>
                                                 <dt class="col-5">Recurso</dt><dd class="col-7">{{ t.recurso.nombre }}</dd>
+                                                <dt class="col-5">Atendido por</dt><dd class="col-7">{% if t.recurso.usuario %}{{ t.recurso.usuario.get_full_name|default:t.recurso.usuario.username }}{% else %}<span class="text-muted">Sin persona asignada</span>{% endif %}</dd>
                                                 <dt class="col-5">Grupo</dt><dd class="col-7">{{ t.recurso.grupo_agenda.nombre }}</dd>
                                                 <dt class="col-5">Inicio</dt><dd class="col-7">{{ t.inicio|date:"l d/m/Y H:i"|capfirst }}</dd>
                                                 <dt class="col-5">Fin</dt><dd class="col-7">{{ t.fin|date:"d/m/Y H:i" }}</dd>

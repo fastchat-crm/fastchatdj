@@ -123,7 +123,7 @@
                         Usuarios asignables
                     </button>
                 {% else %}
-                <div class="kebab-heading">Acciones de Sesión</div>
+                <div class="kebab-heading">Configuración</div>
                 <button type="button" class="kebab-item" data-action="editar"><i class="fa fa-pen"></i> Modificar
                 </button>
                 <button type="button" class="kebab-item" data-action="cambiar-foto"><i class="fa fa-image"></i>
@@ -139,25 +139,17 @@
                 <a href="/whatsapp/sesiones/{{ sesion.id }}/mensajes-rapidos/?tab=menus" class="kebab-item"><i
                         class="fa fa-list-ul"></i> Menús rápidos</a>
                 {% if sesion.es_meta %}
-                    <div class="kebab-sep"></div>
-                    <div class="kebab-heading">Meta Cloud API</div>
-                    <button type="button" class="kebab-item" data-action="resumen"><i class="fa fa-clipboard-check"></i>
-                        Resumen y pasos siguientes
-                    </button>
-                    <button type="button" class="kebab-item" data-action="post-conexion"><i class="fa fa-list-check text-primary"></i>
-                        Configurar en Facebook (post-conexión)
-                    </button>
-                    <button type="button" class="kebab-item" data-action="meta-validar"><i
-                            class="fa fa-satellite-dish text-success"></i> Revalidar número con Meta
-                    </button>
-                    <button type="button" class="kebab-item" data-action="validar-conexion"><i
-                            class="fa fa-clipboard-check text-success"></i> Validar conexión (chequeos)
-                    </button>
                     <button type="button" class="kebab-item" data-action="cambiar-nombre"><i
                             class="fa fa-signature"></i> Cambiar nombre del número
                     </button>
                     <button type="button" class="kebab-item" data-action="datos-transporte"><i
                             class="fa fa-id-card"></i> Datos del transporte (Meta)
+                    </button>
+                    <button type="button" class="kebab-item" data-action="post-conexion"><i class="fa fa-list-check text-primary"></i>
+                        Configurar en Facebook (post-conexión)
+                    </button>
+                    <button type="button" class="kebab-item" data-action="ads-config"><i
+                            class="fa-brands fa-facebook text-primary"></i> Conectar anuncios (Click-to-WhatsApp)
                     </button>
                     {% if sesion.config_meta and sesion.config_meta.waba_id %}
                         <a href="https://business.facebook.com/latest/whatsapp_manager/phone_numbers/?{% if sesion.config_meta.business_account_id %}business_id={{ sesion.config_meta.business_account_id }}&{% endif %}asset_id={{ sesion.config_meta.waba_id }}&nav_ref=whatsapp_manager&tab=phone-numbers{% if sesion.config_meta.phone_number_id %}&phone_number_id={{ sesion.config_meta.phone_number_id }}{% endif %}"
@@ -165,6 +157,19 @@
                             <i class="fa-brands fa-meta"></i> Editar número en Meta Business
                         </a>
                     {% endif %}
+                {% endif %}
+                <div class="kebab-sep"></div>
+                <div class="kebab-heading">Diagnóstico y auditoría</div>
+                {% if sesion.es_meta %}
+                    <button type="button" class="kebab-item" data-action="resumen"><i class="fa fa-clipboard-check"></i>
+                        Resumen y pasos siguientes
+                    </button>
+                    <button type="button" class="kebab-item" data-action="meta-validar"><i
+                            class="fa fa-satellite-dish text-success"></i> Revalidar número con Meta
+                    </button>
+                    <button type="button" class="kebab-item" data-action="validar-conexion"><i
+                            class="fa fa-clipboard-check text-success"></i> Validar conexión (chequeos)
+                    </button>
                     <a href="/whatsapp/sesiones/{{ sesion.id }}/diagnostico/" class="kebab-item"><i
                             class="fa fa-stethoscope text-primary"></i> Diagnóstico de la sesión</a>
                     <a href="/whatsapp/sesiones/{{ sesion.id }}/webhook-log/" class="kebab-item"><i
@@ -172,25 +177,10 @@
                     <button type="button" class="kebab-item" data-action="test-eco"><i class="fa fa-paper-plane"></i>
                         Probar envío de mensaje
                     </button>
-                    <div class="kebab-sep"></div>
-                    <div class="kebab-heading">Meta Administración</div>
                     <button type="button" class="kebab-item" data-action="plantilla-prueba"><i
                             class="fa fa-file-lines"></i> Enviar plantilla de prueba
                     </button>
-                    <a href="/whatsapp/plantillas/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i
-                            class="fa fa-file-lines"></i> Ver plantillas</a>
-                    <a href="/whatsapp/campanas/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i
-                            class="fa fa-bullhorn"></i> Ver campañas</a>
-                    <a href="/whatsapp/campanas/?action=add&sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i
-                            class="fa fa-plus-circle"></i> Nueva campaña</a>
-                    <a href="/whatsapp/analytics/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i
-                            class="fa fa-chart-line"></i> Analytics de esta sesión</a>
-                    <button type="button" class="kebab-item" data-action="ads-config"><i
-                            class="fa-brands fa-facebook text-primary"></i> Conectar anuncios (Click-to-WhatsApp)
-                    </button>
                 {% else %}
-                    <div class="kebab-sep"></div>
-                    <div class="kebab-heading">Baileys (Node.js)</div>
                     <button type="button" class="kebab-item" data-action="baileys-verificar"><i
                             class="fa fa-satellite-dish"></i> Verificar conexión
                     </button>
@@ -198,8 +188,23 @@
                             class="fa fa-qrcode"></i> Reconectar / ver QR
                     </button>
                 {% endif %}
+                <button type="button" class="kebab-item" data-action="historial"><i
+                        class="fa fa-clock-rotate-left"></i> Historial de conexiones
+                </button>
+                {% if sesion.es_meta %}
+                    <div class="kebab-sep"></div>
+                    <div class="kebab-heading">Marketing y analytics</div>
+                    <a href="/whatsapp/analytics/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i
+                            class="fa fa-chart-line"></i> Analytics de esta sesión</a>
+                    <a href="/whatsapp/plantillas/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i
+                            class="fa fa-file-lines"></i> Ver plantillas</a>
+                    <a href="/whatsapp/campanas/?sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i
+                            class="fa fa-bullhorn"></i> Ver campañas</a>
+                    <a href="/whatsapp/campanas/?action=add&sesion={{ sesion.id|encrypt_id }}" class="kebab-item"><i
+                            class="fa fa-plus-circle"></i> Nueva campaña</a>
+                {% endif %}
                 <div class="kebab-sep"></div>
-                <div class="kebab-heading">Acciones de Criticas</div>
+                <div class="kebab-heading">Acciones críticas</div>
                 {% if sesion.estado == 'conectado' %}
                     <button type="button" class="kebab-item kebab-warn" data-action="disconnect"><i
                             class="fa fa-power-off"></i> Desconectar
@@ -207,9 +212,6 @@
                 {% endif %}
                 <button type="button" class="kebab-item kebab-danger" data-action="eliminar"><i
                         class="fa fa-trash"></i> Eliminar sesión
-                </button>
-                <button type="button" class="kebab-item" data-action="historial"><i
-                        class="fa fa-clock-rotate-left"></i> Historial de conexiones
                 </button>
                 {% endif %}
             </div>

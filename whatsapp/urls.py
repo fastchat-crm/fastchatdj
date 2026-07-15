@@ -21,6 +21,7 @@ from .sync_contacts import sync_contacts_view
 from .update_profile_view import update_profile_view
 from .view_contacto import contactoView
 from .view_trazas import trazasView
+from .view_monitoreo import monitoreoWhatsAppView
 from .webhook_baileys_view import webhook_handler
 from .webhook_batch_view import webhook_handler_batch
 from .heartbeat_view import heartbeat_receiver
@@ -77,6 +78,11 @@ whatsapp_urls = (
         "nombre": "Trazas / Logs (IA y conversaciones)",
         "url": 'trazas/',
         "vista": trazasView,
+    },
+    {
+        "nombre": "Monitoreo webhook WhatsApp",
+        "url": 'monitoreo/',
+        "vista": monitoreoWhatsAppView,
     },
     {
         "nombre": "Plantillas WhatsApp",

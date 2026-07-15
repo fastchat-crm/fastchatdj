@@ -143,6 +143,21 @@ def tarifasView(request):
         for o in consumo_por_origen:
             o['origen_label'] = origen_labels.get(o['origen'], o['origen'])
         data['consumo_por_origen'] = consumo_por_origen
+        consumo_sesiones = list(
+            qs_envios.values(
+                'sesion_id', 'sesion__nombre', 'sesion__numero',
+                'sesion__config_meta__waba_id', 'sesion__config_meta__business_account_id',
+            ).annotate(n=Count('id'), total=Sum('costo_estimado')).order_by('-total')
+        )
+        totales_mes = dict(
+            qs_envios.filter(fecha_registro__gte=mes_ini)
+            .values_list('sesion_id')
+            .annotate(t=Sum('costo_estimado'))
+            .values_list('sesion_id', 't')
+        )
+        for c in consumo_sesiones:
+            c['total_mes'] = totales_mes.get(c['sesion_id'])
+        data['consumo_sesiones'] = consumo_sesiones
     except Exception:
         data['consumo_total'] = None
 

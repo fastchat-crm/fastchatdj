@@ -21,8 +21,35 @@ from .models import Usuario, PerfilAdministrativo, PerfilPersona
 from .view_persona import personasView
 
 
+PERMISOS_ESPECIALES = [
+    {
+        'app': 'crm',
+        'codename': 'puede_ver_citas_all',
+        'nombre': 'Ver todas las citas de la agenda',
+        'descripcion': 'Sin este permiso el usuario solo ve las citas de los recursos que tiene asignados. Los superusuarios siempre ven todo.',
+    },
+]
+
+
+def _permisos_especiales_de(usuario):
+    from django.contrib.auth.models import Permission
+    resultado = []
+    for p in PERMISOS_ESPECIALES:
+        asignado = usuario.user_permissions.filter(
+            content_type__app_label=p['app'], codename=p['codename']
+        ).exists()
+        resultado.append({
+            'clave': f"{p['app']}.{p['codename']}",
+            'nombre': p['nombre'],
+            'descripcion': p['descripcion'],
+            'asignado': asignado,
+        })
+    return resultado
+
+
 @login_required
 @secure_module
+
 def usuarioView(request):
     data = {
         'titulo': 'Control de Usuarios Administrativos',
@@ -96,6 +123,27 @@ def usuarioView(request):
                         res_json.append({'error': False, "reload": True})
                     else:
                         raise NameError(f"Usuario ya cuenta con perfil persona")
+                elif action == 'permisos_especiales':
+                    from django.contrib.auth.models import Permission
+                    filtro = model.objects.get(pk=int(request.POST['pk']))
+                    seleccion = request.POST.getlist('permisos')
+                    for p in PERMISOS_ESPECIALES:
+                        perm = Permission.objects.filter(
+                            content_type__app_label=p['app'], codename=p['codename']
+                        ).first()
+                        if not perm:
+                            res_json.append({
+                                'error': True,
+                                'message': f"El permiso {p['codename']} no existe todavía en la base — corre las migraciones de crm.",
+                            })
+                            return JsonResponse(res_json, safe=False)
+                        clave = f"{p['app']}.{p['codename']}"
+                        if clave in seleccion:
+                            filtro.user_permissions.add(perm)
+                        else:
+                            filtro.user_permissions.remove(perm)
+                    log(f"Permisos especiales actualizados para {filtro.username} - {filtro.get_full_name()}", request, "change")
+                    res_json.append({'error': False, 'message': 'Permisos actualizados.', 'reload': True})
                 elif action == 'changegroup':
                     filtro = model.objects.get(pk=int(request.POST['pk']))
                     form = GrupoUserForm(request.POST, request.FILES, instance=filtro, request=request)
@@ -313,6 +361,16 @@ def usuarioView(request):
                     form.fields['ciudad'].queryset = Ciudad.objects.none()
                 data["form"] = form
                 return render(request, 'autenticacion/usuario/form.html', data)
+            elif action == 'permisos_especiales':
+                try:
+                    data['id'] = id = int(request.GET['pk'])
+                    data['filtro'] = filtro = Usuario.objects.get(pk=id)
+                    data['permisos_especiales'] = _permisos_especiales_de(filtro)
+                    titulo = f'Permisos especiales de {filtro.nombre_corto()}'
+                    template = get_template("autenticacion/usuario/form_permisos_especiales.html")
+                    return JsonResponse({"result": True, 'data': template.render(data), 'titulo': titulo})
+                except Exception as ex:
+                    return JsonResponse({"result": False, 'message': str(ex)})
             elif action == 'changegroup':
                 try:
                     data['id'] = id = int(request.GET['pk'])

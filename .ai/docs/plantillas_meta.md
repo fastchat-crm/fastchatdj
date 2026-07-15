@@ -44,6 +44,15 @@ Vista: `whatsapp/view_plantillas.py` (`plantillasView`). Template:
   `fields=...,rejected_reason,quality_score` (fix 2026-07-13; antes el motivo
   llegaba siempre vacío). Valor `NONE` de Meta se normaliza a vacío.
 - Solo plantillas `APPROVED` se listan para envío desde el chat.
+- **Headers con media (IMAGE/VIDEO/DOCUMENT), 2026-07-15:** convención sin
+  migración — `header_contenido` guarda la **URL pública del archivo de
+  EJEMPLO**. Al someter, `_ejemplo_header_handle` (meta/whatsapp.py) descarga la
+  URL y la sube vía `_resumable_upload` (helper compartido con la foto de
+  perfil) para armar `example.header_handle`; errores salen como ValueError con
+  mensaje claro. `someter_a_meta` valida que la URL sea http(s) antes de llamar
+  a Meta; el form muestra hint + placeholder cuando el tipo es media. El envío
+  desde el chat sigue pidiendo la URL real por envío (puede ser distinta a la
+  de ejemplo).
 
 ## Accesos directos a Meta (listado)
 

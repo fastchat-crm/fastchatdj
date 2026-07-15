@@ -2270,3 +2270,16 @@ class RagFuente(ModeloBase):
         if self.tipo == 1:
             return self.enlace[:80]
         return (self.texto or '')[:60] or f'Fuente #{self.id}'
+
+
+class PermisosCRM(models.Model):
+    """Modelo sin tabla (managed=False) que actúa como contenedor de permisos
+    especiales del CRM asignables por usuario desde el módulo administrativo
+    de Usuarios (modal "Permisos especiales")."""
+
+    class Meta:
+        managed = False
+        default_permissions = ()
+        permissions = [
+            ('puede_ver_citas_all', 'Puede ver todas las citas de la agenda'),
+        ]

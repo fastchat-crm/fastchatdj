@@ -710,54 +710,14 @@ class MetaWhatsAppService(ServicioCanalBase):
         if not config:
             return {'success': False, 'message': 'Sesión sin ConfigMeta.'}
 
-        from meta.credenciales import get_meta_app_credentials
-        app_id, _ = get_meta_app_credentials()
-        if not app_id:
-            return {'success': False, 'message': 'Falta Meta App ID en CredencialMetaApp.'}
-
-        if not file_bytes:
-            return {'success': False, 'message': 'Archivo vacío.'}
-        if len(file_bytes) > 5 * 1024 * 1024:
+        if len(file_bytes or b'') > 5 * 1024 * 1024:
             return {'success': False, 'message': 'La imagen supera 5MB. Reduzcala antes de subir.'}
 
-        access_token = config.access_token
+        up = self._resumable_upload(config, file_bytes, mime_type)
+        if not up.get('success'):
+            return {'success': False, 'message': up.get('message')}
+        handle = up['handle']
         try:
-            # Paso 1 — abrir upload session
-            r1 = requests.post(
-                f'{GRAPH_API_BASE}/{app_id}/uploads',
-                params={
-                    'file_length': len(file_bytes),
-                    'file_type':   mime_type,
-                    'access_token': access_token,
-                },
-                timeout=15,
-            )
-            if r1.status_code != 200:
-                msg = self._parse_error_meta(r1, 'No pude abrir upload session')
-                logger.warning("Meta foto upload step1: %s", msg)
-                return {'success': False, 'message': msg}
-            upload_session_id = (r1.json() or {}).get('id')
-            if not upload_session_id:
-                return {'success': False, 'message': 'Meta no devolvió upload_session_id.'}
-
-            # Paso 2 — subir bytes y obtener handle
-            r2 = requests.post(
-                f'{GRAPH_API_BASE}/{upload_session_id}',
-                headers={
-                    'Authorization': f'OAuth {access_token}',
-                    'file_offset':   '0',
-                },
-                data=file_bytes,
-                timeout=60,
-            )
-            if r2.status_code != 200:
-                msg = self._parse_error_meta(r2, 'Falló la subida de bytes')
-                logger.warning("Meta foto upload step2: %s", msg)
-                return {'success': False, 'message': msg}
-            handle = (r2.json() or {}).get('h')
-            if not handle:
-                return {'success': False, 'message': 'Meta no devolvió handle.'}
-
             # Paso 3 — asignar al business profile
             r3 = requests.post(
                 f'{GRAPH_API_BASE}/{config.phone_number_id}/whatsapp_business_profile',
@@ -791,6 +751,97 @@ class MetaWhatsAppService(ServicioCanalBase):
         except Exception:
             return f'{fallback} (HTTP {response.status_code})'
 
+    def _resumable_upload(self, config, file_bytes, mime_type) -> dict:
+        """Flujo Resumable Upload de Meta (App-scoped handle de vida corta).
+
+        1. POST `/{app_id}/uploads?file_length=N&file_type=...` → upload session
+        2. POST `/{upload_session_id}` con `Authorization: OAuth <token>` y
+           `file_offset: 0`, body crudo → `{h: handle}`
+
+        Devuelve `{'success': bool, 'handle'?: str, 'message'?: str}`. El handle
+        solo sirve para una llamada inmediata (foto de perfil, example de
+        plantilla, etc.).
+        """
+        from meta.credenciales import get_meta_app_credentials
+        app_id, _ = get_meta_app_credentials()
+        if not app_id:
+            return {'success': False, 'message': 'Falta Meta App ID en CredencialMetaApp.'}
+        if not file_bytes:
+            return {'success': False, 'message': 'Archivo vacío.'}
+        access_token = config.access_token
+        try:
+            r1 = requests.post(
+                f'{GRAPH_API_BASE}/{app_id}/uploads',
+                params={
+                    'file_length': len(file_bytes),
+                    'file_type':   mime_type,
+                    'access_token': access_token,
+                },
+                timeout=15,
+            )
+            if r1.status_code != 200:
+                msg = self._parse_error_meta(r1, 'No pude abrir upload session')
+                logger.warning("Meta resumable upload paso1: %s", msg)
+                return {'success': False, 'message': msg}
+            upload_session_id = (r1.json() or {}).get('id')
+            if not upload_session_id:
+                return {'success': False, 'message': 'Meta no devolvió upload_session_id.'}
+            r2 = requests.post(
+                f'{GRAPH_API_BASE}/{upload_session_id}',
+                headers={
+                    'Authorization': f'OAuth {access_token}',
+                    'file_offset':   '0',
+                },
+                data=file_bytes,
+                timeout=60,
+            )
+            if r2.status_code != 200:
+                msg = self._parse_error_meta(r2, 'Falló la subida de bytes')
+                logger.warning("Meta resumable upload paso2: %s", msg)
+                return {'success': False, 'message': msg}
+            handle = (r2.json() or {}).get('h')
+            if not handle:
+                return {'success': False, 'message': 'Meta no devolvió handle.'}
+            return {'success': True, 'handle': handle}
+        except Exception as e:
+            logger.exception("Meta resumable upload fallo")
+            return {'success': False, 'message': str(e)}
+
+    _MIME_DEFAULT_HEADER = {
+        'IMAGE':    'image/jpeg',
+        'VIDEO':    'video/mp4',
+        'DOCUMENT': 'application/pdf',
+    }
+
+    def _ejemplo_header_handle(self, plantilla: PlantillaWhatsApp) -> str:
+        """Para headers IMAGE/VIDEO/DOCUMENT Meta exige `example.header_handle`
+        con un archivo de EJEMPLO subido vía resumable upload. Convención local
+        sin migraciones: `header_contenido` guarda la URL pública del archivo
+        de ejemplo; aquí se descarga y se sube a Meta. Lanza ValueError con
+        mensaje claro para que la vista lo muestre tal cual.
+        """
+        url = (plantilla.header_contenido or '').strip()
+        if not url.lower().startswith(('http://', 'https://')):
+            raise ValueError(
+                'Para encabezado de imagen/video/documento, el campo "Contenido del encabezado" '
+                'debe ser la URL pública (https) del archivo de EJEMPLO que verá el revisor de Meta.'
+            )
+        try:
+            resp = requests.get(url, timeout=30)
+            resp.raise_for_status()
+        except Exception as e:
+            raise ValueError(f'No pude descargar el archivo de ejemplo del encabezado ({url}): {e}')
+        contenido = resp.content or b''
+        if len(contenido) > 15 * 1024 * 1024:
+            raise ValueError('El archivo de ejemplo del encabezado supera 15MB — usa uno más liviano.')
+        mime = (resp.headers.get('Content-Type') or '').split(';')[0].strip()
+        if not mime or mime == 'application/octet-stream':
+            mime = self._MIME_DEFAULT_HEADER.get(plantilla.header_tipo, 'image/jpeg')
+        up = self._resumable_upload(plantilla.config_meta, contenido, mime)
+        if not up.get('success'):
+            raise ValueError(f"No pude subir el ejemplo del encabezado a Meta: {up.get('message')}")
+        return up['handle']
+
     def crear_plantilla_en_meta(self, session_id, plantilla: PlantillaWhatsApp) -> dict:
         """Envia la plantilla a Meta para aprobacion. Guarda `id_meta` y marca
         estado PENDING si Meta acepta el envio."""
@@ -798,7 +849,10 @@ class MetaWhatsAppService(ServicioCanalBase):
         if not config:
             return {'success': False, 'error': 'config_meta_no_encontrada'}
 
-        payload = self._construir_payload_plantilla(plantilla)
+        try:
+            payload = self._construir_payload_plantilla(plantilla)
+        except ValueError as e:
+            return {'success': False, 'error': str(e)}
         try:
             r = requests.post(
                 f'{GRAPH_API_BASE}/{config.waba_id}/message_templates',
@@ -877,7 +931,9 @@ class MetaWhatsAppService(ServicioCanalBase):
         components = []
         if plantilla.header_tipo and plantilla.header_tipo != 'NONE':
             header_comp = {'type': 'HEADER', 'format': plantilla.header_tipo}
-            if plantilla.header_tipo == 'TEXT' and plantilla.header_contenido:
+            if plantilla.header_tipo in ('IMAGE', 'VIDEO', 'DOCUMENT'):
+                header_comp['example'] = {'header_handle': [self._ejemplo_header_handle(plantilla)]}
+            elif plantilla.header_tipo == 'TEXT' and plantilla.header_contenido:
                 # Meta rechaza el header con newlines, **negritas**, emojis o
                 # formato markdown. Sanitizamos antes de enviar.
                 header_texto = _sanitizar_header_meta(plantilla.header_contenido)

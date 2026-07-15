@@ -17,6 +17,12 @@ from core.funciones import addData
 from .models import EventoMetaRecibido
 
 BRANDING_MONITOREO = {
+    'whatsapp': {
+        'titulo': 'Monitoreo webhook WhatsApp',
+        'nombre': 'WhatsApp Cloud',
+        'icono': 'fab fa-whatsapp',
+        'webhook': '/whatsapp/meta_webhook/',
+    },
     'instagram': {
         'titulo': 'Monitoreo webhook Instagram',
         'nombre': 'Instagram',
@@ -44,7 +50,12 @@ def _con_error(qs):
 
 def monitoreo_webhook_canal(request, canal):
     branding = BRANDING_MONITOREO[canal]
-    qs = EventoMetaRecibido.objects.filter(tipo_evento__startswith=f'{canal}:')
+    if canal == 'whatsapp':
+        qs = EventoMetaRecibido.objects.all()
+        for prefijo in ('instagram:', 'messenger:', 'tiktok:'):
+            qs = qs.exclude(tipo_evento__startswith=prefijo)
+    else:
+        qs = EventoMetaRecibido.objects.filter(tipo_evento__startswith=f'{canal}:')
 
     if request.GET.get('action') == 'detalle':
         ev = qs.filter(pk=request.GET.get('id') or 0).first()

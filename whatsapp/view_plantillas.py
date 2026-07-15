@@ -240,6 +240,15 @@ def _manejar_post(request, data):
                                    '({{N}}). Agrega texto antes de la primera variable o después de la '
                                    'última (ej. "¡Gracias!") y vuelve a someter.',
                     })
+                if plantilla.header_tipo in ('IMAGE', 'VIDEO', 'DOCUMENT'):
+                    _url_header = (plantilla.header_contenido or '').strip().lower()
+                    if not _url_header.startswith(('http://', 'https://')):
+                        return JsonResponse({
+                            'error': True,
+                            'message': 'El encabezado de imagen/video/documento necesita la URL pública '
+                                       '(https) de un archivo de EJEMPLO en "Contenido del encabezado" — '
+                                       'Meta lo exige para revisar la plantilla. Edítala y vuelve a someter.',
+                        })
                 from .services_meta import MetaWhatsAppService
                 result = MetaWhatsAppService().crear_plantilla_en_meta(
                     plantilla.config_meta.sesion.session_id, plantilla

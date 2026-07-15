@@ -185,6 +185,26 @@ def index(request):
         fecha__gte=hace_7d,
     ).count()
 
+    # Citas de agenda en las próximas 24h. Superuser o permiso
+    # crm.puede_ver_citas_all ven TODAS; el resto solo las de los recursos
+    # que tienen asignados.
+    citas_proximas = []
+    try:
+        from agenda.models import Turno
+        if persona.is_superuser or persona.has_perm('crm.puede_ver_citas_all'):
+            turnos_qs = Turno.objects.filter(status=True)
+        else:
+            turnos_qs = Turno.objects.filter(status=True, recurso__usuario=persona)
+        citas_proximas = list(
+            turnos_qs.filter(inicio__gte=ahora, inicio__lte=ahora + timedelta(hours=24))
+            .exclude(estado__in=['cancelled', 'no_show'])
+            .select_related('recurso', 'servicio', 'contacto')
+            .order_by('inicio')[:8]
+        )
+    except Exception:
+        citas_proximas = []
+    data['citas_proximas'] = citas_proximas
+
     serie_7d = []
     for i in range(0, 7):
         dia_ini = (ahora - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)

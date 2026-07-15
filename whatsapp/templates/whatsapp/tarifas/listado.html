@@ -74,6 +74,54 @@
                 </div>
                 {% endfor %}
             </div>
+            {% if consumo_sesiones %}
+            <div class="mt-3">
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <strong class="small"><i class="fa fa-phone me-1"></i>Consumo por número</strong>
+                    <input type="search" id="filtro-consumo-numero" class="form-control form-control-sm" style="max-width:220px;"
+                           placeholder="Filtrar por número o nombre...">
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0 align-middle" id="tabla-consumo-numeros">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Número / sesión</th>
+                                <th>Envíos</th>
+                                <th class="text-end">Este mes</th>
+                                <th class="text-end">Total histórico</th>
+                                <th class="text-end">Gasto real</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for c in consumo_sesiones %}
+                            <tr>
+                                <td class="small">
+                                    <strong>{{ c.sesion__numero|default:"—" }}</strong>
+                                    <span class="text-muted">{{ c.sesion__nombre|default:"" }}</span>
+                                </td>
+                                <td class="small">{{ c.n }}</td>
+                                <td class="small text-end">${{ c.total_mes|default:"0"|floatformat:4 }}</td>
+                                <td class="small text-end fw-bold">${{ c.total|default:"0"|floatformat:4 }}</td>
+                                <td class="small text-end">
+                                    {% if c.sesion__config_meta__waba_id %}
+                                        <a href="https://business.facebook.com/wa/manage/insights/?waba_id={{ c.sesion__config_meta__waba_id }}{% if c.sesion__config_meta__business_account_id %}&business_id={{ c.sesion__config_meta__business_account_id }}{% endif %}"
+                                           target="_blank" rel="noopener" class="btn btn-sm btn-info text-white py-0">
+                                            <i class="fab fa-facebook me-1"></i>Ver en Meta
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted">Sin WABA ID</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-muted small mt-1">
+                    El costo local es un estimado congelado con la tarifa vigente al momento de cada envío. El gasto real facturado lo muestra Meta (botón "Ver en Meta").
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
     {% endif %}
@@ -241,5 +289,13 @@ function eliminarTarifa(id, etiqueta) {
         }
     });
 }
+
+$(document).on('input', '#filtro-consumo-numero', function() {
+    var q = ($(this).val() || '').toLowerCase().trim();
+    $('#tabla-consumo-numeros tbody tr').each(function() {
+        var txt = $(this).find('td').first().text().toLowerCase();
+        $(this).toggle(!q || txt.indexOf(q) !== -1);
+    });
+});
 </script>
 {% endblock %}

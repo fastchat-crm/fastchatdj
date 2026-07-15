@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block head %}
-    <link rel="stylesheet" href="/static/css/whatsapp/pipeline.css?v1.6">
+    <link rel="stylesheet" href="/static/css/whatsapp/pipeline.css?v1.7">
     <link rel="stylesheet" href="/static/css/whatsapp/ficha_cliente.css?v1.1">
 {% endblock %}
 
@@ -8,43 +8,44 @@
 <div class="pipe-page">
 
     <div class="pipe-header">
-        <div>
-            <h4 class="pipe-title">
-                {% if pipeline_actual %}
-                    <span>{{ pipeline_actual.nombre }}</span>
-                    <button class="pipe-title-edit" data-bs-toggle="modal" data-bs-target="#modalEditarPipeline" title="Editar nombre/descripcion">
-                        <i class="fa fa-pen-to-square"></i>
-                    </button>
-                {% else %}
-                    Pipeline de ventas
-                {% endif %}
-            </h4>
-            <div class="pipe-subtitle">{{ pipeline_actual.descripcion|default:"Tablero Kanban · arrastra tarjetas entre etapas" }}</div>
-        </div>
-        <div class="pipe-toolbar">
-            <button class="pipe-btn" type="button" data-bs-toggle="modal" data-bs-target="#modalAyudaPipeline" title="¿Qué es el pipeline?">
-                <i class="fa fa-circle-question"></i>
-            </button>
-            <select class="form-select form-select-sm" style="min-width:180px;" id="selPipeline" onchange="location='?pipeline='+this.value">
+        <div class="pipe-header-top">
+            <label class="pipe-proceso-label" for="selPipeline"><i class="fa fa-diagram-project me-1"></i>Proceso:</label>
+            <select class="form-select form-select-sm pipe-proceso-select" id="selPipeline" onchange="location='?pipeline='+this.value">
                 {% for p in pipelines %}
                     <option value="{{ p.id }}" {% if pipeline_actual.id == p.id %}selected{% endif %}>{{ p.nombre }}</option>
                 {% endfor %}
             </select>
-            <input type="text" id="filtroBusqueda" class="form-control form-control-sm" style="max-width:200px;"
-                   placeholder="🔎 Filtrar tarjetas..." oninput="filtrarKanban(this.value)">
             <button class="pipe-btn pipe-btn-ai" data-bs-toggle="modal" data-bs-target="#modalGenerarIA">
                 <i class="fa fa-wand-magic-sparkles"></i> Generar con IA
             </button>
             <button class="pipe-btn pipe-btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevoPipeline">
                 <i class="fa fa-plus"></i> Nuevo pipeline
             </button>
-            {% if pipeline_actual %}
-            <button class="pipe-btn pipe-btn-danger-ghost"
-                    onclick="eliminarajax({{ pipeline_actual.id }}, '{{ pipeline_actual.nombre|escapejs }}', 'delete_pipeline')"
-                    title="Eliminar pipeline">
-                <i class="fa fa-trash"></i>
+            <button class="pipe-btn" type="button" data-bs-toggle="modal" data-bs-target="#modalAyudaPipeline" title="¿Qué es el pipeline?">
+                <i class="fa fa-circle-question"></i>
             </button>
-            {% endif %}
+        </div>
+        <div class="pipe-header-main">
+            <div>
+                <h4 class="pipe-title">
+                    {% if pipeline_actual %}
+                        <span>{{ pipeline_actual.nombre }}</span>
+                        <button class="pipe-title-edit" data-bs-toggle="modal" data-bs-target="#modalEditarPipeline" title="Editar nombre/descripción del proceso">
+                            <i class="fa fa-pen-to-square"></i>
+                        </button>
+                        <button class="pipe-title-edit pipe-title-delete"
+                                onclick="eliminarajax({{ pipeline_actual.id }}, '{{ pipeline_actual.nombre|escapejs }}', 'delete_pipeline')"
+                                title="Eliminar este proceso">
+                            <i class="fa fa-trash"></i>
+                        </button>
+                    {% else %}
+                        Pipeline de ventas
+                    {% endif %}
+                </h4>
+                <div class="pipe-subtitle">{{ pipeline_actual.descripcion|default:"Tablero Kanban · arrastra tarjetas entre etapas" }}</div>
+            </div>
+            <input type="text" id="filtroBusqueda" class="form-control form-control-sm pipe-filtro-input"
+                   placeholder="🔎 Filtrar tarjetas..." oninput="filtrarKanban(this.value)">
         </div>
     </div>
 

@@ -97,8 +97,12 @@ def citasView(request):
                     if desde and hasta:
                         qs = qs.filter(inicio__lt=hasta, fin__gt=desde)
                     items = []
-                    for t in qs.select_related('recurso', 'servicio', 'contacto').order_by('inicio'):
+                    for t in qs.select_related('recurso', 'recurso__usuario', 'servicio', 'contacto').order_by('inicio'):
                         contacto_name = t.contacto.contacto_nombre or t.contacto.contacto_numero
+                        usuario_recurso = t.recurso.usuario
+                        atendido_por = (
+                            usuario_recurso.get_full_name() or usuario_recurso.username
+                        ) if usuario_recurso else ''
                         items.append({
                             'id': t.id,
                             'title': f'{contacto_name} · {t.servicio.nombre}',
@@ -111,6 +115,7 @@ def citasView(request):
                                 'estado_label': t.get_estado_display(),
                                 'servicio': t.servicio.nombre,
                                 'recurso': t.recurso.nombre,
+                                'atendido_por': atendido_por,
                                 'contacto': contacto_name,
                                 'precio': str(t.precio_cobrado),
                                 'moneda': t.recurso.grupo_agenda.moneda,

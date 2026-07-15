@@ -107,7 +107,9 @@ Rutas de montaje: `whatsapp/` → `/whatsapp/`, `crm/` → `/crm/`, `agenda/` �
 ### Reglas comentario→DM (`/instagram/reglas-comentarios/`, `view_reglas_comentarios.py`)
 - `ReglaComentario`: automatización por keywords (sin tildes/mayúsculas; vacío = todo comentario), opcionalmente limitada a una publicación. Al matchear (primera regla por orden gana, motor en `funciones_comentarios.procesar_reglas_comentario`, disparado al ingresar el comentario por webhook): respuesta pública automática, DM (private reply, ventana Meta 7 días) y/o etiqueta al contacto si existe. Contador de usos. Canal instagram hoy; tiktok cuando se apruebe su API.
 
-### Monitoreo webhook por canal (`/instagram/monitoreo/`, `/facebook/monitoreo/`, `/tiktok/monitoreo/`, `view_monitoreo_social.py`)
+### Monitoreo webhook por canal (`/whatsapp/monitoreo/`, `/instagram/monitoreo/`, `/facebook/monitoreo/`, `/tiktok/monitoreo/`, `view_monitoreo_social.py`)
+
+Desde 2026-07-15 WhatsApp tiene su propio monitoreo (`whatsapp/view_monitoreo.py`): mismo monitor compartido, canal 'whatsapp' = eventos `EventoMetaRecibido` SIN prefijo de canal social. El kebab de la card de sesión WhatsApp (`sesiones/_card.html`) quedó segmentado en: Configuración / Diagnóstico y auditoría / Marketing y analytics / Acciones críticas.
 - Auditoría por app de los webhooks sociales: lista `EventoMetaRecibido` filtrado por prefijo de canal en `tipo_evento` (`instagram:`/`messenger:`/`tiktok:`) con stats (total, 24h, firma inválida, con error), filtros por estado y modal de payload crudo. Los receivers marcan `procesado`/`error_procesamiento` (firma inválida, unknown_target, excepción). Equivalente por canal del webhook-log por sesión de WhatsApp Meta.
 
 ### Webhooks entrantes
