@@ -181,6 +181,22 @@ def process_incoming_message(session, event_data, channel_layer):
                 if detected_media_key == 'stickerMessage' and not filename.lower().endswith('.png'):
                     filename = f'{filename}.png'
                 file_url = save_media_file(media_data, filename)
+                if media_data and file_url is None:
+                    # La decodificación del adjunto falló: sin esta traza el
+                    # mensaje quedaba como "imagen"/"documento" sin archivo y
+                    # sin ninguna señal de error (media perdida en silencio).
+                    logger.error(
+                        "Media no decodificable de %s tipo=%s filename=%s — mensaje sin adjunto",
+                        from_number, type_name, filename,
+                    )
+                    try:
+                        _traza(
+                            etapa='error_general', sesion=session, numero=from_number,
+                            nivel='error',
+                            detalle=f'Adjunto {type_name} no decodificable (filename={filename}); mensaje sin archivo.',
+                        )
+                    except Exception:
+                        pass
 
         # Actualizar la conversación con el último mensaje
         contacto.ultimo_mensaje = message_text[:100] + ('...' if len(message_text) > 100 else '')
@@ -492,9 +508,16 @@ def process_incoming_message(session, event_data, channel_layer):
         # ─────────────────────────────────────────────────────────────────
 
         _ia_activa = bool(session.agente_ia and session.agente_ia.apikey.filter(estado=True).exists())
-        if not conversation.bienvenida_enviado:
+        # Claim atómico anti doble-bienvenida: dos mensajes del cliente en ráfaga
+        # (IDs distintos, ambos pasan el dedup) leían bienvenida_enviado=False a
+        # la vez y ambos enviaban. El UPDATE condicional solo deja pasar a uno.
+        _claim_bienvenida = (
+            ConversacionWhatsApp.objects
+            .filter(pk=conversation.pk, bienvenida_enviado=False)
+            .update(bienvenida_enviado=True)
+        )
+        if _claim_bienvenida:
             conversation.bienvenida_enviado = True
-            conversation.save()
             if conversation.sesion.mensaje_bienvenida:
                 whatsapp_service.send_text_message(conversation.sesion.session_id, contacto.from_number, conversation.sesion.mensaje_bienvenida, simularEscritura=True)
 
@@ -885,7 +908,19 @@ def process_incoming_message(session, event_data, channel_layer):
                                     es_automatico=True,
                                 )
                             except Exception:
-                                pass
+                                # El cliente ya recibió la burbuja; si el registro
+                                # local falla, dejamos traza en vez de tragar el
+                                # error en silencio (si no, el historial pierde el
+                                # mensaje y el echo del webhook puede duplicarlo).
+                                logger.exception(
+                                    "No se pudo persistir burbuja IA conv=%s (ya enviada al cliente)",
+                                    conversation.id,
+                                )
+                                _traza(
+                                    etapa='error_general', sesion=session, conversacion=conversation,
+                                    numero=from_number, nivel='error',
+                                    detalle='Fallo al persistir burbuja IA ya enviada al cliente',
+                                )
                             _previa = _burbuja
                         send_result = _ultimo_send
                         respuesta_enviada = True
@@ -987,8 +1022,18 @@ def process_incoming_message(session, event_data, channel_layer):
                 fin_detectado = fin_por_frase or (resultado is not None and resultado.fin_detectado)
                 if fin_detectado and regla_fin and respuesta_enviada:
                     try:
+                        # estado_conversacion=1 junto a conversacion_finalizada:
+                        # sin ambos, la conv queda en estado inconsistente
+                        # (finalizada=True, estado=0) → invisible en activas Y en
+                        # finalizadas, y el próximo mensaje crea una conv huérfana.
                         conversation.conversacion_finalizada = True
-                        conversation.save(update_fields=['conversacion_finalizada'])
+                        conversation.estado_conversacion = 1
+                        if conversation.fecha_fin_conversacion is None:
+                            conversation.fecha_fin_conversacion = timezone.now()
+                        conversation.save(update_fields=[
+                            'conversacion_finalizada', 'estado_conversacion',
+                            'fecha_fin_conversacion',
+                        ])
                         contexto_fin = {
                             'nombre_contacto': contacto.contacto_nombre or '',
                             'numero': contacto.contacto_numero or '',

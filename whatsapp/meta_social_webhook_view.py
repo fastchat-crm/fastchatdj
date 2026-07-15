@@ -8,7 +8,11 @@ El payload Meta (page) trae mensajes en `entry[].messaging[]` (legacy) o en
 `entry[].messages[]` para IG. Lo traducimos al shape interno y reusamos
 `process_incoming_message` igual que el receiver de WhatsApp Cloud.
 
-URLs:
+Implementación compartida. Cada red la expone bajo su propia app/URL:
+  Instagram DM  → /instagram/webhook/  (instagram.webhook_view)
+  Messenger     → /facebook/webhook/   (facebook.webhook_view)
+
+Alias legacy (compat, dashboards ya configurados):
   /whatsapp/instagram_webhook/
   /whatsapp/messenger_webhook/
 """
@@ -203,15 +207,24 @@ def _procesar_post_social(request, ConfigCls, canal):
     sesion: SesionWhatsApp = config.sesion
     channel_layer = get_channel_layer()
 
+    # Ids propios de la cuenta (page / ig_user): sirven para descartar los
+    # "echoes" — Meta reentrega los mensajes que envía la propia cuenta; si se
+    # procesan como entrantes, el bot terminaría respondiéndose a sí mismo.
+    own_ids = set()
+    for attr in ('ig_user_id', 'page_id'):
+        val = getattr(config, attr, None)
+        if val:
+            own_ids.add(str(val))
+
     try:
         for entry in payload.get('entry') or []:
             messaging_blocks = entry.get('messaging') or []
             for m in messaging_blocks:
-                evento_interno = _social_a_evento_interno(m, canal)
+                evento_interno = _social_a_evento_interno(m, canal, own_ids)
                 if evento_interno:
                     process_incoming_message(sesion, evento_interno, channel_layer)
             for m in entry.get('messages') or []:
-                evento_interno = _social_a_evento_interno_v2(m, canal)
+                evento_interno = _social_a_evento_interno_v2(m, canal, own_ids)
                 if evento_interno:
                     process_incoming_message(sesion, evento_interno, channel_layer)
             for change in entry.get('changes') or []:
@@ -233,13 +246,16 @@ def _procesar_post_social(request, ConfigCls, canal):
     return JsonResponse({'ok': True}, status=200)
 
 
-def _social_a_evento_interno(m: dict, canal: str) -> dict | None:
+def _social_a_evento_interno(m: dict, canal: str, own_ids=None) -> dict | None:
     """Traduce el shape `messaging` del legacy Messenger/IG al interno."""
     sender_id = (m.get('sender') or {}).get('id')
     if not sender_id:
         return None
     msg = m.get('message') or {}
     if msg.get('is_echo'):
+        return None
+    # Echo/self: el emisor es la propia cuenta (page/ig_user).
+    if own_ids and str(sender_id) in own_ids:
         return None
     text = msg.get('text', '')
     referral = m.get('referral') or msg.get('referral') or {}
@@ -272,10 +288,15 @@ def _social_a_evento_interno(m: dict, canal: str) -> dict | None:
     return evento
 
 
-def _social_a_evento_interno_v2(m: dict, canal: str) -> dict | None:
+def _social_a_evento_interno_v2(m: dict, canal: str, own_ids=None) -> dict | None:
     """Algunos endpoints IG nuevos entregan en `entry[].messages[]` directamente."""
     sender_id = (m.get('from') or {}).get('id')
     if not sender_id:
+        return None
+    # Echo/self: descartar mensajes emitidos por la propia cuenta o marcados echo.
+    if m.get('is_echo'):
+        return None
+    if own_ids and str(sender_id) in own_ids:
         return None
     text = (m.get('text') or {}).get('body') or m.get('message', '')
     return {

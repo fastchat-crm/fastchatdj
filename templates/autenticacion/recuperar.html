@@ -35,7 +35,7 @@
             </div>
 
             <div class="login-content">
-                <form id="frm-login" method="POST" action="/seguridad/recuperar/">{% csrf_token %}
+                <form id="frm-login" method="POST" action="{% url 'auth_recuperar' %}">{% csrf_token %}
 
                     <div class="form-group m-b-15">
                         <input class="form-control form-control-lg" type="text" name="usuario"

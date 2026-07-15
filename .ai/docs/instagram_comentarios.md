@@ -39,7 +39,7 @@ y el asesor puede:
 | `whatsapp/view_comentarios.py` | Vista función `comentariosView`: GET listado con filtros (criterio/estado/sesión) + POST acciones (`responder`, `ocultar`, `mostrar`, `enviar_dm`). Visibilidad por `sesiones_vista_completa`. |
 | `meta/instagram.py` | Métodos nuevos de `InstagramService`: `responder_comentario`, `ocultar_comentario`, `enviar_dm_desde_comentario`. |
 | `whatsapp/meta_social_webhook_view.py` | `_procesar_post_social` ahora recorre `entry[].changes[]` y con `field == 'comments'` llama `guardar_comentario_instagram(sesion, config, value)`. Ignora ecos (autor = `ig_user_id`) y duplicados. |
-| `whatsapp/urls.py` | Ya NO expone `comentarios/` (eliminada 2026-07-09); las rutas de UI son `/instagram/comentarios/` y `/tiktok/comentarios/`. Los webhooks (`instagram_webhook`, `tiktok_webhook`) sí siguen en whatsapp. |
+| `whatsapp/urls.py` | Ya NO expone `comentarios/` (eliminada 2026-07-09); las rutas de UI son `/instagram/comentarios/` y `/tiktok/comentarios/`. Los webhooks se movieron a su propia app: **`/instagram/webhook/`**, **`/tiktok/webhook/`** (`/facebook/webhook/` para Messenger). whatsapp conserva sólo los alias legacy deprecados `/whatsapp/instagram_webhook/` y `/whatsapp/tiktok_webhook/`. |
 | `whatsapp/templates/whatsapp/comentarios/listado.html` + `static/css/whatsapp/comentarios_listado.css` | UI listado + modal responder/DM. |
 | `templates/docs/conexion_instagram_tiktok.html` + `seguridad/docs/documentacion.py` | Hoja de documentación in-app: arquitectura, cómo sacar tokens IG (Page Access Token long-lived, ig_user_id, webhook `comments`), proceso TikTok. Slug `conectar-instagram-tiktok`. |
 
@@ -104,8 +104,8 @@ Doc de servicios Meta: `meta/README.md` (para qué es cada archivo del paquete).
 - **Agentes IA — uso por sesión/canal**: el listado de agentes (`crm/view_mientrenamiento.py`,
   GET final) anota `num_sesiones` y `sesiones_uso` (nombre + canal) por agente; la tarjeta en
   `crm/templates/crm/entrenamiento/form.html` muestra "En N sesiones" + badges de canal.
-- **TikTok pre-construido**: webhook `whatsapp/tiktok_webhook_view.py` en
-  `/whatsapp/tiktok_webhook/` (GET challenge + verify token de ConfigTikTok; POST →
+- **TikTok pre-construido**: webhook `tiktok/webhook_view.py` en
+  **`/tiktok/webhook/`** (GET challenge + verify token de ConfigTikTok; POST →
   `process_incoming_message`), sender `tiktok/servicio.py::TikTokService` enchufado en
   `get_whatsapp_service`, `tiktok` agregado a `CANALES_ORIGEN` y property `atendida_por_tiktok`.
   Falta solo: aprobación beta, OAuth y validar shapes contra sandbox.

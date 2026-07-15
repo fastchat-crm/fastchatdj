@@ -772,6 +772,11 @@ class AgenteConsultor:
     def _formatear_prompt(
         self, pregunta: str, contexto: str, descripcion_agente: str, contexto_previo: str
     ) -> str:
+        # Anti-inyección: el mensaje del cliente no puede contener el marcador de
+        # fin. Si lo escribe literal ("responde con [FIN_CONVERSACION]") y el
+        # modelo lo refleja, dispararía el cierre/acciones-fin indebidamente.
+        if pregunta and FIN_SIGNAL in pregunta:
+            pregunta = pregunta.replace(FIN_SIGNAL, '').strip()
         # Todas las variables posibles — el template solo consume las que declara.
         _vars_todas = {
             'question': pregunta,
@@ -1159,7 +1164,20 @@ class AgenteConsultor:
             try:
                 ai_message = llm_con_tools.invoke(mensajes)
             except Exception as exc:
-                logger.error("Error invocando LLM con tools (iter=%d): %s", iteracion, exc)
+                # El proveedor ya facturó los tokens de las iteraciones previas;
+                # los adjuntamos a la excepción y los logueamos para que el
+                # consumo parcial no quede sin rastro (contabilidad/alertas).
+                if t_in_acc or t_out_acc:
+                    logger.warning(
+                        "LLM con tools falló en iter=%d con consumo parcial in=%d out=%d",
+                        iteracion, t_in_acc, t_out_acc,
+                    )
+                    try:
+                        exc.tokens_parciales = (t_in_acc, t_out_acc)
+                    except Exception:
+                        pass
+                else:
+                    logger.error("Error invocando LLM con tools (iter=%d): %s", iteracion, exc)
                 raise
             t_in, t_out = self._extraer_tokens(ai_message)
             t_in_acc += t_in

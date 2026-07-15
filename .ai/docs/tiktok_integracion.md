@@ -2,7 +2,7 @@
 
 > Estado 2026-07-08: **esqueleto construido** — app `tiktok/` (cuentas/conversaciones/comentarios),
 > modelo `ConfigTikTok`, proveedor `tiktok` en `PROVEEDORES_SESION`/`CANALES_ORIGEN`, webhook
-> `/whatsapp/tiktok_webhook/` (`whatsapp/tiktok_webhook_view.py`) y sender `tiktok/servicio.py`
+> **`/tiktok/webhook/`** (`tiktok/webhook_view.py`; alias legacy `/whatsapp/tiktok_webhook/`) y sender `tiktok/servicio.py`
 > enchufado en `get_whatsapp_service`. Ver `tiktok/README.md` y `.ai/docs/instagram_comentarios.md`.
 > **Bloqueante externo:** aprobación de la Business Messaging API (beta) — los shapes de payload y
 > el endpoint de envío deben validarse contra el sandbox al ser aprobados.
@@ -60,7 +60,7 @@ Todos los canales comparten los mismos modelos, diferenciados por campos — no 
    - Agregar `'tiktok'` a `CANALES_ORIGEN` de `Contacto` (~línea 278) y a los choices de `origen_canal` / `proveedor_atencion` en `ConversacionWhatsApp` (~líneas 533, 565).
    - Nuevo modelo `ConfigTikTok` OneToOne con `SesionWhatsApp`, espejo de `ConfigInstagram` (~línea 2355): `business_id`, `open_id`, `access_token` (cifrado tipo `EncryptedTextField` como `ConfigMeta.access_token`), `refresh_token`, `webhook_verify_token`, `error_mensaje`.
    - Agregar propiedad helper `atendida_por_tiktok` en `ConversacionWhatsApp` (junto a `atendida_por_instagram`, ~línea 721).
-2. **Webhook entrante** — nueva vista `whatsapp/tiktok_webhook_view.py`, path `/whatsapp/tiktok_webhook/` (espejo de `meta_social_webhook_view.py`):
+2. **Webhook entrante** — vista `tiktok/webhook_view.py`, path **`/tiktok/webhook/`** (espejo de `meta_social_webhook_view.py`; `whatsapp/tiktok_webhook_view.py` quedó como shim para el alias legacy `/whatsapp/tiktok_webhook/`):
    - GET: verificación del webhook.
    - POST: validar firma, normalizar payload TikTok al formato interno, llamar a `process_incoming_message(session, event_data, channel_layer)` de `procesar_mensaje.py`. Desde ahí todo funciona solo: Contacto, Conversación, Mensaje, broadcast a `chat_{conv_id}` y `whatsapp_sessionroom_{session_id}`, motor IA, asignación de asesores.
 3. **Servicio de envío** — `meta/tiktok.py` con `TikTokService`, espejo de `InstagramService` (`meta/instagram.py`): POST al endpoint de envío de Business Messaging con el access token de `ConfigTikTok`.

@@ -376,6 +376,11 @@ def evaluar_condicion(cond: dict, contexto: dict) -> bool:
             if op == '>=': return a >= b
             if op == '<=': return a <= b
         except TypeError:
+            # Tipos incomparables (ej. número vs texto que no es numérico). No
+            # es un error del sistema pero sí una condición mal armada: la
+            # dejamos en False y la registramos para poder diagnosticarla.
+            logger.warning(
+                'Condición %r no comparable: izq=%r der=%r → False', op, izq, der)
             return False
 
     if op in ('contiene', 'no_contiene'):
@@ -408,6 +413,24 @@ def _aplicar_credencial(cred, headers: dict, query: dict) -> None:
         query[s.get('nombre_param', 'api_key')] = s.get('valor', '')
     elif tipo == 'custom_header':
         headers.update(s.get('headers') or {})
+
+
+_CLAVES_SECRETAS = ('api_key', 'apikey', 'api-key', 'token', 'access_token',
+                    'key', 'secret', 'password', 'passwd', 'pwd', 'auth', 'signature')
+
+
+def _redactar_secretos(query):
+    """Devuelve una copia de `query` con los valores de parámetros sensibles
+    reemplazados por '***', para no persistir credenciales en TrazaMensajeIA."""
+    if not isinstance(query, dict):
+        return query
+    limpio = {}
+    for k, v in query.items():
+        if any(sec in str(k).lower() for sec in _CLAVES_SECRETAS):
+            limpio[k] = '***'
+        else:
+            limpio[k] = v
+    return limpio
 
 
 def ejecutar_http(nodo, contexto: dict, _traza_extra: Optional[dict] = None):
@@ -453,7 +476,7 @@ def ejecutar_http(nodo, contexto: dict, _traza_extra: Optional[dict] = None):
     if _traza_extra is not None:
         _traza_extra.update({
             'url': url, 'metodo': metodo,
-            'query': query, 'request_body': body,
+            'query': _redactar_secretos(query), 'request_body': body,
         })
 
     # Timeout: prefiere el del nodo (cfg.timeout_seg) si está definido — útil
@@ -1173,19 +1196,33 @@ class MotorFlujo:
         'timeout' — evita dejar al cliente atascado en silencio."""
         msg = (mensaje or getattr(self.session, 'mensaje_handoff', '')
                or 'No pude entender tu respuesta. Te comunico con un asesor para continuar.')
+        # Intentamos asignar ANTES de fijar en_handoff: si no hay ningún asesor
+        # disponible, dejar en_handoff=True apagaba el bot y nadie tomaba la
+        # conversación → cliente atascado sin bot ni humano. En ese caso NO
+        # entramos en handoff y dejamos que el flujo/IA siga respondiendo.
+        agente = None
+        try:
+            from crm.helpers_asignacion import auto_asignar_agente
+            agente = auto_asignar_agente(self.conversation, motivo=motivo)
+        except Exception:
+            logger.exception('Auto-asignación fallida (%s) conv=%s',
+                             motivo, self.conversation.id)
+        if not agente:
+            logger.warning('Handoff sin asesor disponible conv=%s motivo=%s — no se fija en_handoff',
+                           self.conversation.id, motivo)
+            self._trace('handoff_sin_asesor',
+                        f'Handoff solicitado ({motivo}) pero no hay asesor disponible', False,
+                        {'motivo': motivo})
+            aviso = 'En este momento no hay un asesor disponible. Te responderemos apenas se libere uno.'
+            self.enviar(aviso)
+            return
         if msg:
             self.enviar(msg)
         self.handoff = True
         self.estado.en_handoff = True
         self.estado.save()
-        try:
-            from crm.helpers_asignacion import auto_asignar_agente
-            auto_asignar_agente(self.conversation, motivo=motivo)
-        except Exception:
-            logger.exception('Auto-asignación fallida (%s) conv=%s',
-                             motivo, self.conversation.id)
         self._trace('handoff_auto', f'Handoff automático ({motivo})', True,
-                    {'motivo': motivo})
+                    {'motivo': motivo, 'agente': getattr(agente, 'username', '')})
 
     # ── Presentación de nodos de input ───────────────────────────────
 
@@ -1801,6 +1838,14 @@ def procesar_mensaje_tradicional(session, conversation, contacto, texto, boton_i
     if (session.modo_bot or 'ia') != 'tradicional':
         return ResultadoFlujo(manejado=False)
 
+    # get_or_create es race-safe para la creación (EstadoFlujoChatbot.conversacion
+    # es OneToOne único). No envolvemos el turno en una transacción con
+    # select_for_update: motor.ejecutar() hace I/O HTTP (envíos a WhatsApp y nodos
+    # http de hasta 15s), y mantener el lock + una conexión del pool durante esa
+    # latencia agota conexiones bajo carga; peor aún, un fallo de ORM a mitad de
+    # turno haría rollback de mensajes ya enviados → respuestas duplicadas.
+    # La serialización estricta por conversación (dos mensajes casi simultáneos)
+    # requiere un rediseño con flag de claim y queda como trabajo futuro.
     estado, _ = EstadoFlujoChatbot.objects.get_or_create(conversacion=conversation)
 
     # Ya está en handoff humano: el motor no responde hasta que humanos lo liberen.

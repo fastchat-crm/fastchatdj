@@ -538,9 +538,10 @@ def addData(request, data):
     # WEB PUSH
     webpush_settings = getattr(settings, 'WEBPUSH_SETTINGS', {})
     # ------FILTRO HECHOS EN LOS LISTADOS
+    from django.utils.html import escape as _escape_html
     data['dict_url_vars_input'] = mark_safe(
         '<input type="hidden" name="dict_url_vars" id="id_dict_url_vars" value="{}" />'.format(
-            request.GET.get('dict_url_vars') or ""))
+            _escape_html(request.GET.get('dict_url_vars') or "")))
     if request.GET.get('dict_url_vars'):
         try:
             dict_url_vars_completo = request.GET.get('dict_url_vars') or "{}"
@@ -710,8 +711,10 @@ def encrypt_sesion_id(pk):
 
 
 def decrypt_sesion_id(token, default=None):
-    """Inversa de encrypt_sesion_id. Si el token no parece firmado, intenta int() directo
-    (tolerante con tabs abiertas / links viejos en claro)."""
+    """Inversa de encrypt_sesion_id. Si el token no parece firmado, intenta int()
+    directo (tolerante con tabs abiertas / links viejos en claro). NOTA: el id de
+    sesión NO es secreto; la autorización real la hace `leer_sesion_id` validando
+    que la sesión resuelta sea visible para el usuario (evita IDOR)."""
     if token in (None, ''):
         return default
     if isinstance(token, int):
@@ -722,7 +725,7 @@ def decrypt_sesion_id(token, default=None):
             return int(valor)
         except (TypeError, ValueError):
             return default
-    # Fallback: id crudo
+    # Fallback: id crudo (uso interno legítimo: selector de sesión en el inbox)
     try:
         return int(token)
     except (TypeError, ValueError):
@@ -744,14 +747,30 @@ def leer_sesion_id(request, default=None, persistir=True):
     raw = request.GET.get('sesion') or request.GET.get('sesion_id') or ''
     sid = decrypt_sesion_id(raw, default=None)
     if sid is not None:
-        if persistir and hasattr(request, 'session'):
-            request.session[WA_SESION_ACTIVA_KEY] = sid
-        return sid
+        # Autorización: solo se acepta/persiste un id de sesión que el usuario
+        # tenga permitido ver. Un id ajeno pasado en la URL se ignora (IDOR).
+        if _sesion_visible_para(request, sid):
+            if persistir and hasattr(request, 'session'):
+                request.session[WA_SESION_ACTIVA_KEY] = sid
+            return sid
     if hasattr(request, 'session'):
         gsid = request.session.get(WA_SESION_ACTIVA_KEY)
         if gsid:
             return gsid
     return default
+
+
+def _sesion_visible_para(request, sid):
+    """True si la sesión WhatsApp `sid` es visible para el usuario de la request.
+    Best-effort: ante cualquier error o usuario anónimo, deniega."""
+    user = getattr(request, 'user', None)
+    if not user or not getattr(user, 'is_authenticated', False):
+        return False
+    try:
+        from whatsapp.permisos_sesion import sesiones_visibles
+        return sesiones_visibles(user).filter(id=sid).exists()
+    except Exception:
+        return False
 
 
 def set_wa_sesion_activa(request, sid):
@@ -915,12 +934,50 @@ def formatear_nombres(cadena):
     return re.sub("\s+", " ", cadena.strip())
 
 
+_FILTROS_SEGUROS = {
+    'upper': lambda v: str(v).upper(),
+    'lower': lambda v: str(v).lower(),
+    'title': lambda v: str(v).title(),
+    'capfirst': lambda v: str(v)[:1].upper() + str(v)[1:],
+    'strip': lambda v: str(v).strip(),
+}
+
+
 def renderizar_texto_dinamico(template_str, variables_contexto):
-    from django.template import Template, Context
+    """Sustituye `{{ variable }}` y `{{ variable|filtro }}` en un texto editable
+    por staff (ej. body de mailing). NO usa el motor Django Template completo a
+    propósito: ese permite tags `{% %}`, acceso a métodos de los objetos del
+    contexto y filtros arbitrarios → SSTI / exfiltración de datos. Aquí solo se
+    resuelven variables planas del contexto con una whitelist de filtros."""
+    import re as _re
+
+    if not template_str:
+        return template_str or ''
+
+    def _resolver(nombre):
+        # Soporta acceso por punto sobre dicts/objetos simples del contexto.
+        valor = variables_contexto
+        for parte in str(nombre).split('.'):
+            if isinstance(valor, dict):
+                valor = valor.get(parte, '')
+            else:
+                valor = getattr(valor, parte, '')
+            if callable(valor):  # nunca invocamos métodos
+                return ''
+        return '' if valor is None else valor
+
+    def _sub(match):
+        expr = match.group(1).strip()
+        if '|' in expr:
+            nombre, _, filtro = expr.partition('|')
+            valor = _resolver(nombre.strip())
+            fn = _FILTROS_SEGUROS.get(filtro.strip())
+            return fn(valor) if fn else str(valor)
+        return str(_resolver(expr))
+
     try:
-        django_template = Template(template_str)
-        contexto = Context(variables_contexto)
-        return django_template.render(contexto)
+        # Solo {{ ... }} sin llaves/tags anidados; ignora cualquier {% %}.
+        return _re.sub(r'\{\{\s*([^{}%]+?)\s*\}\}', _sub, str(template_str))
     except Exception as e:
         return f"Error processing template: {e}"
 

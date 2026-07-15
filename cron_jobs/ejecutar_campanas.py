@@ -134,11 +134,26 @@ def _despachar_campana(campana: Campana):
             return 0
         lote = min(lote, restante_hoy)
 
-    pendientes = (
+    # Claim atómico por fila: reservamos hasta `lote` envíos pasando
+    # 'pendiente'→'enviando' con un UPDATE condicional. Si dos ejecuciones del
+    # cron se solapan (un lote tarda más de un minuto), solo una gana cada fila
+    # → sin doble envío al mismo contacto. Antes se leían los 'pendiente' y se
+    # marcaban dentro del loop, dejando la ventana de carrera abierta.
+    ids_lote = list(
         EnvioCampana.objects
         .filter(campana=campana, estado='pendiente', status=True)
+        .values_list('id', flat=True)[:lote]
+    )
+    ids_claim = []
+    for _eid in ids_lote:
+        if EnvioCampana.objects.filter(id=_eid, estado='pendiente').update(estado='enviando'):
+            ids_claim.append(_eid)
+    if not ids_claim:
+        return 0
+    pendientes = (
+        EnvioCampana.objects
+        .filter(id__in=ids_claim)
         .select_related('contacto', 'contacto__sesion')
-        [:lote]
     )
 
     service = get_whatsapp_service(campana.sesion)
@@ -150,9 +165,8 @@ def _despachar_campana(campana: Campana):
             envio.save(update_fields=['estado', 'error'])
             campana.total_fallidos = (campana.total_fallidos or 0) + 1
             continue
-        envio.estado = 'enviando'
         envio.intentos += 1
-        envio.save(update_fields=['estado', 'intentos'])
+        envio.save(update_fields=['intentos'])
         try:
             texto_final = _render_mensaje(campana, envio.contacto)
             destino = envio.contacto.from_number or envio.contacto.contacto_numero

@@ -185,6 +185,22 @@ def conversacionesFinalizadasView(request):
                     if not puede_ver_conversacion(request.user, conversacion):
                         return JsonResponse({'error': True, 'message': 'Not authorized.'})
 
+                    # Misma ventana de gracia que exige `marcar-reactivar`: sin
+                    # esto la regla era evadible enviando un mensaje en vez de
+                    # usar el botón Reactivar.
+                    bloqueada_react, vence_react = _bloqueo_reactivar(conversacion)
+                    if bloqueada_react:
+                        return JsonResponse({
+                            'error': True,
+                            'message': (
+                                f'No se puede reactivar: la ventana de {HORAS_VENTANA_REACTIVAR}h '
+                                f'desde la creación venció'
+                                + (f' el {vence_react.strftime("%d/%m/%Y %H:%M")}' if vence_react else '')
+                                + '. Usá una plantilla aprobada para retomar la conversación.'
+                            ),
+                            'requiere_plantilla': True,
+                        })
+
                     bloqueada_meta, vence_meta = _bloqueo_ventana_meta(conversacion)
                     if bloqueada_meta:
                         msg = (
@@ -304,6 +320,8 @@ def conversacionesFinalizadasView(request):
                         filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['id']))
                     except Exception as ex:
                         raise NameError(f'No se encontró la conversación: {ex}')
+                    if not puede_ver_conversacion(request.user, filtro):
+                        return JsonResponse({'error': True, 'message': 'No autorizado.'})
                     bloqueada, vence_en = _bloqueo_reactivar(filtro)
                     if bloqueada:
                         res_json.append({

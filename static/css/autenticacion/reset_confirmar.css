@@ -1,0 +1,24 @@
+.rc-news-image {
+    background-size: cover;
+    background-position: center;
+}
+
+.rc-logo {
+    height: 50%;
+    width: 50%;
+}
+
+.rc-link {
+    color: #007b99;
+}
+
+.rc-invalido {
+    text-align: center;
+    padding: 10px 0 20px;
+}
+
+.rc-invalido-icon {
+    font-size: 42px;
+    color: #f59e0b;
+    margin-bottom: 12px;
+}

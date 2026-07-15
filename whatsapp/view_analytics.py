@@ -13,6 +13,7 @@ from django.shortcuts import render
 from django.utils import timezone
 
 from core.funciones import addData, secure_module, leer_sesion_id
+from .permisos_sesion import sesiones_vista_completa
 from .models import (
     Campana,
     ConversacionEnPipeline,
@@ -71,18 +72,23 @@ def analyticsView(request):
     desde_dt, hasta_dt, dias, modo = _rango_fechas(request)
     sesion_id = _sesion_filtro(request)
 
+    # Scope multicanal: dueño de la sesión O supervisor (igual que /supervision/,
+    # y todas las redes comparten esta vista). Antes se limitaba a las sesiones
+    # propias, dejando ciegos a los supervisores. Superuser ve todo.
+    sesiones_scope = sesiones_vista_completa(request.user)
+
     # Conversaciones del rango. ConversacionWhatsApp.sesion es @cached_property,
     # el campo real es contacto.sesion -> usamos contacto__sesion__*
     conv_qs = ConversacionWhatsApp.objects.filter(
         fecha_registro__gte=desde_dt, fecha_registro__lte=hasta_dt, status=True,
-        contacto__sesion__usuario=request.user,
+        contacto__sesion__in=sesiones_scope,
     )
     if sesion_id:
         conv_qs = conv_qs.filter(contacto__sesion_id=sesion_id)
 
     msgs_qs = MensajeWhatsApp.objects.filter(
         fecha__gte=desde_dt, fecha__lte=hasta_dt,
-        conversacion__contacto__sesion__usuario=request.user,
+        conversacion__contacto__sesion__in=sesiones_scope,
     )
     if sesion_id:
         msgs_qs = msgs_qs.filter(conversacion__contacto__sesion_id=sesion_id)
@@ -100,9 +106,7 @@ def analyticsView(request):
     data['fecha_desde'] = desde_dt.date().isoformat()
     data['fecha_hasta'] = hasta_dt.date().isoformat()
     data['sesion_sel'] = sesion_id
-    data['sesiones'] = SesionWhatsApp.objects.filter(
-        usuario=request.user, status=True,
-    ).order_by('nombre')
+    data['sesiones'] = sesiones_scope.order_by('nombre')
     if sesion_id:
         data['sesion_actual'] = data['sesiones'].filter(pk=sesion_id).first()
     return render(request, 'whatsapp/analytics/dashboard.html', data)
@@ -235,9 +239,10 @@ def _data_json(request, conv_qs, msgs_qs, sesion_id, dias, desde_dt, hasta_dt):
         logging.getLogger(__name__).exception('Error enriqueciendo roi_ctwa con nombres')
 
     # ----- Pipeline forecast -----
+    sesiones_scope = sesiones_vista_completa(request.user)
     pipeline_qs = ConversacionEnPipeline.objects.filter(
         status=True,
-        conversacion__contacto__sesion__usuario=request.user,
+        conversacion__contacto__sesion__in=sesiones_scope,
     )
     if sesion_id:
         pipeline_qs = pipeline_qs.filter(conversacion__contacto__sesion_id=sesion_id)
@@ -252,7 +257,7 @@ def _data_json(request, conv_qs, msgs_qs, sesion_id, dias, desde_dt, hasta_dt):
     camp_qs = Campana.objects.filter(
         status=True,
         fecha_registro__gte=desde_dt, fecha_registro__lte=hasta_dt,
-        sesion__usuario=request.user,
+        sesion__in=sesiones_scope,
     )
     if sesion_id:
         camp_qs = camp_qs.filter(sesion_id=sesion_id)
@@ -263,7 +268,10 @@ def _data_json(request, conv_qs, msgs_qs, sesion_id, dias, desde_dt, hasta_dt):
     )
 
     # ----- CAPI events -----
-    capi_qs = EventoCAPI.objects.filter(event_time__gte=desde_dt, event_time__lte=hasta_dt)
+    capi_qs = EventoCAPI.objects.filter(
+        event_time__gte=desde_dt, event_time__lte=hasta_dt,
+        conversacion__contacto__sesion__in=sesiones_scope,
+    )
     if sesion_id:
         capi_qs = capi_qs.filter(conversacion__contacto__sesion_id=sesion_id)
     capi_stats = capi_qs.aggregate(

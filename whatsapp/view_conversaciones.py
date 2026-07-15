@@ -470,6 +470,8 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
         elif action == 'ver_estadisticas':
             try:
                 conversacion = get_object_or_404(ConversacionWhatsApp, pk=int(request.GET['pk']))
+                if not puede_ver_conversacion(request.user, conversacion):
+                    return JsonResponse({'error': True, 'message': 'No autorizado.'})
                 return JsonResponse({'error': False, **_estadisticas_conversacion(conversacion)})
             except Exception as ex:
                 return JsonResponse({'error': True, 'message': str(ex)})
@@ -480,6 +482,8 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
         elif action == 'asignar-conversacion':
             try:
                 filtro = ConversacionWhatsApp.objects.get(pk=int(request.GET['id']))
+                if not puede_ver_conversacion(request.user, filtro):
+                    return JsonResponse({"result": False, 'message': 'No autorizado.'})
                 form = AsignarAgenteForm(instance=filtro)
                 data.update({'form': form, 'filtro': filtro})
                 template = get_template("whatsapp/conversaciones/form.html")
@@ -489,6 +493,8 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
         elif action == 'historial_cliente':
             try:
                 conv = get_object_or_404(ConversacionWhatsApp, pk=int(request.GET['pk']))
+                if not puede_ver_conversacion(request.user, conv):
+                    return JsonResponse({'error': True, 'message': 'No autorizado.'})
                 return historial_cliente_list(request, conv)
             except Exception as ex:
                 return JsonResponse({'error': True, 'message': str(ex)})
@@ -496,6 +502,8 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
             try:
                 from crm.models import CLIENTE_SEXO_CHOICES
                 conv = get_object_or_404(ConversacionWhatsApp, pk=int(request.GET['id']))
+                if not puede_ver_conversacion(request.user, conv):
+                    return JsonResponse({'result': False, 'message': 'No autorizado.'})
                 clientes = _clientes_de_conversacion(conv)
                 prefill, variables_flujo = _prefill_ficha_cliente(conv)
                 ctx = {
@@ -532,6 +540,8 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
         elif action == 'historial_mensajes':
             try:
                 conv = get_object_or_404(ConversacionWhatsApp, pk=int(request.GET['pk']))
+                if not puede_ver_conversacion(request.user, conv):
+                    return JsonResponse({'error': True, 'message': 'No autorizado.'})
                 return historial_cliente_mensajes(request, conv)
             except Exception as ex:
                 return JsonResponse({'error': True, 'message': str(ex)})
@@ -541,6 +551,8 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
             try:
                 pk = int(request.GET['pk'])
                 conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
+                if not puede_ver_conversacion(request.user, conversacion):
+                    return JsonResponse({'error': True, 'message': 'No autorizado.'})
                 sesion = conversacion.sesion
                 if not getattr(sesion, 'es_meta', False):
                     return JsonResponse({'error': False, 'plantillas': [], 'motivo': 'sesion_no_meta'})
@@ -578,6 +590,24 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
             with transaction.atomic():
                 action = request.POST['action']
                 res_json= []
+
+                # Guard IDOR: las acciones que operan sobre una conversación por
+                # pk/id deben verificar que el usuario puede verla. Sin esto, un
+                # usuario de otro tenant pasaba un pk ajeno y cerraba/reasignaba/
+                # renombraba/pausaba conversaciones de otra empresa.
+                ACCIONES_CONV = {
+                    'asignar-conversacion', 'toggle-bot', 'toggle-bloquear-cierre',
+                    'reiniciar-flujo', 'marcar-resuelto', 'terminar-sin-despedida',
+                }
+                if action in ACCIONES_CONV:
+                    _pk_conv = request.POST.get('pk') or request.POST.get('id')
+                    try:
+                        _conv_guard = ConversacionWhatsApp.objects.get(pk=int(_pk_conv))
+                    except (TypeError, ValueError, ConversacionWhatsApp.DoesNotExist):
+                        return JsonResponse({'error': True, 'message': 'Conversación no encontrada.'})
+                    if not puede_ver_conversacion(request.user, _conv_guard):
+                        return JsonResponse({'error': True, 'message': 'No autorizado.'})
+
                 if action == 'send':
                     pk = int(request.POST['pk'])
                     texto = request.POST.get('mensaje')
@@ -1267,6 +1297,7 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
         # select_related sobre los FK que el partial usa (foto, nombre,
         # numero de la sesión, foto del contacto). Sin esto, el render del
         # partial dispara N+1 queries por cada item del listado.
+        from django.db.models import Count, Q as _Q_nl, F as _F_nl
         qs = (
             ConversacionWhatsApp.objects.sin_expirar
             .filter(filtros)
@@ -1277,6 +1308,13 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                 'contacto__sesion__config_baileys',
                 'asignado_a',
             )
+            # Cuenta de no-leídos por SQL (evita 1 COUNT por tarjeta del inbox).
+            # El template la consume vía `mensajes_no_leidos`.
+            .annotate(_no_leidos_ann=Count(
+                'mensajes',
+                filter=_Q_nl(mensajes__leido=False,
+                             mensajes__remitente=_F_nl('contacto__contacto_numero')),
+            ))
             .distinct()
         )
 

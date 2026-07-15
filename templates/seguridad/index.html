@@ -38,51 +38,6 @@
         {% endfor %}
     </div>
 
-    {% if request.user.is_superuser and consumo_por_sesion %}
-        <div class="mb-3">
-            <button class="btn btn-warning btn-sm" type="button" data-bs-toggle="collapse"
-                    data-bs-target="#consumo-sesiones-panel">
-                <i class="fa fa-coins me-1"></i> Ver consumo por sesión
-            </button>
-            <div class="collapse mt-2" id="consumo-sesiones-panel">
-                <div class="card">
-                    <div class="card-body p-2">
-                        <div class="d-flex align-items-center justify-content-between mb-2">
-                            <strong class="small"><i class="fa fa-coins me-1 text-warning"></i>Consumo estimado en
-                                plantillas Meta por sesión</strong>
-                            <a href="/whatsapp/tarifas/" class="small">Ver tarifas y consumo global →</a>
-                        </div>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover mb-0 align-middle">
-                                <thead class="table-light">
-                                <tr>
-                                    <th>Sesión</th>
-                                    <th>Envíos</th>
-                                    <th class="text-end">Total estimado (USD)</th>
-                                </tr>
-                                </thead>
-                                <tbody>
-                                {% for c in consumo_por_sesion %}
-                                    <tr>
-                                        <td class="small">{{ c.sesion__nombre|default:c.sesion__numero }}</td>
-                                        <td class="small">{{ c.n }}</td>
-                                        <td class="small text-end fw-bold">${{ c.total|default:"0"|floatformat:4 }}</td>
-                                    </tr>
-                                {% empty %}
-                                    <tr>
-                                        <td colspan="3" class="text-center text-muted small py-3">Aún no hay envíos de
-                                            plantillas registrados.
-                                        </td>
-                                    </tr>
-                                {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    {% endif %}
     {% if PERFIL_EXISTE %}
         <div class="pp-page">
 

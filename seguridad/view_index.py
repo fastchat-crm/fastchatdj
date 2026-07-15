@@ -63,21 +63,6 @@ def index(request):
         })
     data['canales_resumen'] = canales_resumen
 
-    # Consumo estimado por sesión (plantillas Meta) — SOLO superusuarios.
-    if persona.is_superuser:
-        try:
-            from django.db.models import Sum
-            from whatsapp.models import EnvioPlantillaMeta
-            data['consumo_por_sesion'] = list(
-                EnvioPlantillaMeta.objects
-                .filter(status=True, sesion__in=sesiones_qs)
-                .values('sesion_id', 'sesion__nombre', 'sesion__numero')
-                .annotate(total=Sum('costo_estimado'), n=Count('id'))
-                .order_by('-total')
-            )
-        except Exception:
-            data['consumo_por_sesion'] = None
-
     if not persona.es_administrativo():
         data['PERFIL_EXISTE'] = False
         return render(request, 'seguridad/index.html', data)

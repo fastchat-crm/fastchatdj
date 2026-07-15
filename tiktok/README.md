@@ -6,7 +6,7 @@
 >
 > **Estado del canal:** la Business Messaging API de TikTok está en beta y requiere
 > aprobación (ver `.ai/docs/tiktok_integracion.md`). Esta app permite pre-registrar
-> cuentas y dejar listo asesores/IA; el webhook `/whatsapp/tiktok_webhook/` y el
+> cuentas y dejar listo asesores/IA; el webhook `/tiktok/webhook/` y el
 > `TikTokService` de envío se implementan al llegar la aprobación.
 
 ## Archivos
@@ -14,7 +14,8 @@
 | Archivo | Para qué es |
 |---|---|
 | `apps.py` | Registro de la app (`TiktokConfig`). |
-| `urls.py` | Tupla `tiktok_urls` + `urlpatterns`. Montada en `/tiktok/` desde `fastchatdj/urls.py`. |
+| `urls.py` | Tupla `tiktok_urls` + `urlpatterns` (incluye la ruta pública `webhook/`). Montada en `/tiktok/` desde `fastchatdj/urls.py`. |
+| `webhook_view.py` | Receiver del webhook TikTok Business Messaging → `/tiktok/webhook/` (`csrf_exempt`). GET responde `challenge` validando el verify token de `ConfigTikTok`; POST valida HMAC-SHA256 contra `client_secret` (fail-closed sólo si hay secreto configurado), resuelve la config por `business_id`/`open_id`, traduce el evento y llama `whatsapp.procesar_mensaje.process_incoming_message`. Registra cada evento en `EventoMetaRecibido` (prefijo `tiktok:`). |
 | `view_monitoreo.py` | `/tiktok/monitoreo/` → `whatsapp.view_monitoreo_social.monitoreo_webhook_canal(request, 'tiktok')`: auditoría de eventos webhook (`EventoMetaRecibido` prefijo `tiktok:`), stats, filtros y detalle de payload — clave para verificar el sandbox durante la beta. |
 | `view_cuentas.py` | `/tiktok/sesiones/` (renombrada desde `cuentas/` 2026-07) — pre-registro de sesiones Business (nombre, @username, business_id, tokens OAuth opcionales), activar/suspender, eliminar (soft). UI en cards estilo tablero de sesiones WhatsApp (reusa `conex-*` de `/static/stylenew/sesiones.css`) + modal "Nueva conexión" con sidebar de canales que redirige a `/whatsapp/sesiones/` y `/instagram/sesiones/`. |
 | `funciones_cuentas.py` | `guardar_cuenta`: crea `SesionWhatsApp(session_id='tiktok-<username>')` + `ConfigTikTok` con verify token generado. |
@@ -23,10 +24,15 @@
 | `servicio.py` | `TikTokService(ServicioCanalBase)` — sender de DMs (Business Messaging v1.3, header `Access-Token`). Enchufado en `get_whatsapp_service()` para `proveedor='tiktok'`. Parte textos > 1000 chars en envíos secuenciales. Endpoints por validar contra sandbox al aprobar la app. |
 | `templates/tiktok/...` | `cuentas/listado.html`, `conversaciones/listado.html`. CSS en `static/css/tiktok/`. |
 
-El webhook entrante ya existe: `whatsapp/tiktok_webhook_view.py` →
-`/whatsapp/tiktok_webhook/` (GET responde `challenge` validando el verify token de
-`ConfigTikTok`; POST resuelve la config por `business_id`/`open_id`, traduce el evento y llama
-`process_incoming_message`). `CANALES_ORIGEN` y `atendida_por_tiktok` ya soportan el canal.
+El webhook entrante vive ahora en esta app: `tiktok/webhook_view.py` →
+**`/tiktok/webhook/`** (canónica). `whatsapp/tiktok_webhook_view.py` quedó como shim
+que re-exporta la vista y mantiene el alias legacy `/whatsapp/tiktok_webhook/` para no
+romper dashboards ya configurados. `CANALES_ORIGEN` y `atendida_por_tiktok` ya soportan
+el canal.
+
+> **Al configurar el webhook en el panel de TikTok usa la URL canónica
+> `/tiktok/webhook/`.** La antigua `/whatsapp/tiktok_webhook/` sigue respondiendo pero
+> está deprecada.
 
 ## Pendiente al aprobar la API
 

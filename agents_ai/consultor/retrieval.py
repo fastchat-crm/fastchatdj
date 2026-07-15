@@ -16,8 +16,29 @@ _bm25_cache: dict[str, tuple[float, object]] = {}
 _cache_lock = threading.Lock()
 
 
+def _ruta_vectorstore_permitida(path: str) -> bool:
+    """FAISS.load_local deserializa pickle (ejecución de código si el índice es
+    malicioso). Solo permitimos rutas DENTRO de las carpetas propias de la app
+    (MEDIA_ROOT / BASE_DIR) para que no se cargue un índice colocado en otro
+    lugar del disco."""
+    try:
+        from django.conf import settings
+        real = os.path.realpath(path)
+        permitidas = []
+        for attr in ('MEDIA_ROOT', 'BASE_DIR'):
+            base = getattr(settings, attr, None)
+            if base:
+                permitidas.append(os.path.realpath(str(base)))
+        return any(real == b or real.startswith(b + os.sep) for b in permitidas)
+    except Exception:
+        return False
+
+
 def _get_vectorstore_cached(path: str, embeddings) -> object | None:
     """Carga FAISS desde disco con cache basado en mtime."""
+    if not _ruta_vectorstore_permitida(path):
+        logger.error("Ruta de vectorstore fuera del área permitida, no se carga: %s", path)
+        return None
     index_file = os.path.join(path, 'index.faiss')
     try:
         mtime = os.path.getmtime(index_file)

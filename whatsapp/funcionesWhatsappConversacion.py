@@ -115,14 +115,24 @@ def _bloqueo_ventana_meta(conversacion):
 
 def reactivar_conversacion(conversacion):
     """Pone la conversación de vuelta en estado activo. Espejo de lo que hace
-    `marcar-reactivar` pero invocable desde otras acciones (ej. `send`)."""
+    `marcar-reactivar` pero invocable desde otras acciones (ej. `send`).
+
+    Renueva `fecha_hora_expira` según `min_sesion` (0 = sin cierre automático):
+    sin esto, la conversación reactivada conservaba una `fecha_hora_expira`
+    pasada → quedaba `expirado=True` en el manager y no aparecía en el inbox
+    activo hasta que el cliente volviera a escribir."""
+    from dateutil.relativedelta import relativedelta
+    min_sesion = int(getattr(conversacion.sesion, 'min_sesion', None) or 0)
     conversacion.estado_conversacion = 0
     conversacion.fecha_fin_conversacion = None
     conversacion.despedida_enviado = False
     conversacion.conversacion_finalizada = False
+    conversacion.fecha_hora_expira = (
+        timezone.now() + relativedelta(minutes=min_sesion) if min_sesion > 0 else None
+    )
     conversacion.save(update_fields=[
         'estado_conversacion', 'fecha_fin_conversacion',
-        'despedida_enviado', 'conversacion_finalizada',
+        'despedida_enviado', 'conversacion_finalizada', 'fecha_hora_expira',
     ])
 
 
@@ -273,6 +283,10 @@ def cambiar_clasificacion_post(request):
     except Exception as ex:
         return JsonResponse([{'error': True, 'message': f'No se encontró la conversación: {ex}'}], safe=False)
 
+    from .permisos_sesion import puede_ver_conversacion
+    if not puede_ver_conversacion(request.user, filtro):
+        return JsonResponse([{'error': True, 'message': 'No autorizado.'}], safe=False)
+
     inline = request.POST.get('inline') == '1'
     form = CambiarClasificacionForm(request.POST, instance=filtro, request=request)
     if form.is_valid():
@@ -316,10 +330,12 @@ def cambiar_nombre_contacto_get(request):
 
 
 def historial_cliente_list(request, conversacion):
+    from django.db.models import Count, Q as _Q
     contacto = conversacion.contacto
     qs = (
         ConversacionWhatsApp.objects
         .filter(contacto=contacto, status=True)
+        .annotate(_total_msgs=Count('mensajes', filter=_Q(mensajes__status=True)))
         .order_by('-fecha_registro')
     )
     items = []
@@ -332,7 +348,7 @@ def historial_cliente_list(request, conversacion):
             'fecha_inicio': c.fecha_registro.strftime('%d/%m/%Y %H:%M') if c.fecha_registro else '',
             'fecha_inicio_corta': c.fecha_registro.strftime('%d/%m/%y') if c.fecha_registro else '',
             'fecha_fin': c.fecha_fin_conversacion.strftime('%d/%m/%Y %H:%M') if c.fecha_fin_conversacion else '',
-            'total_mensajes': c.mensajes.filter(status=True).count(),
+            'total_mensajes': c._total_msgs,
             'clasificacion': c.get_clasificacion_display() if c.clasificacion else '',
             'sentimiento': c.sentimiento or '',
             'resumen': (c.resumen_conversacion or '')[:240],
@@ -376,6 +392,10 @@ def cambiar_nombre_contacto_post(request):
         filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['pk']))
     except Exception as ex:
         return JsonResponse([{'error': True, 'message': f'No se encontró la conversación: {ex}'}], safe=False)
+
+    from .permisos_sesion import puede_ver_conversacion
+    if not puede_ver_conversacion(request.user, filtro):
+        return JsonResponse([{'error': True, 'message': 'No autorizado.'}], safe=False)
 
     contacto = filtro.contacto
     form = CambiarNombreContactoForm(request.POST, instance=contacto, request=request)

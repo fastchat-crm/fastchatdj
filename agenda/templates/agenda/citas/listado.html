@@ -391,12 +391,13 @@
                         <input type="text" id="nuevaFechaTexto" class="form-control" disabled>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Recurso *</label>
+                        <label class="form-label">Persona / recurso que atiende *</label>
                         <select name="recurso" id="nuevoRecurso" class="form-select" required>
                             {% for r in recursos %}
-                                <option value="{{ r.id }}">{{ r.nombre }}</option>
+                                <option value="{{ r.id }}">{{ r.nombre }}{% if r.usuario %} — {{ r.usuario.get_full_name|default:r.usuario.username }}{% endif %}</option>
                             {% endfor %}
                         </select>
+                        <small class="text-muted">La cita queda asignada a la persona vinculada a este recurso.</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Servicio *</label>
@@ -599,6 +600,7 @@
                         <p class="mb-1"><strong>Contacto:</strong> ${p.contacto}</p>
                         <p class="mb-1"><strong>Servicio:</strong> ${p.servicio}</p>
                         <p class="mb-1"><strong>Recurso:</strong> ${p.recurso}</p>
+                        <p class="mb-1"><strong>Atendido por:</strong> ${p.atendido_por || 'Sin persona asignada'}</p>
                         <p class="mb-1"><strong>Precio:</strong> ${p.precio} ${p.moneda}</p>
                         <p class="mb-1"><strong>Desde:</strong> ${info.event.start.toLocaleString()}</p>
                         <p class="mb-1"><strong>Hasta:</strong> ${info.event.end.toLocaleString()}</p>

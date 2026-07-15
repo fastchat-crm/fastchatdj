@@ -12,7 +12,8 @@
 | Archivo | Rol |
 |---|---|
 | `apps.py` | Registro `FacebookConfig` (en `INSTALLED_APPS` de `fastchatdj/settings.py`). |
-| `urls.py` | Tupla `facebook_urls` (6 rutas) montada en `/facebook/` desde `fastchatdj/urls.py`. |
+| `urls.py` | Tupla `facebook_urls` (6 rutas) + `urlpatterns` (incluye la ruta pública `webhook/`). Montada en `/facebook/` desde `fastchatdj/urls.py`. |
+| `webhook_view.py` | Receiver del webhook Messenger → `/facebook/webhook/` (`csrf_exempt`). Módulo delgado: re-exporta `messenger_webhook` de `whatsapp/meta_social_webhook_view.py` (impl compartida con Instagram; también procesa comentarios del feed). |
 | `view_centro.py` | `/facebook/centro/` → `whatsapp.view_centro._render_centro(request, 'facebook')` (guía en `GUIAS_CANAL`). |
 | `view_monitoreo.py` | `/facebook/monitoreo/` → `whatsapp.view_monitoreo_social.monitoreo_webhook_canal(request, 'messenger')`: auditoría de eventos webhook (`EventoMetaRecibido` prefijo `messenger:`), stats, filtros error/firma/pendiente y detalle de payload. |
 | `view_cuentas.py` | `/facebook/sesiones/` — conectar páginas: autodetección desde token (`/me/accounts`), probar conexión, activar/suspender, eliminar (soft). |
@@ -33,9 +34,11 @@ crear un proveedor `facebook` nuevo.
 
 ## Flujo de datos
 
-- **DMs Messenger**: webhook `/whatsapp/messenger_webhook/`
-  (`whatsapp/meta_social_webhook_view.py`) → `process_incoming_message` →
-  pipeline completo (ya existía antes de esta app).
+- **DMs Messenger**: webhook **`/facebook/webhook/`** (`facebook/webhook_view.py`,
+  re-exporta la impl compartida de `whatsapp/meta_social_webhook_view.py`) →
+  `process_incoming_message` → pipeline completo. Alias legacy deprecado:
+  `/whatsapp/messenger_webhook/`. **Al configurar el panel de Meta usa la URL
+  canónica `/facebook/webhook/`.**
 - **Comentarios del feed**: mismo webhook, `field == 'feed'` con
   `item == 'comment'` → `funciones_comentarios.guardar_comentario_facebook`
   (usa `created_time` real del payload) → motor de reglas

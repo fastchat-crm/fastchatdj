@@ -7,6 +7,7 @@ from .view_conversaciones import conversacionesInstagramView
 from .view_cuentas import cuentasView
 from .view_monitoreo import monitoreoInstagramView
 from .view_posts import publicacionesView
+from .webhook_view import instagram_webhook
 
 instagram_urls = (
     {
@@ -46,6 +47,8 @@ instagram_urls = (
     },
 )
 
-urlpatterns = []
+urlpatterns = [
+    re_path(r'^webhook/$', instagram_webhook, name='instagram_webhook'),
+]
 for u in instagram_urls:
     urlpatterns.append(re_path(r'^{}$'.format(u["url"]), u["vista"]))

@@ -1,5 +1,4 @@
 import json
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Q
 from django.views import View
 
@@ -8,10 +7,25 @@ from autenticacion.models import Usuario
 from django.http import JsonResponse, HttpResponse
 
 
+# Acciones que pueden invocarse sin sesión (formularios públicos de registro y
+# catálogos geográficos). El resto expone datos de usuarios (PII) y exige login.
+ACCIONES_PUBLICAS = {
+    'consultar-prefijo-celular-por-pais',
+    'consultar-area-geografica',
+    'duplicado',
+    'duplicado-mail',
+    'duplicado-documento',
+    'consultarcedulaadmin',
+}
+
+
 class ConsultasAjax(View):
     def get(self, request, *args, **kwargs):
         try:
             accion = kwargs['accion']
+
+            if accion not in ACCIONES_PUBLICAS and not request.user.is_authenticated:
+                return JsonResponse({'state': False, 'error': 'No autorizado.'}, status=403)
 
             if accion == 'consultar-prefijo-celular-por-pais':
                 id = request.GET['id'].lower()
@@ -143,13 +157,13 @@ class ConsultasAjax(View):
                 response = JsonResponse({'respuesta': state})
                 return HttpResponse(response.content)
 
-        except Exception as ex:
-            response = JsonResponse({'state': False, 'error': str(ex)})
-            return HttpResponse(response.content)
+            return JsonResponse({'state': False, 'error': 'Acción desconocida.'}, status=404)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception('ConsultasAjax GET falló')
+            return JsonResponse({'state': False, 'error': 'Error al procesar la solicitud.'}, status=500)
 
     def post(self, request, *args, **kwargs):
-        try:
-            action = request.POST['action']
-
-        except Exception as ex:
-            return HttpResponse(json.dumps({'state': False, 'error': str(ex)}))
+        if not request.user.is_authenticated:
+            return JsonResponse({'state': False, 'error': 'No autorizado.'}, status=403)
+        return JsonResponse({'state': False, 'error': 'Acción no soportada.'}, status=404)

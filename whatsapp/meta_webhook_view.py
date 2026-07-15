@@ -257,9 +257,17 @@ def _procesar_evento(request):
 
 def _validar_firma_hmac(raw_body: bytes, signature_header: str, app_secret: str) -> bool:
     """Compara X-Hub-Signature-256 contra HMAC(app_secret_org, body).
-    Si no hay app_secret devuelve True (modo permisivo para setup inicial)."""
+
+    Si no hay app_secret devuelve True (modo permisivo para setup inicial). OJO:
+    esto es fail-OPEN — en producción configura SIEMPRE el app_secret para
+    cerrar la puerta a eventos spoofeados. Se emite un warning por cada evento
+    aceptado sin validar para que sea visible en logs/monitoreo."""
     if not app_secret:
-        return True  # sin app_secret no podemos validar, dejamos pasar con warning
+        logger.warning(
+            "Webhook Meta aceptado SIN validar firma (app_secret no configurado) — "
+            "configura el App Secret para cerrar este fail-open."
+        )
+        return True
     if not signature_header:
         return False
     try:

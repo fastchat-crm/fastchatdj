@@ -169,6 +169,10 @@ urlpatterns = [
     path('meta/webhook-hits/poll/', meta_webhook_hits_poll, name='whatsapp_meta_webhook_hits_poll'),
     path('meta/webhook-hits/<int:hit_id>/', meta_webhook_hit_detalle, name='whatsapp_meta_webhook_hit_detalle'),
     path('sesiones/<int:sesion_id>/profile-picture/', meta_actualizar_foto_perfil, name='whatsapp_meta_foto_perfil'),
+    # Alias legacy (deprecados): cada webhook social vive ahora bajo su propia
+    # app/URL — Instagram /instagram/webhook/, Messenger /facebook/webhook/,
+    # TikTok /tiktok/webhook/. Se conservan para no romper dashboards ya
+    # configurados con la URL antigua.
     path('instagram_webhook/', instagram_webhook, name='whatsapp_instagram_webhook'),
     path('messenger_webhook/', messenger_webhook, name='whatsapp_messenger_webhook'),
     path('tiktok_webhook/', tiktok_webhook, name='whatsapp_tiktok_webhook'),

@@ -7,6 +7,7 @@ from .view_conversaciones import conversacionesFacebookView
 from .view_cuentas import cuentasView
 from .view_monitoreo import monitoreoFacebookView
 from .view_posts import publicacionesView
+from .webhook_view import messenger_webhook
 
 facebook_urls = (
     {
@@ -46,6 +47,8 @@ facebook_urls = (
     },
 )
 
-urlpatterns = []
+urlpatterns = [
+    re_path(r'^webhook/$', messenger_webhook, name='messenger_webhook'),
+]
 for u in facebook_urls:
     urlpatterns.append(re_path(r'^{}$'.format(u["url"]), u["vista"]))

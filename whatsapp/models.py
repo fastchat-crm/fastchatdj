@@ -752,6 +752,11 @@ class ConversacionWhatsApp(ModeloBase):
         # Mensajes entrantes del contacto aun sin marcar como leidos. Se usa
         # en el listado solo para conversaciones abiertas; las finalizadas
         # no muestran badge (no hay "pendiente" que atender).
+        # Si el queryset del listado ya anotó `_no_leidos_ann` (Count por SQL),
+        # lo usamos y evitamos una query COUNT por cada tarjeta (N+1 en el inbox).
+        ann = getattr(self, '_no_leidos_ann', None)
+        if ann is not None:
+            return ann
         return self.mensajes.filter(leido=False, remitente=self.contacto_numero).count()
 
     @cached_property
@@ -2580,6 +2585,10 @@ class ConfigTikTok(ModeloBase):
     refresh_token = models.TextField('Refresh Token', blank=True, default='')
     token_expira_en = models.DateTimeField('Token expira en', null=True, blank=True)
     webhook_verify_token = models.CharField(max_length=60, blank=True, default='')
+    client_secret = models.CharField(
+        'Client Secret (firma webhook)', max_length=255, blank=True, default='',
+        help_text='Secreto de la app TikTok. Se usa para validar la firma HMAC de los webhooks entrantes.'
+    )
     webhook_verificado_en = models.DateTimeField(null=True, blank=True)
     ultima_sincronizacion = models.DateTimeField(null=True, blank=True)
     error_mensaje = models.TextField('Último error', blank=True, default='')

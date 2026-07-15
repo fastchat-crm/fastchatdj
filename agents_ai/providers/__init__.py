@@ -11,6 +11,7 @@ Cómo agregar un nuevo provider (ej. Claude):
      a `'claude'` en `PROVEEDOR_ID_TO_NAME`.
   4. Listo — el resto del código ya lo soporta automáticamente.
 """
+import hashlib
 import threading
 
 from .base import BaseProvider
@@ -91,10 +92,22 @@ _emb_cache: dict[tuple, object] = {}
 _clientes_lock = threading.Lock()
 
 
+def _hash_apikey(apikey):
+    """Huella corta de la apikey para usar como parte de la clave de cache.
+
+    Nunca guardamos la apikey en claro dentro del diccionario en memoria: si el
+    proceso se vuelca (core dump, inspección) la clave quedaría expuesta. El hash
+    identifica igual de bien la config sin exponer el secreto.
+    """
+    if apikey is None:
+        return None
+    return hashlib.sha256(str(apikey).encode('utf-8')).hexdigest()
+
+
 def get_llm_cached(provider: BaseProvider, apikey, model_name, max_output_tokens,
                    temperature=0.1, base_url=None):
     """Devuelve el LLM del provider reutilizando la instancia si la config no cambió."""
-    key = (provider.name, apikey, model_name, max_output_tokens, float(temperature), base_url)
+    key = (provider.name, _hash_apikey(apikey), model_name, max_output_tokens, float(temperature), base_url)
     with _clientes_lock:
         llm = _llm_cache.get(key)
         if llm is not None:
@@ -116,7 +129,7 @@ def get_embeddings_cached(provider: BaseProvider, apikey, base_url=None):
     Propaga NotImplementedError de providers sin API de embeddings (Claude,
     DeepSeek, Huawei) — el caller decide el fallback.
     """
-    key = (provider.name, apikey, base_url)
+    key = (provider.name, _hash_apikey(apikey), base_url)
     with _clientes_lock:
         emb = _emb_cache.get(key)
         if emb is not None:

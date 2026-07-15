@@ -11,7 +11,8 @@
 | Archivo | Para qué es |
 |---|---|
 | `apps.py` | Registro de la app (`InstagramConfig`). |
-| `urls.py` | Tupla `instagram_urls` (formato del sistema para `urls_sistema`/módulos) + `urlpatterns`. Montada en `/instagram/` desde `fastchatdj/urls.py`. |
+| `urls.py` | Tupla `instagram_urls` (formato del sistema para `urls_sistema`/módulos) + `urlpatterns` (incluye la ruta pública `webhook/`). Montada en `/instagram/` desde `fastchatdj/urls.py`. |
+| `webhook_view.py` | Receiver del webhook Instagram DM → `/instagram/webhook/` (`csrf_exempt`). Módulo delgado: re-exporta `instagram_webhook` de `whatsapp/meta_social_webhook_view.py` (impl compartida con Messenger, pegada al pipeline de mensajería). |
 | `view_cuentas.py` | `/instagram/sesiones/` (renombrada desde `cuentas/` 2026-07) — conectar/editar/probar/suspender/eliminar sesiones. Acción `autodetectar`: con solo el Access Token extrae page_id / ig_user_id / @username. Al guardar prueba conexión y genera el webhook verify token. UI en cards estilo tablero de sesiones WhatsApp (reusa `conex-*` de `/static/stylenew/sesiones.css`) + modal "Nueva conexión" con sidebar de canales que redirige a `/whatsapp/sesiones/` y `/tiktok/sesiones/`. |
 | `funciones_cuentas.py` | Helpers de `view_cuentas`: `autodetectar_desde_token` (Graph `/me/accounts` y `/me`), `guardar_cuenta` (crea `SesionWhatsApp` + `ConfigInstagram`, `session_id='instagram-<ig_user_id>'`), `probar_conexion` (actualiza `estado`). |
 | `view_conversaciones.py` | `/instagram/conversaciones/` — wrapper de `whatsapp.view_conversaciones.conversacionesView(canal_fijo='instagram', template='instagram/conversaciones/listado.html')`: misma lógica de inbox en vivo que WhatsApp acotada a sesiones Instagram, pero con **template propio** (desde 2026-07-09: copia completa del listado de WhatsApp con branding Instagram fijo — ícono/toast `fa-instagram`, links a `/instagram/sesiones/`, modal sin-sesiones Instagram). Los partials `_modal_*` / `_ci_kebab_portal` siguen compartidos desde `whatsapp/`. Cambios de lógica compartida (JS/WebSocket/acciones) hay que replicarlos en las tres copias. |
@@ -25,5 +26,5 @@
 
 - Vistas basadas en funciones; helpers en `funciones_<tema>.py`.
 - Visibilidad: dueño de la sesión o superuser (cuentas); `sesiones_vista_completa` (conversaciones/posts).
-- El webhook del canal NO está aquí: es `/whatsapp/instagram_webhook/` (`whatsapp/meta_social_webhook_view.py`).
+- El webhook del canal vive en `instagram/webhook_view.py` → **`/instagram/webhook/`** (canónica; usa esta al configurar el panel de Meta). La implementación es compartida con Messenger en `whatsapp/meta_social_webhook_view.py`. Alias legacy deprecado: `/whatsapp/instagram_webhook/`.
 - Guía de tokens para clientes: Documentación in-app, slug `conectar-instagram-tiktok`.

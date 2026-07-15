@@ -143,6 +143,10 @@ def _carga_abierta(usuario):
             asignado_a=usuario, conversacion_finalizada=False, status=True,
         ).count()
     except Exception:
+        # No silenciar: si esto falla, todos los asesores parecerían con carga 0
+        # y el balanceo se rompe sin ninguna señal. Dejamos rastro.
+        logger.exception('No pude calcular la carga abierta de usuario=%s',
+                         getattr(usuario, 'id', None))
         return 0
 
 
@@ -481,15 +485,34 @@ def auto_asignar_agente(conversacion, motivo='handoff', asignador=None, avisar_c
         return None
     candidato, carga = candidatos[0]
 
+    # Bloqueo de fila: dos handoffs concurrentes de la misma conversación
+    # (timeout + fin_flujo, o reintento del webhook) leían asignado_a=None a la
+    # vez y ambos asignaban. Re-leemos bajo select_for_update y abortamos si otro
+    # proceso ya asignó mientras calculábamos los candidatos.
+    from django.db import transaction
+    from whatsapp.models import ConversacionWhatsApp
     try:
+        with transaction.atomic():
+            conv_lock = (
+                ConversacionWhatsApp.objects.select_for_update()
+                .get(pk=conversacion.pk)
+            )
+            if conv_lock.asignado_a_id:
+                conversacion.asignado_a = conv_lock.asignado_a
+                return conv_lock.asignado_a
+            conv_lock.asignado_a = candidato
+            conv_lock.fecha_asignacion = timezone.now()
+            if not conv_lock.primer_agente_id:
+                conv_lock.primer_agente = candidato
+            conv_lock.ai_activo = False
+            conv_lock.save(update_fields=[
+                'asignado_a', 'fecha_asignacion', 'primer_agente', 'ai_activo',
+            ])
+        # Reflejar en la instancia recibida por el caller
         conversacion.asignado_a = candidato
-        conversacion.fecha_asignacion = timezone.now()
-        if not getattr(conversacion, 'primer_agente_id', None):
-            conversacion.primer_agente = candidato
+        conversacion.fecha_asignacion = conv_lock.fecha_asignacion
+        conversacion.primer_agente = conv_lock.primer_agente
         conversacion.ai_activo = False
-        conversacion.save(update_fields=[
-            'asignado_a', 'fecha_asignacion', 'primer_agente', 'ai_activo',
-        ])
     except Exception:
         logger.exception('No se pudo guardar la asignación auto conv=%s agente=%s',
                          conversacion.id, getattr(candidato, 'id', None))

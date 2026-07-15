@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8"/>
+    <title>{{ nombreempresa }} | Restablecer contraseña</title>
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+    <link href="{{ favicon }}" rel="icon" type="image/png">
+    <link href="https://fonts.googleapis.com/css?family=Open+Sans:300,400,600,700" rel="stylesheet"/>
+    <link href="/static/assets/css/default/app.min.css?v=0.8" rel="stylesheet"/>
+    <link rel="stylesheet" href="/static/css/autenticacion/reset_confirmar.css?v1.0">
+</head>
+<body class="pace-top">
+
+<div id="page-container" class="fade">
+    <div class="login login-with-news-feed">
+        <div class="news-feed">
+            <div class="news-image rc-news-image" data-banner="{{ bannerlog }}"></div>
+            <div class="news-caption">
+                <h4 class="caption-title"><b>Restablecer</b> Contraseña</h4>
+                <p>{{ alias }}</p>
+            </div>
+        </div>
+        <div class="right-content">
+            <img src="{{ logo }}" class="rc-logo" alt="{{ nombreempresa }}">
+            <div class="login-header">
+                <div class="brand">
+                    <b>Crea una nueva contraseña</b>
+                    <small>Elige una contraseña segura para tu cuenta.</small>
+                </div>
+            </div>
+
+            <div class="login-content">
+                {% if token_valido %}
+                    <form id="frm-reset" method="POST" action="{{ request.path }}">{% csrf_token %}
+                        <div class="form-group m-b-15">
+                            <input class="form-control form-control-lg" type="password" name="password1"
+                                   placeholder="Nueva contraseña" required minlength="8" autocomplete="new-password">
+                        </div>
+                        <div class="form-group m-b-15">
+                            <input class="form-control form-control-lg" type="password" name="password2"
+                                   placeholder="Repite la nueva contraseña" required minlength="8" autocomplete="new-password">
+                        </div>
+                        <div class="login-buttons">
+                            <button type="submit" class="btn btn-info btn-block btn-lg" id="btnreset">Guardar contraseña
+                                <i class="fa fa-key"></i></button>
+                        </div>
+                    </form>
+                {% else %}
+                    <div class="rc-invalido">
+                        <i class="fa fa-triangle-exclamation rc-invalido-icon"></i>
+                        <p>El enlace no es válido o ya venció. Los enlaces son de un solo uso.</p>
+                        <a href="{% url 'auth_recuperar' %}" class="btn btn-info btn-block btn-lg">Solicitar uno nuevo</a>
+                    </div>
+                {% endif %}
+
+                <div class="m-t-20 m-b-40 p-b-40 text-inverse">
+                    <a href="{% url 'login_url' %}" class="rc-link">Iniciar Sesión</a> en cuenta existente.
+                </div>
+                <hr/>
+                <p class="text-center text-grey-darker mb-0">
+                    &copy; {{ nombreempresa }} Derechos Reservados
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/static/assets/js/app.min.js?v=1.0"></script>
+<script src="/static/assets/js/theme/default.min.js"></script>
+<link rel="stylesheet" href="/static/sweetalert2/sweetalert2.css">
+<script src="/static/sweetalert2/sweetalert2.js"></script>
+
+<script>
+    window.onload = function () {
+        var banner = document.querySelector('.rc-news-image');
+        if (banner) {
+            var url = banner.getAttribute('data-banner');
+            if (url) { banner.style.backgroundImage = 'url(' + url + ')'; }
+        }
+        {% if messages %}
+            {% for message in messages %}
+                Swal.fire('{{ message }}', '{{ nombreempresa }}', '{% if message.tags %}{{ message.tags }}{% endif %}');
+            {% endfor %}
+        {% endif %}
+    }
+</script>
+
+</body>
+</html>
