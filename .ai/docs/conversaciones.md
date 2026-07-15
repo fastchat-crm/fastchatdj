@@ -262,8 +262,9 @@ Método `ConversacionWhatsApp.cerrar(*, enviar_despedida=True, ...)` en `models.
    `mensaje_despedida` de la sesión. No bloquea si falla envío — deja traza.
 4. Marca `conversacion_finalizada=True`, `estado_conversacion=1`.
 
-Disparado por: `marcar-resuelto`, `terminar-sin-despedida`, cron job de
-inactividad y `enviar_plantilla_meta` (cuando reactiva).
+Disparado por: `marcar-resuelto`, `terminar-sin-despedida` y cron job de
+inactividad. (`enviar_plantilla_meta` ya NO reactiva ni cierra: deja la conv
+finalizada con `pendiente_reconexion=True` — ver flujo de reconexión abajo.)
 
 ---
 
@@ -303,7 +304,7 @@ muestra `#bloqueo-reactivar-aviso` con la fecha de vencimiento.
 | Action | Línea | Comportamiento |
 |--------|-------|----------------|
 | `send` | 182 | Permitido solo dentro de la ventana 6h (caso raro: agente reactivó manualmente y aún la conv está abierta) |
-| `enviar_plantilla_meta` | 257 | Sustituye `{{N}}` server-side con `_render_cuerpo`, llama `service.send_template`, **reactiva la conv** (`estado_conversacion=0`, recalcula `fecha_hora_expira` con `min_sesion`), persiste mensaje, guarda `primer_agente` si vacío, setea `request.session['contactoId']` y devuelve `{reactivada: True, url: '/whatsapp/conversaciones/'}` para que el JS redirija |
+| `enviar_plantilla_meta` | delega en `enviar_plantilla_reconexion` (`funcionesWhatsappConversacion.py`) | Sustituye `{{N}}` server-side con `_render_cuerpo`, llama `service.send_template`, persiste el mensaje en la MISMA conversación y la marca `pendiente_reconexion=True, reconectada=False` (NO la reabre). Cuando el cliente responde, `obtener_o_crear_activa` REABRE esa misma conversación (estado 0, limpia fecha_fin/despedida/duración, renueva `fecha_hora_expira`, `reconectada=True`) — se conserva historial (plantillas enviadas incluidas) y asesor asignado. Devuelve `{pendiente: true, mensaje_html}` |
 | `cambiar-clasificacion` | 365 | Idem abiertas |
 | `marcar-reactivar` | 379 | Reset puro: `estado_conversacion=0`, limpia `fecha_fin_conversacion`, `despedida_enviado`, `conversacion_finalizada`, `fecha_hora_expira`, `duracion_conversacion`. Setea `contactoId` en sesión y redirige |
 
@@ -484,12 +485,16 @@ $(document).on('click', '.cargar-conversacion', function() {
 
 - Cache local `_plantillasCache[convId]` evita refetch.
 - `_detectarVarsEnCuerpo(body)` extrae IDs de `{{N}}` con regex `/\{\{(\d+)\}\}/g`.
-- `_plantillaNecesitaFormulario(p)` decide si abrir el form de variables.
+- Click en una plantilla SIEMPRE abre el form: muestra preview del mensaje
+  (`.pp-envio-preview`: header TEXT + cuerpo + footer) y un aviso
+  (`.pp-envio-info`) de qué pasará al enviar (cliente lo recibe ya; la conv pasa
+  a Pendientes de reconexión; al responder se reanuda ESA misma conversación con
+  su historial). Sin variables, el form solo pide confirmar.
 - Si `header_tipo` ∈ `{IMAGE, VIDEO, DOCUMENT}` → input URL obligatorio + filename opcional para DOCUMENT.
 - Al enviar, POST `action=enviar_plantilla_meta` con `params_cuerpo_json` y
-  `params_header_json`. Si la respuesta trae `{reactivada: true, url}`, redirige
-  a la vista de abiertas — la conv ya quedó preseleccionada por
-  `request.session['contactoId']`.
+  `params_header_json`. La respuesta trae `{pendiente: true, mensaje_html}`: el
+  JS inyecta el mensaje y muestra el toast; no hay redirect.
+- Mismo patrón en `listado_pendiente_reconexion.html` (reenvío de sonda).
 
 ---
 
@@ -608,25 +613,27 @@ JsonResponse({mensaje_html: ...})
 real lo regenera ChatConsumer.get_messages_html para todos los demás clientes)
 ```
 
-### Reactivación de finalizada (Meta-only)
+### Reconexión de finalizada por plantilla (Meta-only)
 
 ```
-[JS] click en plantilla → form de variables → POST action=enviar_plantilla_meta
+[JS] click en plantilla → SIEMPRE abre form (preview + aviso de qué pasará
+     + variables si las hay) → POST action=enviar_plantilla_meta
    ▼
-view_conversaciones_finalizadas.enviar_plantilla_meta  (línea 257)
+enviar_plantilla_reconexion  (funcionesWhatsappConversacion.py)
    │
-   ├─ valida _bloqueo_reactivar() → si vencida: error
    ├─ valida sesion.es_meta + plantilla APPROVED
    ├─ get_whatsapp_service(sesion).send_template(...)
-   ├─ render placeholders + persiste mensaje local
-   ├─ estado_conversacion=0, recalcula fecha_hora_expira
-   ├─ request.session['contactoId'] = encrypt(conv.id)
+   ├─ render placeholders + persiste mensaje en la MISMA conversación
+   ├─ pendiente_reconexion=True, reconectada=False  (sigue en estado 1)
    ▼
-JsonResponse({reactivada: true, url: '/whatsapp/conversaciones/'})
+JsonResponse({pendiente: true, mensaje_html})
    ▼
-[JS] window.location.href = '/whatsapp/conversaciones/'
+[JS] inyecta mensaje + toast "se reanudará automáticamente cuando responda"
    ▼
-conversacionesView lee contactoId de session y abre la conv automáticamente
+(cliente responde) webhook → obtener_o_crear_activa REABRE la misma conv:
+   estado_conversacion=0, conversacion_finalizada=False, limpia fecha_fin/
+   despedida/duración, renueva fecha_hora_expira, reconectada=True
+   → historial íntegro (plantillas enviadas incluidas) + mismo asesor
 ```
 
 ---
@@ -644,7 +651,7 @@ conversacionesView lee contactoId de session y abre la conv automáticamente
 | Manager `expirado` | `models_querysetmanagers.py:37` filtra solo por `estado_conversacion=1` | Fuente de verdad — evita que estados inconsistentes (`conversacion_finalizada=True` pero `estado_conversacion=0`) aparezcan en finalizadas |
 | Idempotencia webhook | Candado cache SET NX 60s + chequeo BD por `mensaje_id_externo` (`procesar_mensaje.py`) | Meta y Baileys reintentan; el chequeo BD solo no cubría dos entregas SIMULTÁNEAS del mismo id (ambas pasaban el `.exists()` antes de que ninguna guardara → doble respuesta IA y tokens dobles). TTL corto a propósito: si el procesamiento falla antes de guardar, el reintento legítimo debe poder procesarse |
 | Cliente vuelve tras "resuelta" | `procesar_mensaje.py` (bloque de renovación de ventana): si `estado_atencion=='resuelta'` y escribe el cliente → `estado_atencion='abierta'` + `ai_activo=True` (con traza `reabierta_por_cliente_tras_resuelta`) | "Marcar como resuelta" NO cierra la conversación; como el asesor al escribir deja `ai_activo=False`, sin este guard el cliente que volvía quedaba en silencio total (ni bot ni asesor) |
-| Anti-duplicado de conversaciones | `obtener_o_crear_activa` (`models.py:1028`): (a) serializa con `select_for_update` sobre la fila del `Contacto`; (b) si la conv está abierta pero con ventana vencida y el cron aún no la cerró, la REUSA renovando `fecha_hora_expira` en vez de crear otra | Dos mensajes en paralelo creaban DOS conversaciones (carrera), y un mensaje llegado tras vencer `min_sesion` pero antes del cron de cierre abría una duplicada mientras la vieja seguía visible (fix 2026-07-13) |
+| Anti-duplicado de conversaciones | `obtener_o_crear_activa` (`models.py:1028`): (a) serializa con `select_for_update` sobre la fila del `Contacto`; (b) si la conv está abierta pero con ventana vencida y el cron aún no la cerró, la REUSA renovando `fecha_hora_expira` en vez de crear otra; (c) si el contacto tiene una sonda `pendiente_reconexion=True` sin responder, REABRE esa misma conversación (no crea una nueva enlazada; `iniciada_por_plantilla`/`conv_origen` quedan solo como datos históricos del flujo anterior) | Dos mensajes en paralelo creaban DOS conversaciones (carrera), y un mensaje llegado tras vencer `min_sesion` pero antes del cron de cierre abría una duplicada mientras la vieja seguía visible (fix 2026-07-13) |
 | Rate limit Node | Cache `wa_rate_limited_<session_id>` | Si Baileys reporta saturación, `process_incoming_message` corta antes de invocar IA |
 | Dispatcher único | Siempre `get_whatsapp_service(sesion)` | Nunca hardcodear `if sesion.proveedor=='meta'` — esparce lógica de transporte |
 | `select_related` obligatorio en listado | `view_conversaciones.py:830-841` | El partial `conversacion_item.html` toca `sesion.config_meta`, `sesion.config_baileys`, `asignado_a.foto` — sin `select_related` son N+1 |

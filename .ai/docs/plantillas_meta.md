@@ -44,3 +44,26 @@ Vista: `whatsapp/view_plantillas.py` (`plantillasView`). Template:
   `fields=...,rejected_reason,quality_score` (fix 2026-07-13; antes el motivo
   llegaba siempre vacío). Valor `NONE` de Meta se normaliza a vacío.
 - Solo plantillas `APPROVED` se listan para envío desde el chat.
+
+## Accesos directos a Meta (listado)
+
+En la fila de botones del listado hay un dropdown **"Ver en Facebook/Meta"**
+(solo sesiones con `config_meta.waba_id`; agrega `business_id` si
+`business_account_id` está configurado). Por sesión ofrece 3 links
+(target=_blank):
+
+- **Ver plantillas en Meta** → `business.facebook.com/wa/manage/message-templates/?waba_id=...`
+- **Ver costos y consumo** → `business.facebook.com/wa/manage/insights/?waba_id=...`
+- **Facturación en Meta** → `business.facebook.com/billing_hub/accounts`
+
+Sesiones Meta sin `waba_id` muestran un texto "sin WABA ID configurado" — el
+WABA ID se configura en Sesiones → editar sesión → Configuración Meta.
+
+## Envío desde conversaciones finalizadas / pendientes de reconexión
+
+El panel "Plantillas aprobadas" del chat (finalizadas y pendiente-reconexión)
+SIEMPRE abre un paso de confirmación al elegir plantilla: preview del mensaje
+(header TEXT + cuerpo + footer), aviso de qué pasará al enviar y el botón
+"Enviar plantilla" (variables solo si la plantilla las tiene). Detalle completo
+del flujo de reconexión en `conversaciones.md` (la respuesta del cliente REABRE
+la misma conversación, conservando historial y asesor).
