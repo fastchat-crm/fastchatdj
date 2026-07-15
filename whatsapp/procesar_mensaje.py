@@ -818,6 +818,7 @@ def process_incoming_message(session, event_data, channel_layer):
                                 'preview': (resultado.respuesta or '')[:300],
                                 'tokens_total': getattr(resultado, 'tokens_total', 0),
                                 'apikey_id': apikey.id,
+                                'pesos_prompt': getattr(consultor, 'desglose_prompt', None) or None,
                             },
                         )
                         # ── Envío humanizado (burbujas + delays) ──────────────

@@ -29,3 +29,35 @@ consumo y acciones generativas. La configuración (agentes, API keys) vive en
 - [`ai_actions/`](ai_actions/README.md) — acciones IA one-shot fuera del chat (generar plantillas, campañas, horarios, etc.).
 
 Referencia técnica completa: `.ai/docs/agents_ai_entrenamiento.md`.
+
+## Optimización de tokens y continuidad (2026-07-15, patrones de backmanageria)
+
+Cuatro mejoras aplicadas al `AgenteConsultor` tras estudiar el motor de
+`backmanageria` (ver informe en la sesión y `.ai/docs/agents_ai_entrenamiento.md`):
+
+1. **Resumen rodante intra-conversación** — `_actualizar_resumen_rodante()`
+   (`agente_consultor.py`): cada `_RESUMEN_CADA_N=6` mensajes, un refresco LLM
+   resume los turnos que rotaron fuera de la ventana reciente (≤700 chars,
+   incremental sobre el resumen previo). Se guarda como fila `system` interna
+   en `message_store` con prefijo `RESUMEN_RODANTE:` (helpers
+   `get_resumen_rodante`/`set_resumen_rodante`/`get_range`/`count_conversacion`
+   en `memoria/historial.py`) y se reinyecta al inicio de `_contexto_previo()`
+   como "Resumen de lo conversado antes: …". Los tokens del refresco se suman
+   al `ConsultaResultado` para que el consumo quede facturado. Las filas
+   internas (system) ya no consumen lugares de la ventana `get_recent`.
+2. **Techo del contexto estático en consultas amplias** — Modo A amplio ya no
+   manda el `contexto_estatico` completo: se capa a
+   `cfg_max_static_amplia` (default `_MAX_STATIC_AMPLIA=12000` chars,
+   overrideable por campo del agente si se agrega).
+3. **FAQ directa sin LLM** — `_respuesta_faq_directa()`: si la pregunta
+   normalizada coincide casi exacta con una FAQ aprobada
+   (`SequenceMatcher ratio ≥ 0.92` o igualdad), responde la FAQ con 0 tokens,
+   registra el hit y corta antes del retrieval. Activa en `consultar()` y
+   `consultar_con_listas()`.
+4. **Desglose del peso del prompt** — `self.desglose_prompt` (chars por bloque:
+   docs, estático, FAQ, APIs, memoria, historial, total) se registra en la
+   traza `llm_respondio` (`procesar_mensaje.py`, clave `pesos_prompt`) para
+   detectar qué sección engorda el prompt por agente.
+
+Pendiente del developer: ninguno (sin migraciones — el resumen usa
+`message_store` existente).

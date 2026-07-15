@@ -1,6 +1,10 @@
+import json
+
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langchain_core.chat_history import BaseChatMessageHistory
 from ..models import MessageStore
+
+PREFIJO_RESUMEN_RODANTE = "RESUMEN_RODANTE:"
 
 
 class DjangoChatMessageHistory(BaseChatMessageHistory):
@@ -44,16 +48,78 @@ class DjangoChatMessageHistory(BaseChatMessageHistory):
         """Cuenta mensajes con COUNT(*) — sin cargar registros."""
         return MessageStore.objects.filter(session_id=self.session_id).count()
 
+    def _qs_conversacion(self):
+        """Solo los turnos reales de la conversación: sin filas internas
+        (system/resumen) ni LISTA_GUARDADA."""
+        return (
+            MessageStore.objects
+            .filter(session_id=self.session_id)
+            .exclude(role="system")
+            .exclude(content__startswith="LISTA_GUARDADA:")
+        )
+
+    def count_conversacion(self) -> int:
+        """Cuenta solo los turnos reales (excluye filas internas)."""
+        return self._qs_conversacion().count()
+
+    def get_range(self, desde: int, hasta: int) -> list[BaseMessage]:
+        """Turnos reales [desde:hasta] en orden cronológico (para resumir los
+        que rotaron fuera de la ventana reciente)."""
+        qs = self._qs_conversacion().order_by('created_at')[desde:hasta]
+        result = []
+        for entry in qs:
+            if entry.role == "human":
+                result.append(HumanMessage(content=entry.content))
+            elif entry.role == "ai":
+                result.append(AIMessage(content=entry.content))
+        return result
+
+    def get_resumen_rodante(self) -> dict | None:
+        """Devuelve {'texto': str, 'hasta': int} del resumen rodante, o None."""
+        row = (
+            MessageStore.objects
+            .filter(session_id=self.session_id, role="system",
+                    content__startswith=PREFIJO_RESUMEN_RODANTE)
+            .order_by('-created_at')
+            .first()
+        )
+        if not row:
+            return None
+        try:
+            return json.loads(row.content[len(PREFIJO_RESUMEN_RODANTE):])
+        except Exception:
+            return None
+
+    def set_resumen_rodante(self, texto: str, hasta: int) -> None:
+        """Guarda/actualiza el resumen rodante como fila system interna."""
+        payload = PREFIJO_RESUMEN_RODANTE + json.dumps(
+            {'texto': texto, 'hasta': int(hasta)}, ensure_ascii=False
+        )
+        row = (
+            MessageStore.objects
+            .filter(session_id=self.session_id, role="system",
+                    content__startswith=PREFIJO_RESUMEN_RODANTE)
+            .order_by('-created_at')
+            .first()
+        )
+        if row:
+            row.content = payload
+            row.save(update_fields=['content'])
+        else:
+            MessageStore.objects.create(
+                session_id=self.session_id, role="system", content=payload
+            )
+        self._cache = None
+
     def get_recent(self, n: int) -> list[BaseMessage]:
         """Devuelve los últimos n mensajes en orden cronológico.
 
         Usa LIMIT en la query en vez de cargar todo el historial.
-        Filtra automáticamente los mensajes internos LISTA_GUARDADA.
+        Filtra automáticamente las filas internas (system y LISTA_GUARDADA)
+        para que no consuman lugares de la ventana.
         """
         qs = (
-            MessageStore.objects
-            .filter(session_id=self.session_id)
-            .exclude(content__startswith="LISTA_GUARDADA:")
+            self._qs_conversacion()
             .order_by('-created_at')[:n]
         )
         result = []

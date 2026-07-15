@@ -66,7 +66,10 @@ _MAX_OUTPUT_TOKENS = 3000   # tokens de salida — suficiente para menús comple
 _TOPIC_ANCHOR_CHARS = 180   # chars del primer mensaje sustantivo como ancla de tema
 _UMBRAL_DISTANCIA  = 1.4    # distancia L2² máx de un chunk relevante (embeddings normalizados: ≈ coseno 0.3)
 _TEMPERATURE_TOOLS = 0.2    # temperatura máx durante tool-calling — argumentos deterministas
-# Para consultas amplias en Modo A (sin FAISS) se envía el contexto_estatico completo sin cap
+_MAX_STATIC_AMPLIA = 12_000 # techo del contexto estático completo en consultas amplias (Modo A)
+_RESUMEN_CADA_N    = 6      # mensajes entre refrescos del resumen rodante (patrón backmanageria)
+_RESUMEN_MAX_CHARS = 700    # techo del resumen rodante reinyectado al historial
+_FAQ_MATCH_RATIO   = 0.92   # similitud mínima para responder una FAQ directa sin LLM
 
 # La clasificación de mensajes (saludos/acks/consultas amplias) vive en
 # consultor/clasificacion.py y el retrieval (cache FAISS, BM25, híbrida,
@@ -122,6 +125,8 @@ class AgenteConsultor:
         self.cfg_max_output_tokens = _cfg('cfg_max_output_tokens', _MAX_OUTPUT_TOKENS)
         self.cfg_topic_anchor_chars = _cfg('cfg_topic_anchor_chars', _TOPIC_ANCHOR_CHARS)
         self.cfg_umbral_distancia  = _cfg('cfg_umbral_distancia', _UMBRAL_DISTANCIA)
+        self.cfg_max_static_amplia = _cfg('cfg_max_static_amplia', _MAX_STATIC_AMPLIA)
+        self.desglose_prompt = {}
 
         # Persona del bot — si el agente no tiene los campos (agentes viejos), defaults neutros.
         # Si el agente tiene un `personalidad_preset` distinto de 'personalizado',
@@ -406,16 +411,25 @@ class AgenteConsultor:
 
     def _contexto_previo(self) -> str:
         """
-        Devuelve los últimos N turnos como texto compacto.
+        Devuelve los últimos N turnos como texto compacto, precedidos por el
+        resumen rodante de lo que ya salió de la ventana (continuidad barata).
         Trunca para minimizar tokens: usuario → _USER_SNIPPET chars, IA → _AI_SNIPPET chars.
         """
         h = self._historia
         if not h:
             return ""
 
+        resumen = ""
+        try:
+            data = h.get_resumen_rodante()
+            if data and (data.get('texto') or '').strip():
+                resumen = f"Resumen de lo conversado antes: {data['texto'].strip()}\n"
+        except Exception:
+            resumen = ""
+
         mensajes = h.get_recent(self.cfg_history_turns * 2)
         if not mensajes:
-            return ""
+            return resumen
 
         partes = []
         for msg in mensajes:
@@ -426,7 +440,7 @@ class AgenteConsultor:
                 t = msg.content[:self.cfg_ai_snippet]
                 partes.append(f"A: {t}{'…' if len(msg.content) > self.cfg_ai_snippet else ''}")
 
-        return "Historial reciente:\n" + "\n".join(partes) + "\n\n"
+        return resumen + "Historial reciente:\n" + "\n".join(partes) + "\n\n"
 
     def _tema_inicial(self) -> str:
         """Primer mensaje sustantivo del usuario en esta conversación.
@@ -628,11 +642,13 @@ class AgenteConsultor:
                     "Prohibido usar conocimiento externo o inventar datos."
                 )
 
+        self.desglose_prompt = {'chars_docs': len(contexto) if not _sin_datos else 0}
+
         if self.contexto_estatico:
             sin_faiss = not contexto
             if sin_faiss:
                 if _es_amplia:
-                    contexto = self.contexto_estatico
+                    contexto = self.contexto_estatico[:self.cfg_max_static_amplia]
                 else:
                     contexto = _extraer_seccion_relevante(
                         self.contexto_estatico, _query_faiss, _presupuesto
@@ -652,8 +668,14 @@ class AgenteConsultor:
                     len(estatico_trim), len(faiss_trim), len(contexto), _presupuesto,
                 )
 
+        self.desglose_prompt['chars_estatico'] = (
+            len(contexto) - self.desglose_prompt['chars_docs']
+            if self.contexto_estatico else 0
+        )
+
         # ── FAQ top-N inyectadas al inicio del contexto ────────────────
         bloque_faq, faq_ids = self._construir_bloque_faq()
+        self.desglose_prompt['chars_faq'] = len(bloque_faq)
         if bloque_faq:
             contexto = f"{bloque_faq}\n\n{contexto}" if contexto else bloque_faq
             # Incrementar hits en background (no bloquear respuesta)
@@ -663,17 +685,21 @@ class AgenteConsultor:
 
         # ── APIs externas (fuentes tipo=1 fetch en vivo, sin embeddings) ──
         bloque_apis = self._construir_bloque_apis()
+        self.desglose_prompt['chars_apis'] = len(bloque_apis)
         if bloque_apis:
             contexto = f"{contexto}\n\n{bloque_apis}" if contexto else bloque_apis
             if _sin_datos:
                 _sin_datos = False
 
         # ── Memoria RAG — respuestas aprendidas en conversaciones previas ──
+        self.desglose_prompt['chars_memoria'] = 0
         if not _es_ack:
             bloque_memoria = self._construir_bloque_memoria(_query_faiss, _query_vector)
+            self.desglose_prompt['chars_memoria'] = len(bloque_memoria or '')
             if bloque_memoria:
                 contexto = f"{contexto}\n\n{bloque_memoria}" if contexto else bloque_memoria
 
+        self.desglose_prompt['chars_contexto_total'] = len(contexto)
         return contexto, _sin_datos
 
     def _memoria_disponible(self) -> bool:
@@ -859,6 +885,89 @@ class AgenteConsultor:
         except Exception:
             return "Hola 👋, ¿en qué te puedo ayudar?"
 
+    def _respuesta_faq_directa(self, pregunta: str) -> str | None:
+        """Si la pregunta coincide casi exacta con una FAQ aprobada, devuelve su
+        respuesta sin invocar al LLM (0 tokens). El match usa normalización sin
+        tildes/mayúsculas y similitud de secuencia con umbral alto para no
+        responder FAQs equivocadas."""
+        if self.agente is None:
+            return None
+        q = normalizar_texto(pregunta).strip()
+        if len(q) < 8 or _es_ack_simple(pregunta) or _es_saludo(pregunta):
+            return None
+        try:
+            faqs = list(
+                self.agente.faqs.filter(estado='aprobada', status=True)
+                .values_list('id', 'pregunta', 'respuesta')[:150]
+            )
+        except Exception:
+            return None
+        from difflib import SequenceMatcher
+        mejor_id, mejor_resp, mejor_ratio = None, None, 0.0
+        for fid, fp, fr in faqs:
+            fpn = normalizar_texto(fp or '').strip()
+            if not fpn or not (fr or '').strip():
+                continue
+            if fpn == q:
+                mejor_id, mejor_resp, mejor_ratio = fid, fr, 1.0
+                break
+            ratio = SequenceMatcher(None, q, fpn).ratio()
+            if ratio > mejor_ratio:
+                mejor_id, mejor_resp, mejor_ratio = fid, fr, ratio
+        if mejor_resp and mejor_ratio >= _FAQ_MATCH_RATIO:
+            try:
+                from django.db.models import F
+                from crm.models import FaqAgente
+                FaqAgente.objects.filter(pk=mejor_id).update(hits=F('hits') + 1)
+            except Exception as exc:
+                logger.debug("No se pudo incrementar hit de FAQ directa: %s", exc)
+            logger.debug("FAQ directa sin LLM (ratio=%.2f, faq=%s)", mejor_ratio, mejor_id)
+            return mejor_resp.strip()
+        return None
+
+    def _actualizar_resumen_rodante(self) -> tuple[int, int]:
+        """Mantiene un resumen compacto de los turnos que salieron de la ventana
+        reciente (patrón backmanageria: refresco throttleado cada
+        _RESUMEN_CADA_N mensajes, salida capada). Devuelve (tokens_in,
+        tokens_out) del refresco, o (0, 0) si no tocó resumir."""
+        h = self._historia
+        if not h:
+            return 0, 0
+        try:
+            total = h.count_conversacion()
+            ventana = self.cfg_history_turns * 2
+            if total <= ventana or total % _RESUMEN_CADA_N != 0:
+                return 0, 0
+            data = h.get_resumen_rodante() or {}
+            hasta_previo = int(data.get('hasta') or 0)
+            corte = total - ventana
+            if corte <= hasta_previo:
+                return 0, 0
+            rotados = h.get_range(hasta_previo, corte)
+            if not rotados:
+                return 0, 0
+            lineas = []
+            for m in rotados:
+                prefijo = 'U' if isinstance(m, HumanMessage) else 'A'
+                lineas.append(f"{prefijo}: {m.content[:200]}")
+            base = (data.get('texto') or '')[:_RESUMEN_MAX_CHARS]
+            prompt = (
+                "Resume en máximo 5 líneas los datos útiles para continuar esta "
+                "conversación (nombres, pedidos, cantidades, decisiones, datos ya "
+                "entregados). Sin saludos ni relleno.\n"
+                + (f"Resumen previo: {base}\n" if base else "")
+                + "Mensajes nuevos:\n" + "\n".join(lineas)
+                + "\nResumen actualizado:"
+            )
+            ai_message = self.llm.invoke(prompt)
+            texto = self._extraer_texto(ai_message)[:_RESUMEN_MAX_CHARS]
+            if texto:
+                h.set_resumen_rodante(texto, corte)
+            return self._extraer_tokens(ai_message)
+        except Exception as exc:
+            logger.debug("Resumen rodante omitido: %s", exc)
+            return 0, 0
+
     # ------------------------------------------------------------------
     # Consulta principal — 1 llamada LLM
     # ------------------------------------------------------------------
@@ -874,8 +983,23 @@ class AgenteConsultor:
                 h.add_ai_message(bienvenida)
             return ConsultaResultado(respuesta=bienvenida)
 
+        respuesta_faq = self._respuesta_faq_directa(pregunta)
+        if respuesta_faq is not None:
+            h = self._chat_history()
+            if h:
+                h.add_user_message(pregunta)
+                h.add_ai_message(respuesta_faq)
+            t_res_in, t_res_out = self._actualizar_resumen_rodante()
+            return ConsultaResultado(
+                respuesta=respuesta_faq,
+                tokens_entrada=t_res_in, tokens_salida=t_res_out,
+                tokens_total=t_res_in + t_res_out,
+            )
+
         contexto, _sin_datos = self._construir_contexto(pregunta, contexto_previo)
         prompt_final = self._formatear_prompt(pregunta, contexto, descripcion_agente, contexto_previo)
+        self.desglose_prompt['chars_historial'] = len(contexto_previo)
+        self.desglose_prompt['chars_prompt_total'] = len(prompt_final)
 
         try:
             ai_message = self.llm.invoke(prompt_final)
@@ -897,10 +1021,12 @@ class AgenteConsultor:
 
         self._incrementar_hits_faqs()
         self._memorizar_interaccion(pregunta, respuesta, _sin_datos)
+        t_res_in, t_res_out = self._actualizar_resumen_rodante()
 
         return ConsultaResultado(
             respuesta=respuesta, fin_detectado=fin_detectado,
-            tokens_entrada=t_in, tokens_salida=t_out, tokens_total=t_in + t_out,
+            tokens_entrada=t_in + t_res_in, tokens_salida=t_out + t_res_out,
+            tokens_total=t_in + t_out + t_res_in + t_res_out,
             sin_datos=_sin_datos,
         )
 
@@ -1080,11 +1206,13 @@ class AgenteConsultor:
 
         self._incrementar_hits_faqs()
         self._memorizar_interaccion(pregunta, respuesta, _sin_datos)
+        t_res_in, t_res_out = self._actualizar_resumen_rodante()
 
         return ConsultaResultado(
             respuesta=respuesta, fin_detectado=fin_detectado,
-            tokens_entrada=t_in_acc, tokens_salida=t_out_acc,
-            tokens_total=t_in_acc + t_out_acc, sin_datos=_sin_datos,
+            tokens_entrada=t_in_acc + t_res_in, tokens_salida=t_out_acc + t_res_out,
+            tokens_total=t_in_acc + t_out_acc + t_res_in + t_res_out,
+            sin_datos=_sin_datos,
         )
 
     def _incrementar_hits_faqs(self) -> None:
