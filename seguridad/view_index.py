@@ -31,6 +31,53 @@ def index(request):
     if request.method == 'POST':
         return render(request, 'seguridad/index.html', data)
 
+    # Resumen de sesiones por canal — visible para todos los perfiles: cada
+    # tarjeta lleva a las conversaciones/sesiones de su app e indica cuántas
+    # sesiones hay y cuántas están conectadas (para saber si el canal funciona).
+    q_mis_sesiones = Q(usuario=persona) | Q(
+        perfilsesionwhatsapp__usuario=persona,
+        perfilsesionwhatsapp__status=True,
+    )
+    sesiones_qs = (
+        SesionWhatsApp.objects
+        .filter(q_mis_sesiones, status=True)
+        .select_related('config_meta', 'config_baileys', 'agente_ia')
+        .distinct()
+    )
+    canales_def = [
+        ('whatsapp', 'WhatsApp', ('baileys', 'meta'), '/whatsapp/conversaciones/', '/whatsapp/sesiones/'),
+        ('facebook', 'Facebook', ('messenger',), '/facebook/conversaciones/', '/facebook/sesiones/'),
+        ('instagram', 'Instagram', ('instagram',), '/instagram/conversaciones/', '/instagram/sesiones/'),
+        ('tiktok', 'TikTok', ('tiktok',), '/tiktok/conversaciones/', '/tiktok/sesiones/'),
+    ]
+    canales_resumen = []
+    for key, label, provs, url_conv, url_ses in canales_def:
+        qs_c = sesiones_qs.filter(proveedor__in=provs)
+        canales_resumen.append({
+            'key': key,
+            'label': label,
+            'total': qs_c.count(),
+            'conectadas': qs_c.filter(estado='conectado').count(),
+            'url_conversaciones': url_conv,
+            'url_sesiones': url_ses,
+        })
+    data['canales_resumen'] = canales_resumen
+
+    # Consumo estimado por sesión (plantillas Meta) — SOLO superusuarios.
+    if persona.is_superuser:
+        try:
+            from django.db.models import Sum
+            from whatsapp.models import EnvioPlantillaMeta
+            data['consumo_por_sesion'] = list(
+                EnvioPlantillaMeta.objects
+                .filter(status=True, sesion__in=sesiones_qs)
+                .values('sesion_id', 'sesion__nombre', 'sesion__numero')
+                .annotate(total=Sum('costo_estimado'), n=Count('id'))
+                .order_by('-total')
+            )
+        except Exception:
+            data['consumo_por_sesion'] = None
+
     if not persona.es_administrativo():
         data['PERFIL_EXISTE'] = False
         return render(request, 'seguridad/index.html', data)
@@ -49,20 +96,6 @@ def index(request):
     hace_24h = ahora - timedelta(hours=24)
     hace_7d = ahora - timedelta(days=7)
     mes_ini = ahora.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-    # Sesiones del panel: las que el usuario creó (dueño) MÁS las que tiene
-    # asignadas vía PerfilSesionWhatsApp (supervisor o asesor). Un asesor sin
-    # sesiones propias ve igual el resumen de sus sesiones asignadas.
-    q_mis_sesiones = Q(usuario=persona) | Q(
-        perfilsesionwhatsapp__usuario=persona,
-        perfilsesionwhatsapp__status=True,
-    )
-    sesiones_qs = (
-        SesionWhatsApp.objects
-        .filter(q_mis_sesiones, status=True)
-        .select_related('config_meta', 'config_baileys', 'agente_ia')
-        .distinct()
-    )
 
     stats_sesiones = sesiones_qs.aggregate(
         total=Count('id'),

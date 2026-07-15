@@ -458,6 +458,63 @@ def listar_plantillas_meta(request):
         return JsonResponse({'error': True, 'message': str(ex)})
 
 
+_PREFIJOS_PAIS = (
+    ('593', 'EC'), ('521', 'MX'), ('52', 'MX'), ('57', 'CO'), ('51', 'PE'),
+    ('56', 'CL'), ('54', 'AR'), ('55', 'BR'), ('591', 'BO'), ('595', 'PY'),
+    ('598', 'UY'), ('58', 'VE'), ('507', 'PA'), ('506', 'CR'), ('502', 'GT'),
+    ('503', 'SV'), ('504', 'HN'), ('505', 'NI'), ('34', 'ES'), ('1', 'US'),
+)
+
+
+def _pais_por_numero(numero):
+    n = ''.join(ch for ch in str(numero or '') if ch.isdigit())
+    for prefijo, pais in _PREFIJOS_PAIS:
+        if n.startswith(prefijo):
+            return pais
+    return 'EC'
+
+
+def _registrar_envio_plantilla(request, sesion, conversacion, plantilla, mensaje, origen):
+    """Congela el costo del envío con la tarifa vigente y deja rastro:
+    fila en EnvioPlantillaMeta (consumo acumulable), contador de la plantilla
+    y traza en la trazabilidad de la conversación. Best-effort — nunca rompe
+    el envío."""
+    try:
+        from .models import EnvioPlantillaMeta, TarifaPlantillaMeta
+        pais = _pais_por_numero(conversacion.contacto_numero)
+        tarifa = TarifaPlantillaMeta.vigente(pais, plantilla.categoria)
+        EnvioPlantillaMeta.objects.create(
+            sesion=sesion,
+            conversacion=conversacion,
+            plantilla=plantilla,
+            mensaje=mensaje,
+            agente=request.user if request.user.is_authenticated else None,
+            plantilla_nombre=plantilla.nombre,
+            categoria=plantilla.categoria,
+            pais=pais,
+            costo_estimado=tarifa.precio if tarifa else None,
+            moneda=tarifa.moneda if tarifa else 'USD',
+            origen=origen,
+        )
+        from .trazas import registrar as _traza_registrar
+        _traza_registrar(
+            etapa='mensaje_enviado', sesion=sesion, conversacion=conversacion,
+            mensaje=mensaje, numero=conversacion.contacto_numero, nivel='info',
+            detalle={
+                'tipo': 'plantilla',
+                'origen': origen,
+                'plantilla': plantilla.nombre,
+                'categoria': plantilla.categoria,
+                'pais': pais,
+                'costo_estimado': str(tarifa.precio) if tarifa else None,
+                'moneda': tarifa.moneda if tarifa else 'USD',
+            },
+        )
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception('No se pudo registrar el envío de plantilla')
+
+
 def enviar_plantilla_reconexion(request):
     """POST: envía una plantilla Meta a una conversación finalizada como sonda
     de reconexión.
@@ -541,6 +598,10 @@ def enviar_plantilla_reconexion(request):
     if not conversacion.primer_agente:
         conversacion.primer_agente = request.user
         conversacion.save(update_fields=['primer_agente'])
+
+    _registrar_envio_plantilla(
+        request, sesion, conversacion, plantilla, mensaje, origen='reconexion',
+    )
 
     log(
         f"Plantilla de reconexión '{plantilla.nombre}' enviada en la conversación {conversacion.id}; marcada pendiente de reconexión",

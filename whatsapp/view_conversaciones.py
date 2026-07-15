@@ -860,6 +860,11 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                     if campos_plantilla:
                         conversacion.save(update_fields=campos_plantilla)
 
+                    from .funcionesWhatsappConversacion import _registrar_envio_plantilla
+                    _registrar_envio_plantilla(
+                        request, sesion, conversacion, plantilla, mensaje, origen='chat',
+                    )
+
                     log(f"Plantilla Meta '{plantilla.nombre}' enviada a {conversacion.contacto_numero}",
                         request, "add", obj=conversacion.id)
 

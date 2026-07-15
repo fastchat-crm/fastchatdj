@@ -41,6 +41,43 @@
         {% endfor %}
     </div>
 
+    {% if consumo_total %}
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <i class="fa fa-coins text-warning"></i>
+                <strong>Consumo en envíos de plantillas</strong>
+                <span class="text-muted small">(costo estimado con la tarifa vigente al momento de cada envío)</span>
+            </div>
+            <div class="row g-3">
+                <div class="col-6 col-md-3">
+                    <div class="border rounded p-2 h-100">
+                        <div class="text-muted small">Total histórico</div>
+                        <div class="fs-5 fw-bold">${{ consumo_total.total|default:"0"|floatformat:4 }}</div>
+                        <div class="text-muted small">{{ consumo_total.n|default:0 }} envío{{ consumo_total.n|pluralize }}</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="border rounded p-2 h-100">
+                        <div class="text-muted small">Este mes</div>
+                        <div class="fs-5 fw-bold">${{ consumo_mes.total|default:"0"|floatformat:4 }}</div>
+                        <div class="text-muted small">{{ consumo_mes.n|default:0 }} envío{{ consumo_mes.n|pluralize }}</div>
+                    </div>
+                </div>
+                {% for o in consumo_por_origen %}
+                <div class="col-6 col-md-3">
+                    <div class="border rounded p-2 h-100">
+                        <div class="text-muted small">{{ o.origen_label }}</div>
+                        <div class="fs-5 fw-bold">${{ o.total|default:"0"|floatformat:4 }}</div>
+                        <div class="text-muted small">{{ o.n }} envío{{ o.n|pluralize }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <div class="card mb-3">
         <div class="card-body">
             <form method="GET" class="mb-0">

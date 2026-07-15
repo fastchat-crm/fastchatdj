@@ -67,3 +67,29 @@ SIEMPRE abre un paso de confirmación al elegir plantilla: preview del mensaje
 "Enviar plantilla" (variables solo si la plantilla las tiene). Detalle completo
 del flujo de reconexión en `conversaciones.md` (la respuesta del cliente REABRE
 la misma conversación, conservando historial y asesor).
+
+
+## Registro de envíos y consumo (`EnvioPlantillaMeta`)
+
+Cada envío individual de plantilla desde el chat crea una fila en
+`EnvioPlantillaMeta` (`whatsapp/models.py`, junto a `TarifaPlantillaMeta`):
+sesión, conversación, plantilla, mensaje, agente, categoría, país (inferido del
+prefijo del número — `_pais_por_numero` en `funcionesWhatsappConversacion.py`),
+`costo_estimado` congelado con `TarifaPlantillaMeta.vigente(pais, categoria)` y
+`origen` (`reconexion` | `chat` | `campana`). Lo escribe
+`_registrar_envio_plantilla(...)` (best-effort, nunca rompe el envío), llamado
+desde `enviar_plantilla_reconexion` (finalizadas/pendientes) y desde
+`enviar_plantilla_meta` en abiertas. También deja traza `mensaje_enviado` con
+`detalle.tipo='plantilla'` y el costo. `veces_enviada` lo incrementa
+`MetaWhatsAppService.send_template` — NO duplicar el contador aquí.
+
+**Dónde se ve el consumo:**
+- `/whatsapp/tarifas/` — card "Consumo en envíos de plantillas": total
+  histórico, mes actual y por origen (guardas try/except por si la tabla aún no
+  está migrada).
+- `/panel/` — botón "Ver consumo por sesión" (SOLO superuser): tabla por sesión
+  con número de envíos y total estimado USD.
+
+**Migración pendiente:** el developer debe correr `makemigrations whatsapp` +
+`migrate` para crear la tabla (regla del proyecto: Claude no ejecuta comandos
+de manage.py).

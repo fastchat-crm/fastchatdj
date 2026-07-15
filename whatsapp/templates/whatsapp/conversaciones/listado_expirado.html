@@ -1138,6 +1138,12 @@ $(document).ready(function() {
         });
     }
 
+    $('#mensajes-container').on('click', '.btn-reenviar', function() {
+        console.log('[plantillas] reenviar en finalizadas: se reenvía como plantilla desde el panel');
+        _avisarError('En una conversación finalizada el reintento debe hacerse con una plantilla aprobada: usa el botón "Enviar plantilla" y envíala de nuevo. Si el error fue de pago (131042), primero corrige el método de pago en Meta.');
+        $('#plantillas-btn').trigger('click');
+    });
+
     document.addEventListener('click', function(e) {
         const panel = document.getElementById('plantillas-panel');
         const btn = document.getElementById('plantillas-btn');

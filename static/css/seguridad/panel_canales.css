@@ -38,3 +38,49 @@
 .panel-canales-row .canal-facebook { background: linear-gradient(135deg, #1877f2, #0a5dc7); }
 .panel-canales-row .canal-instagram { background: linear-gradient(135deg, #f58529, #dd2a7b 55%, #8134af); }
 .panel-canales-row .canal-tiktok { background: linear-gradient(135deg, #2b2b2b, #010101); }
+
+.panel-canales-row .canal-estado {
+    font-size: .68rem;
+    opacity: .95;
+}
+
+.panel-canales-row .canal-ok::before {
+    content: "●";
+    color: #7CFC9A;
+    margin-right: 4px;
+}
+
+.panel-canales-row .canal-off::before {
+    content: "●";
+    color: #ffb3b3;
+    margin-right: 4px;
+}
+
+.panel-canales-row .canal-none {
+    opacity: .7;
+    font-style: italic;
+}
+
+.panel-canales-row .canal-links {
+    margin-left: auto;
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.panel-canales-row .canal-links a {
+    color: #fff;
+    background: rgba(255, 255, 255, .18);
+    border-radius: 8px;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .8rem;
+    text-decoration: none;
+}
+
+.panel-canales-row .canal-links a:hover {
+    background: rgba(255, 255, 255, .32);
+}

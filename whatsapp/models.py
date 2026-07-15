@@ -1924,6 +1924,61 @@ class TarifaPlantillaMeta(ModeloBase):
         return qs.first()
 
 
+class EnvioPlantillaMeta(ModeloBase):
+    """Registro de cada envío individual de una plantilla Meta.
+
+    Permite trazabilidad (qué plantilla, a qué conversación, quién la envió)
+    y control de consumo: `costo_estimado` se congela al momento del envío con
+    la `TarifaPlantillaMeta` vigente para el país del destinatario, de modo que
+    el gasto acumulado (p. ej. en reconexiones) se pueda sumar aunque las
+    tarifas cambien después.
+    """
+    ORIGENES = (
+        ('reconexion', 'Reconexión de finalizada'),
+        ('chat', 'Chat abierto'),
+        ('campana', 'Campaña'),
+    )
+    sesion = models.ForeignKey(
+        SesionWhatsApp, on_delete=models.CASCADE,
+        related_name='envios_plantilla', verbose_name='Sesión',
+    )
+    conversacion = models.ForeignKey(
+        ConversacionWhatsApp, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='envios_plantilla', verbose_name='Conversación',
+    )
+    plantilla = models.ForeignKey(
+        PlantillaWhatsApp, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='envios', verbose_name='Plantilla',
+    )
+    mensaje = models.ForeignKey(
+        MensajeWhatsApp, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='envios_plantilla', verbose_name='Mensaje',
+    )
+    agente = models.ForeignKey(
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='envios_plantilla', verbose_name='Agente',
+    )
+    plantilla_nombre = models.CharField('Nombre de plantilla', max_length=512, default='')
+    categoria = models.CharField(
+        'Categoría', max_length=20, choices=CATEGORIAS_PLANTILLA, default='MARKETING',
+    )
+    pais = models.CharField('País destino (ISO-2)', max_length=2, default='EC')
+    costo_estimado = models.DecimalField(
+        'Costo estimado', max_digits=10, decimal_places=6, null=True, blank=True,
+        help_text='Tarifa vigente al momento del envío. Vacío si no había tarifa configurada.',
+    )
+    moneda = models.CharField('Moneda', max_length=3, default='USD')
+    origen = models.CharField('Origen', max_length=15, choices=ORIGENES, default='reconexion', db_index=True)
+
+    class Meta:
+        verbose_name = 'Envío de plantilla Meta'
+        verbose_name_plural = 'Envíos de plantillas Meta'
+        ordering = ['-fecha_registro']
+
+    def __str__(self):
+        return f'{self.plantilla_nombre} → conv {self.conversacion_id} ({self.origen})'
+
+
 class MetaWebhookHit(models.Model):
     """Auditoria de bajo nivel: cada request HTTP que toca /whatsapp/meta_webhook/.
 

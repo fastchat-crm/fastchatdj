@@ -135,6 +135,10 @@
                         onclick="$('#control-respuestas-panel').toggleClass('d-none')" title="Control de respuestas">
                     <i class="fa fa-chart-bar"></i>
                 </button>
+                <a href="javascript:void(0)" target="_blank" rel="noopener" class="btn btn-sm btn-default d-none"
+                   id="btn-trazas" title="Ver trazabilidad: todos los logs y errores de esta conversación">
+                    <i class="fa fa-route me-1"></i>Trazas
+                </a>
                 <div class="btn-group d-none" id="descartar-btn">
                     <a href="javascript:void(0)" class="btn btn-sm btn-outline-danger" id="descartar-pendiente" title="Descartar reconexión pendiente">
                         <i class="fa fa-xmark me-1"></i>Descartar
@@ -430,7 +434,7 @@ $(document).ready(function() {
         document.body.classList.remove('chat-mobile-open');
         $('#mensajes-container').html('');
         $('#cm-empty-state').show();
-        $('#descartar-btn, #ver-resumen-btn, #chat-footer, #dropdowns-btn, #btn-estadisticas, #btn-control-respuestas').addClass('d-none').hide();
+        $('#descartar-btn, #ver-resumen-btn, #chat-footer, #dropdowns-btn, #btn-estadisticas, #btn-control-respuestas, #btn-trazas').addClass('d-none').hide();
         $('#stats-panel, #control-respuestas-panel').addClass('d-none');
         $('#contacto-nombre').text('Selecciona una conversación');
         $('#contacto-foto').attr('src', '/static/assets/img/avatar.png');
@@ -471,7 +475,7 @@ $(document).ready(function() {
         try { localStorage.setItem('wa_last_conv_pendiente', String(id)); } catch (e) {}
 
         if (chatSocket) { chatSocket.close(); chatSocket = null; }
-        $('#descartar-btn, #ver-resumen-btn, #btn-control-respuestas, #btn-estadisticas').addClass('d-none').hide();
+        $('#descartar-btn, #ver-resumen-btn, #btn-control-respuestas, #btn-estadisticas, #btn-trazas').addClass('d-none').hide();
         $('#control-respuestas-panel, #stats-panel').addClass('d-none');
         $('#cm-empty-state').hide();
         $('#mensajes-container')
@@ -517,6 +521,7 @@ $(document).ready(function() {
                 $('#descartar-pendiente, #ver-resumen, #cambiar-clasificacion').attr('data-id', id);
                 $('#descartar-btn').removeClass('d-none').show();
                 $('#ver-resumen-btn').removeClass('d-none').show();
+                $('#btn-trazas').attr('href', '/whatsapp/trazas/?conversacion=' + r.conversacion_id).removeClass('d-none').show();
                 $('#dropdowns-btn').removeClass('d-none').show();
 
                 window._lastStatsData = r;
@@ -957,6 +962,12 @@ $(document).ready(function() {
             $btn.prop('disabled', false).text('Enviar plantilla');
         });
     }
+
+    $('#mensajes-container').on('click', '.btn-reenviar', function() {
+        console.log('[plantillas] reenviar en pendientes: se reenvía como plantilla desde el panel');
+        _avisarError('El reintento debe hacerse con una plantilla aprobada: usa el botón "Enviar plantilla" y envíala de nuevo. Si el error fue de pago (131042), primero corrige el método de pago en Meta.');
+        $('#plantillas-btn').trigger('click');
+    });
 
     document.addEventListener('click', function(e) {
         const panel = document.getElementById('plantillas-panel');

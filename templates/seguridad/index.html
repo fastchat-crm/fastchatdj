@@ -6,40 +6,72 @@
 {% block head %}
   <link rel="stylesheet" href="{% static 'stylenew/panel_principal.css' %}?v1.0">
   <link rel="stylesheet" href="/static/stylenew/sesiones.css?v2.0">
-  <link rel="stylesheet" href="/static/css/seguridad/panel_canales.css?v1.0">
+  <link rel="stylesheet" href="/static/css/seguridad/panel_canales.css?v1.1">
 {% endblock %}
 
 {% block content %}
   <div class="row g-2 mb-3 panel-canales-row">
+    {% for c in canales_resumen %}
     <div class="col-6 col-md-3">
-      <a href="/whatsapp/conversaciones/" class="canal-conv-btn canal-whatsapp">
-        <i class="fab fa-whatsapp"></i>
-        <span>Ir a conversaciones<br><b>WhatsApp</b></span>
-        <i class="fa fa-arrow-right canal-arrow"></i>
-      </a>
+      <div class="canal-conv-btn canal-{{ c.key }}">
+        {% if c.key == 'whatsapp' %}<i class="fab fa-whatsapp"></i>
+        {% elif c.key == 'facebook' %}<i class="fab fa-facebook-messenger"></i>
+        {% elif c.key == 'instagram' %}<i class="fab fa-instagram"></i>
+        {% else %}<i class="fab fa-tiktok"></i>{% endif %}
+        <span>
+          <b>{{ c.label }}</b><br>
+          {% if c.total %}
+            <span class="canal-estado {% if c.conectadas %}canal-ok{% else %}canal-off{% endif %}">
+              {{ c.conectadas }}/{{ c.total }} sesión{{ c.total|pluralize:"es" }} conectada{{ c.conectadas|pluralize }}
+            </span>
+          {% else %}
+            <span class="canal-estado canal-none">Sin sesiones</span>
+          {% endif %}
+        </span>
+        <span class="canal-links">
+          <a href="{{ c.url_conversaciones }}" title="Ir a conversaciones de {{ c.label }}"><i class="fa fa-comments"></i></a>
+          <a href="{{ c.url_sesiones }}" title="Sesiones de {{ c.label }}"><i class="fa fa-plug"></i></a>
+        </span>
+      </div>
     </div>
-    <div class="col-6 col-md-3">
-      <a href="/facebook/conversaciones/" class="canal-conv-btn canal-facebook">
-        <i class="fab fa-facebook-messenger"></i>
-        <span>Ir a conversaciones<br><b>Facebook</b></span>
-        <i class="fa fa-arrow-right canal-arrow"></i>
-      </a>
-    </div>
-    <div class="col-6 col-md-3">
-      <a href="/instagram/conversaciones/" class="canal-conv-btn canal-instagram">
-        <i class="fab fa-instagram"></i>
-        <span>Ir a conversaciones<br><b>Instagram</b></span>
-        <i class="fa fa-arrow-right canal-arrow"></i>
-      </a>
-    </div>
-    <div class="col-6 col-md-3">
-      <a href="/tiktok/conversaciones/" class="canal-conv-btn canal-tiktok">
-        <i class="fab fa-tiktok"></i>
-        <span>Ir a conversaciones<br><b>TikTok</b></span>
-        <i class="fa fa-arrow-right canal-arrow"></i>
-      </a>
+    {% endfor %}
+  </div>
+
+  {% if request.user.is_superuser and consumo_por_sesion %}
+  <div class="mb-3">
+    <button class="btn btn-warning btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#consumo-sesiones-panel">
+      <i class="fa fa-coins me-1"></i> Ver consumo por sesión
+    </button>
+    <div class="collapse mt-2" id="consumo-sesiones-panel">
+      <div class="card">
+        <div class="card-body p-2">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <strong class="small"><i class="fa fa-coins me-1 text-warning"></i>Consumo estimado en plantillas Meta por sesión</strong>
+            <a href="/whatsapp/tarifas/" class="small">Ver tarifas y consumo global →</a>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0 align-middle">
+              <thead class="table-light">
+                <tr><th>Sesión</th><th>Envíos</th><th class="text-end">Total estimado (USD)</th></tr>
+              </thead>
+              <tbody>
+                {% for c in consumo_por_sesion %}
+                <tr>
+                  <td class="small">{{ c.sesion__nombre|default:c.sesion__numero }}</td>
+                  <td class="small">{{ c.n }}</td>
+                  <td class="small text-end fw-bold">${{ c.total|default:"0"|floatformat:4 }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="3" class="text-center text-muted small py-3">Aún no hay envíos de plantillas registrados.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
+  {% endif %}
   {% if PERFIL_EXISTE %}
     <div class="pp-page">
 

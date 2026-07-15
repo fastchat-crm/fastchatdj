@@ -48,11 +48,11 @@
                     {% if mensaje.estado_envio == 'fallido' %}
                         <i class="fa fa-exclamation-triangle text-danger" title="{{ mensaje.error_envio|default:'Fallo de envío' }}"></i>
                     {% elif mensaje.estado_envio == 'leido' %}
-                        <i class="fa fa-check-double text-primary" title="Read"></i>
+                        <i class="fa fa-check-double text-primary" title="Leído"></i>
                     {% elif mensaje.estado_envio == 'entregado' %}
-                        <i class="fa fa-check-double text-muted" title="Delivered"></i>
+                        <i class="fa fa-check-double text-muted" title="Entregado"></i>
                     {% elif mensaje.estado_envio == 'enviado' %}
-                        <i class="fa fa-check text-muted" title="Sent"></i>
+                        <i class="fa fa-check text-muted" title="Enviado"></i>
                     {% else %}
                         <i class="fa fa-clock text-muted"></i>
                     {% endif %}
@@ -62,6 +62,9 @@
                             data-msg-id="{{ mensaje.id }}" title="Reenviar mensaje">
                         <i class="fa fa-rotate-right"></i> Reenviar
                     </button>
+                    <div class="msg-error-detalle text-danger w-100" style="font-size:.68rem;">
+                        <i class="fa fa-exclamation-triangle me-1"></i>No entregado: {{ mensaje.error_envio|default:'Fallo de envío' }}
+                    </div>
                 {% endif %}
             </div>
         </div>

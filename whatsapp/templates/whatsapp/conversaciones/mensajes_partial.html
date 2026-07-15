@@ -90,6 +90,9 @@
                                     data-msg-id="{{ mensaje.id }}" title="Reenviar mensaje">
                                 <i class="fa fa-rotate-right"></i> Reenviar
                             </button>
+                            <div class="msg-error-detalle text-danger w-100" style="font-size:.68rem;">
+                                <i class="fa fa-exclamation-triangle me-1"></i>No entregado: {{ mensaje.error_envio|default:'Fallo de envío' }}
+                            </div>
                         {% endif %}
                         {% if conversacion.sesion.es_baileys and not mensaje.eliminado %}
                             {% if mensaje.tipo == 'texto' %}

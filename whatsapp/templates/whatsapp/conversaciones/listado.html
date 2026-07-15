@@ -196,6 +196,11 @@
                            title="Escribirle por WhatsApp Web">
                             <i class="fab fa-whatsapp"></i>
                         </a>
+                        <a href="javascript:void(0)" target="_blank" rel="noopener"
+                           class="btn btn-sm btn-default d-none" id="btn-trazas"
+                           title="Ver trazabilidad: todos los logs y errores de esta conversación">
+                            <i class="fa fa-route"></i>
+                        </a>
                         <div class="d-inline d-none" id="dropdowns-btn">
                             <a href="javascript:void(0)" class="btn btn-sm btn-default"
                                role="button" data-bs-toggle="offcanvas" data-bs-target="#convAccionesOffcanvas"
@@ -1834,7 +1839,7 @@
             sessionWebSocket(sesionId, filtroActivo);
             $('#mensajes-container').html('<div class="text-center p-5"><i class="fa fa-comments fa-4x text-muted mb-3"></i><p>Selecciona una conversación para ver los mensajes</p></div>');
             $('#chat-footer').hide();
-            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #clasificacion-inline-container, #btn-wa-web').addClass('d-none');
+            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #clasificacion-inline-container, #btn-wa-web, #btn-trazas').addClass('d-none');
             $('#stats-panel, #control-respuestas-panel').addClass('d-none');
             $('#contacto-nombre').text('Selecciona una conversación');
             $('#conv-id-badge').hide();
@@ -1907,7 +1912,7 @@
             $('#conv-id-badge').hide();
             $('#conv-fecha-inicio').hide();
             $('#contacto-foto').attr('src', '/static/assets/img/avatar.png');
-            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container, #clasificacion-inline-container, #btn-wa-web').addClass('d-none').hide();
+            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container, #clasificacion-inline-container, #btn-wa-web, #btn-trazas').addClass('d-none').hide();
             $('#stats-panel, #control-respuestas-panel, #menus-rapidos-bar').addClass('d-none');
             $('#chat-footer').addClass('d-none').hide();
             if (typeof resetHistorialCliente === 'function') resetHistorialCliente();
@@ -2404,7 +2409,7 @@
             if (chatSocket) { chatSocket.close(); chatSocket = null; }
 
             // Ocultar controles + empty state mientras carga
-            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container, #chat-footer, #clasificacion-inline-container, #btn-wa-web').addClass('d-none').hide();
+            $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container, #chat-footer, #clasificacion-inline-container, #btn-wa-web, #btn-trazas').addClass('d-none').hide();
             $('#stats-panel, #control-respuestas-panel').addClass('d-none');
             $('#respuestas-btn').removeClass('visible');
             cerrarModalRespuestas();
@@ -2454,6 +2459,7 @@
                         $('#resolver-btn').addClass('d-none').hide();
                     }
                     $('#dropdowns-btn').removeClass('d-none').show();
+                    $('#btn-trazas').attr('href', '/whatsapp/trazas/?conversacion=' + response.conversacion_id).removeClass('d-none').show();
 
                     // Bot toggle
                     _convAiActivo = response.ai_activo;
