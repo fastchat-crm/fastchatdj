@@ -4,14 +4,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MensajerIA · CRM omnicanal con IA — WhatsApp, Instagram, Facebook y TikTok</title>
+    <title>{% block title %}MensajerIA · CRM omnicanal con IA — WhatsApp, Instagram, Facebook y TikTok{% endblock %}</title>
     <meta name="description" content="MensajerIA — el CRM omnicanal con IA: WhatsApp, Instagram, Facebook Messenger y TikTok en una sola bandeja, con flujos visuales, secuencias, comentarios convertidos en ventas y pipeline.">
     <meta name="theme-color" content="#2563eb">
     <link href="{{ favicon }}" rel="shortcut icon">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
-    <link rel="stylesheet" href="/static/css/public/landing.css?v1.5">
+    <link rel="stylesheet" href="/static/css/public/landing.css?v1.6">
     {% block head %}{% endblock %}
 </head>
 <body class="landing-body">
@@ -22,17 +22,22 @@
             <img src="/static/img/public/mensajeria_logo.png" alt="MensajerIA" class="brand-logo">
             <span>Mensajer<span class="brand-name-ia">IA</span></span>
         </a>
+        <input type="checkbox" id="nav-toggle" class="nav-toggle">
         <div class="nav-links">
-            <a href="#canales">Canales</a>
-            <a href="#features">Funciones</a>
-            <a href="#panel">Panel en vivo</a>
-            <a href="#comparativa">Comparativa</a>
-            <a href="#precios">Planes</a>
-            <a href="#faq">FAQ</a>
+            <a href="/#canales">Canales</a>
+            <a href="/#features">Funciones</a>
+            <a href="/#pipeline">Pipeline</a>
+            <a href="/#panel">Panel en vivo</a>
+            <a href="/#comparativa">Comparativa</a>
+            <a href="/#precios">Planes</a>
+            <a href="/#faq">FAQ</a>
         </div>
         <div class="nav-cta">
             <a href="/login/" class="btn btn-ghost">Iniciar sesión</a>
-            <a href="#cta" class="btn btn-primary">Solicitar demo</a>
+            <a href="/#cta" class="btn btn-primary">Solicitar demo</a>
+            <label for="nav-toggle" class="nav-burger" aria-label="Abrir menú">
+                <span></span><span></span><span></span>
+            </label>
         </div>
     </div>
 </nav>
@@ -43,7 +48,7 @@
     <div class="wrap foot">
         <span>&copy; {% now "Y" %} MensajerIA · Hecho para equipos que venden por chat en todas sus redes.</span>
         <div class="foot-links">
-            <a href="/terminosycondiciones/">Privacidad</a>
+            <a href="/privacidad/">Privacidad</a>
             <a href="/terminosycondiciones/">Términos</a>
             <a href="/acercade/">Estado</a>
             <a href="/quienes-somos/">Contacto</a>

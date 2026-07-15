@@ -84,7 +84,7 @@ def _procesar_post(request):
     except Exception:
         return JsonResponse({'error': 'invalid_json'}, status=400)
 
-    EventoMetaRecibido.objects.create(
+    evento_log = EventoMetaRecibido.objects.create(
         config_meta=None,
         tipo_evento=f"tiktok:{payload.get('event', payload.get('type', 'unknown'))}",
         payload_json=payload,
@@ -94,6 +94,8 @@ def _procesar_post(request):
 
     config = _resolver_config(payload)
     if not config:
+        evento_log.error_procesamiento = 'Sin ConfigTikTok que coincida con business_id/open_id del payload (unknown_target).'
+        evento_log.save(update_fields=['error_procesamiento'])
         return JsonResponse({'ok': True, 'warning': 'unknown_target'}, status=200)
 
     sesion: SesionWhatsApp = config.sesion
@@ -105,8 +107,12 @@ def _procesar_post(request):
             interno = _a_evento_interno(evento)
             if interno:
                 process_incoming_message(sesion, interno, channel_layer)
+        evento_log.procesado = True
+        evento_log.save(update_fields=['procesado'])
     except Exception as e:
         logger.exception("Error procesando tiktok webhook: %s", e)
+        evento_log.error_procesamiento = str(e)[:2000]
+        evento_log.save(update_fields=['error_procesamiento'])
 
     return JsonResponse({'ok': True}, status=200)
 

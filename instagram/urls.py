@@ -5,6 +5,7 @@ from .view_comentarios import comentariosInstagramView
 from .view_reglas import reglasComentariosInstagramView
 from .view_conversaciones import conversacionesInstagramView
 from .view_cuentas import cuentasView
+from .view_monitoreo import monitoreoInstagramView
 from .view_posts import publicacionesView
 
 instagram_urls = (
@@ -37,6 +38,11 @@ instagram_urls = (
         "nombre": "Publicaciones Instagram",
         "url": 'publicaciones/',
         "vista": publicacionesView,
+    },
+    {
+        "nombre": "Monitoreo Instagram",
+        "url": 'monitoreo/',
+        "vista": monitoreoInstagramView,
     },
 )
 

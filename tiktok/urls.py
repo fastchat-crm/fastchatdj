@@ -4,6 +4,7 @@ from .view_centro import centroTikTokView
 from .view_comentarios import comentariosTikTokView
 from .view_conversaciones import conversacionesTikTokView
 from .view_cuentas import cuentasView
+from .view_monitoreo import monitoreoTikTokView
 
 tiktok_urls = (
     {
@@ -25,6 +26,11 @@ tiktok_urls = (
         "nombre": "Comentarios TikTok",
         "url": 'comentarios/',
         "vista": comentariosTikTokView,
+    },
+    {
+        "nombre": "Monitoreo TikTok",
+        "url": 'monitoreo/',
+        "vista": monitoreoTikTokView,
     },
 )
 

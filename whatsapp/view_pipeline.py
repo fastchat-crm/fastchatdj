@@ -1,4 +1,10 @@
-"""Vista Kanban del pipeline de ventas."""
+"""Vista Kanban del pipeline de ventas multicanal.
+
+Las cards son conversaciones de cualquier canal (WhatsApp, Instagram,
+Messenger, TikTok — `Contacto.canal`); cada card muestra su canal y el
+deep-link "Ir" abre el inbox del canal correspondiente (`CANAL_PIPELINE`).
+Expuesta en `/crm/pipeline/` (ubicación oficial) y `/whatsapp/pipeline/` (alias legado).
+"""
 import json
 import logging
 from decimal import Decimal
@@ -17,6 +23,26 @@ from .models import (
 )
 
 logger = logging.getLogger(__name__)
+
+CANAL_PIPELINE = {
+    'whatsapp': {'label': 'WhatsApp', 'icono': 'fab fa-whatsapp', 'inbox': '/whatsapp/conversaciones/'},
+    'instagram': {'label': 'Instagram', 'icono': 'fab fa-instagram', 'inbox': '/instagram/conversaciones/'},
+    'messenger': {'label': 'Messenger', 'icono': 'fab fa-facebook-messenger', 'inbox': '/facebook/conversaciones/'},
+    'tiktok': {'label': 'TikTok', 'icono': 'fab fa-tiktok', 'inbox': '/tiktok/conversaciones/'},
+    'otro': {'label': 'Otro', 'icono': 'fa fa-comment', 'inbox': '/whatsapp/conversaciones/'},
+}
+
+
+def _canal_de_conversacion(conv):
+    canal = (conv.contacto.canal or 'whatsapp') if conv.contacto_id else 'whatsapp'
+    return canal if canal in CANAL_PIPELINE else 'otro'
+
+
+def _url_ir_conversacion(conv, token):
+    # Deep-link al inbox del canal de origen; finalizadas solo existen en whatsapp
+    if conv.conversacion_finalizada:
+        return f'/whatsapp/conversaciones-finalizadas/?conv={token}'
+    return f"{CANAL_PIPELINE[_canal_de_conversacion(conv)]['inbox']}?conv={token}"
 
 
 def _generar_pipeline_con_ia(request):
@@ -80,7 +106,7 @@ def _generar_pipeline_con_ia(request):
 def pipelineView(request):
     data = {
         'titulo': 'Pipeline de Ventas',
-        'descripcion': 'Tablero Kanban de oportunidades',
+        'descripcion': 'Tablero Kanban de oportunidades multicanal',
         'ruta': request.path,
     }
     addData(request, data)
@@ -218,10 +244,8 @@ def pipelineView(request):
                     ).render({'clientes': _clientes, 'conv': conv}, request)
                     finalizada = bool(conv.conversacion_finalizada)
                     conv_token = encrypt_sesion_id(conv.id)
-                    if finalizada:
-                        url_ir = f'/whatsapp/conversaciones-finalizadas/?conv={conv_token}'
-                    else:
-                        url_ir = f'/whatsapp/conversaciones/?conv={conv_token}'
+                    url_ir = _url_ir_conversacion(conv, conv_token)
+                    canal_info = CANAL_PIPELINE[_canal_de_conversacion(conv)]
                     comentarios_qs = (
                         ComentarioCardPipeline.objects
                         .filter(card=card, status=True)
@@ -259,6 +283,9 @@ def pipelineView(request):
                             'id': conv.id,
                             'nombre': contacto.contacto_nombre or contacto_numero,
                             'numero': contacto_numero,
+                            'canal': _canal_de_conversacion(conv),
+                            'canal_label': canal_info['label'],
+                            'canal_icono': canal_info['icono'],
                             'estado': 'Finalizada' if finalizada else 'Activa',
                             'finalizada': finalizada,
                             'url_ir': url_ir,
@@ -455,11 +482,13 @@ def pipelineView(request):
             for ca in cards_qs:
                 conv = ca.conversacion
                 token = encrypt_sesion_id(conv.id)
+                ca.url_ir = _url_ir_conversacion(conv, token)
+                info_canal = CANAL_PIPELINE[_canal_de_conversacion(conv)]
+                ca.canal_label = info_canal['label']
+                ca.canal_icono = info_canal['icono']
                 if conv.conversacion_finalizada:
-                    ca.url_ir = f'/whatsapp/conversaciones-finalizadas/?conv={token}'
                     ca.lead_vivo = False
                 else:
-                    ca.url_ir = f'/whatsapp/conversaciones/?conv={token}'
                     ca.lead_vivo = bool(conv.fecha_hora_expira and conv.fecha_hora_expira > ahora)
             total_valor = sum((ca.valor_estimado or 0) for ca in cards_qs)
             cards_por_etapa.append({

@@ -5,6 +5,7 @@ from .view_comentarios import comentariosFacebookView
 from .view_reglas import reglasComentariosFacebookView
 from .view_conversaciones import conversacionesFacebookView
 from .view_cuentas import cuentasView
+from .view_monitoreo import monitoreoFacebookView
 from .view_posts import publicacionesView
 
 facebook_urls = (
@@ -37,6 +38,11 @@ facebook_urls = (
         "nombre": "Publicaciones Facebook",
         "url": 'publicaciones/',
         "vista": publicacionesView,
+    },
+    {
+        "nombre": "Monitoreo Facebook",
+        "url": 'monitoreo/',
+        "vista": monitoreoFacebookView,
     },
 )
 

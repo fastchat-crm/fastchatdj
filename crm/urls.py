@@ -12,8 +12,20 @@ from .view_departamento_chatbot import departamentoChatbotsView
 from .view_perfilempresa import perfil_empresa
 from .view_prueba_chatbot import probar_chatbot_view
 from .view_rag import ragColeccionView
+from .view_centro import centroCrmView
+from whatsapp.view_pipeline import pipelineView
 
 crm_urls = (
+    {
+        "nombre": "Centro CRM e IA",
+        "url": 'centro/',
+        "vista": centroCrmView,
+    },
+    {
+        "nombre": "Pipeline de ventas",
+        "url": 'pipeline/',
+        "vista": pipelineView,
+    },
     {
         "nombre": "Mensajeria Instantanea",
         "url": 'departamentos_chatbots/',

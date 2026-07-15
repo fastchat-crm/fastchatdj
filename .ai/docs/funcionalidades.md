@@ -15,8 +15,9 @@ Rutas de montaje: `whatsapp/` → `/whatsapp/`, `crm/` → `/crm/`, `agenda/` �
 
 ## whatsapp/ — motor central de mensajería multicanal
 
-### Centro de canal (`/whatsapp/centro/`, `/instagram/centro/`, `/tiktok/centro/`, `view_centro.py`)
-- Página guía por canal: cards de cada módulo con qué hace, cuándo usarlo, nivel (esencial/recomendado/avanzado) y orden por fases (conexión → automatización → audiencia/marketing → operación → medición). Contenido estático en `GUIAS_CANAL`; wrappers en `instagram/view_centro.py` y `tiktok/view_centro.py`.
+### Centro de canal (`/whatsapp/centro/`, `/instagram/centro/`, `/facebook/centro/`, `/tiktok/centro/`, `/crm/centro/`, `view_centro.py`)
+- Página guía por área: cards de cada módulo con qué hace, cuándo usarlo, nivel (esencial/recomendado/avanzado) y orden por fases (conexión → automatización → audiencia/marketing → operación → medición). Contenido estático en `GUIAS_CANAL`; wrappers en `instagram/view_centro.py`, `facebook/view_centro.py`, `tiktok/view_centro.py` y `crm/view_centro.py` (Centro CRM e IA: contexto de negocio → IA → flujos → proceso comercial).
+- Guía transversal de conexión de redes con URLs internas y requisitos externos por canal: `docs/guia_definitiva_conexion_redes.md`.
 
 ### Sesiones / canales (`/whatsapp/sesiones/`, `view_sesiones.py`)
 - Tablero de conexiones en cards con estado, badge de conversaciones abiertas y refresco AJAX por card. Canales activables desde configuración: WhatsApp QR (Baileys), WhatsApp API (Meta), Instagram, Messenger, TikTok.
@@ -84,8 +85,9 @@ Rutas de montaje: `whatsapp/` → `/whatsapp/`, `crm/` → `/crm/`, `agenda/` �
 - "Salir al responder": cualquier mensaje entrante del contacto cancela sus inscripciones activas (hook en `procesar_mensaje.py`).
 - Despacho por `cron_jobs/ejecutar_secuencias.py` con claim atómico, tope de intentos, respeto de opt-out y backoff de ventana Meta 24h.
 
-### Pipeline / Kanban de ventas (`/whatsapp/pipeline/`)
-- Tableros con etapas (color, orden, probabilidad, ganado/perdido), cards ligadas a conversaciones con valor y moneda, drag&drop con historial, comentarios, deep-link al inbox; mover a "ganado" dispara Purchase a Meta CAPI; generación de pipeline con IA.
+### Pipeline / Kanban de ventas (`/crm/pipeline/`, alias legado `/whatsapp/pipeline/`, `view_pipeline.py`)
+- Tableros con etapas (color, orden, probabilidad, ganado/perdido), cards ligadas a conversaciones **de cualquier canal** con valor y moneda, drag&drop con historial, comentarios; mover a "ganado" dispara Purchase a Meta CAPI; generación de pipeline con IA.
+- Multicanal: cada card muestra icono/label del canal de origen (`CANAL_PIPELINE`, `Contacto.canal`) y el deep-link "Ir" abre el inbox del canal (`/whatsapp|instagram|facebook|tiktok/conversaciones/?conv=`); finalizadas siempre en `/whatsapp/conversaciones-finalizadas/`.
 
 ### Horarios de atención (`/whatsapp/horarios/`)
 - Franjas semanales + excepciones/feriados + mensaje fuera de horario + zona horaria; duplicar entre sesiones; sincronización del perfil de negocio con Meta (leer/actualizar); generación con IA.
@@ -104,6 +106,9 @@ Rutas de montaje: `whatsapp/` → `/whatsapp/`, `crm/` → `/crm/`, `agenda/` �
 
 ### Reglas comentario→DM (`/instagram/reglas-comentarios/`, `view_reglas_comentarios.py`)
 - `ReglaComentario`: automatización por keywords (sin tildes/mayúsculas; vacío = todo comentario), opcionalmente limitada a una publicación. Al matchear (primera regla por orden gana, motor en `funciones_comentarios.procesar_reglas_comentario`, disparado al ingresar el comentario por webhook): respuesta pública automática, DM (private reply, ventana Meta 7 días) y/o etiqueta al contacto si existe. Contador de usos. Canal instagram hoy; tiktok cuando se apruebe su API.
+
+### Monitoreo webhook por canal (`/instagram/monitoreo/`, `/facebook/monitoreo/`, `/tiktok/monitoreo/`, `view_monitoreo_social.py`)
+- Auditoría por app de los webhooks sociales: lista `EventoMetaRecibido` filtrado por prefijo de canal en `tipo_evento` (`instagram:`/`messenger:`/`tiktok:`) con stats (total, 24h, firma inválida, con error), filtros por estado y modal de payload crudo. Los receivers marcan `procesado`/`error_procesamiento` (firma inválida, unknown_target, excepción). Equivalente por canal del webhook-log por sesión de WhatsApp Meta.
 
 ### Webhooks entrantes
 - Baileys (`/whatsapp/webhook_handler/` + batch), heartbeat Node (`/whatsapp/heartbeat/`), trace receiver, Meta Cloud (`/whatsapp/meta_webhook/` con HMAC + handshake), Instagram DM, Messenger, TikTok (beta). Idempotencia en dos capas (candado cache + `mensaje_id_externo`). Log e inspección de hits crudos Meta por sesión.
@@ -229,6 +234,7 @@ Rutas de montaje: `whatsapp/` → `/whatsapp/`, `crm/` → `/crm/`, `agenda/` �
 ## public/ — portal público
 
 - Landing "MensajerIA", login/registro público con términos, restaurar contraseña, recordar usuario, cambiar clave, páginas institucionales (acerca de, quiénes somos, términos/privacidad), registro de visitas.
+- Base compartido de landing: `templates/public/landing/baselanding.html` (navbar sticky con menú hamburguesa móvil, footer, `landing.css`). Lo extienden `landing.html` y `terminosycondiciones.html` (títulos dinámicos: `/privacidad/` → "Política de Privacidad", `/terminosycondiciones/` → "Términos y Condiciones"). Landing incluye sección `#pipeline` "Visualiza el viaje completo" con tabs CSS-only por sector (Educación/Aseguradora/Ventas) mostrando etapas completado/actual/futuro y badge de la red de origen por etapa.
 
 ## area_geografica/ — catálogos
 

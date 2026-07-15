@@ -14,6 +14,7 @@
 | `apps.py` | Registro `FacebookConfig` (en `INSTALLED_APPS` de `fastchatdj/settings.py`). |
 | `urls.py` | Tupla `facebook_urls` (6 rutas) montada en `/facebook/` desde `fastchatdj/urls.py`. |
 | `view_centro.py` | `/facebook/centro/` → `whatsapp.view_centro._render_centro(request, 'facebook')` (guía en `GUIAS_CANAL`). |
+| `view_monitoreo.py` | `/facebook/monitoreo/` → `whatsapp.view_monitoreo_social.monitoreo_webhook_canal(request, 'messenger')`: auditoría de eventos webhook (`EventoMetaRecibido` prefijo `messenger:`), stats, filtros error/firma/pendiente y detalle de payload. |
 | `view_cuentas.py` | `/facebook/sesiones/` — conectar páginas: autodetección desde token (`/me/accounts`), probar conexión, activar/suspender, eliminar (soft). |
 | `funciones_cuentas.py` | Helpers: `autodetectar_desde_token`, `guardar_cuenta` (crea sesión + `ConfigMessenger`), `probar_conexion` (via `MessengerService.obtener_perfil`), `generar_verify_token`. |
 | `view_conversaciones.py` | `/facebook/conversaciones/` — wrapper `conversacionesView(canal_fijo='messenger')`; el template es el único compartido de whatsapp, con branding vía `BRANDING_INBOX_CANAL`. |

@@ -1,8 +1,10 @@
-"""Centro de canal — guía instructiva de módulos por canal (WhatsApp/Instagram/Facebook/TikTok).
+"""Centro de canal — guía instructiva de módulos por canal (WhatsApp/Instagram/Facebook/TikTok)
+y del área CRM e IA.
 
 Página de orientación: qué es cada módulo, para qué sirve, cuándo usarlo y en
 qué orden conviene configurarlo. Los wrappers por canal viven en
-`instagram/view_centro.py`, `facebook/view_centro.py` y `tiktok/view_centro.py`.
+`instagram/view_centro.py`, `facebook/view_centro.py`, `tiktok/view_centro.py`
+y `crm/view_centro.py`.
 """
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
@@ -94,8 +96,8 @@ GUIAS_CANAL = {
                     {'nombre': 'Pendientes de reconexión', 'url': '/whatsapp/conversaciones-pendiente-reconexion/', 'icono': 'fa fa-rotate-left', 'nivel': 'avanzado',
                      'para_que': 'Conversaciones marcadas para reenganchar con plantilla cuando venció la ventana de 24h.',
                      'cuando': 'Cuando manejas volumen por API oficial y no quieres perder leads por la ventana.'},
-                    {'nombre': 'Pipeline de ventas', 'url': '/whatsapp/pipeline/', 'icono': 'fa fa-table-columns', 'nivel': 'recomendado',
-                     'para_que': 'Tablero Kanban de oportunidades: etapas con probabilidad, valor estimado y comentarios; al ganar reporta conversión a Meta.',
+                    {'nombre': 'Pipeline de ventas', 'url': '/crm/pipeline/', 'icono': 'fa fa-table-columns', 'nivel': 'recomendado',
+                     'para_que': 'Tablero Kanban de oportunidades multicanal (WhatsApp, Instagram, Messenger, TikTok): etapas con probabilidad, valor estimado y comentarios; al ganar reporta conversión a Meta.',
                      'cuando': 'Cuando vendes con seguimiento y quieres pronóstico de cierre, no solo chats sueltos.'},
                     {'nombre': 'Citas', 'url': '/agenda/citas/', 'icono': 'fa fa-calendar-days', 'nivel': 'avanzado',
                      'para_que': 'Calendario de turnos: crear, reagendar, marcar cumplido/no asistió.',
@@ -167,6 +169,9 @@ GUIAS_CANAL = {
                     {'nombre': 'Analytics', 'url': '/whatsapp/analytics/', 'icono': 'fa fa-chart-line', 'nivel': 'recomendado',
                      'para_que': 'Las métricas incluyen el canal de origen — filtra conversaciones y leads que llegaron por Instagram.',
                      'cuando': 'Revisión semanal.'},
+                    {'nombre': 'Monitoreo webhook', 'url': '/instagram/monitoreo/', 'icono': 'fa fa-heart-pulse', 'nivel': 'avanzado',
+                     'para_que': 'Auditoría de cada evento que Instagram envió: firma HMAC, si se procesó y el error exacto si falló.',
+                     'cuando': 'Cuando un DM o comentario no apareció en la bandeja y necesitas saber si Meta lo envió y qué pasó.'},
                 ],
             },
         ],
@@ -219,6 +224,9 @@ GUIAS_CANAL = {
                     {'nombre': 'Analytics', 'url': '/whatsapp/analytics/', 'icono': 'fa fa-chart-line', 'nivel': 'recomendado',
                      'para_que': 'Las métricas incluyen el canal de origen — filtra conversaciones y leads que llegaron por Messenger.',
                      'cuando': 'Revisión semanal.'},
+                    {'nombre': 'Monitoreo webhook', 'url': '/facebook/monitoreo/', 'icono': 'fa fa-heart-pulse', 'nivel': 'avanzado',
+                     'para_que': 'Auditoría de cada evento que Facebook envió: firma HMAC, si se procesó y el error exacto si falló.',
+                     'cuando': 'Cuando un mensaje de Messenger o un comentario no apareció y necesitas saber si Meta lo envió y qué pasó.'},
                 ],
             },
         ],
@@ -247,6 +255,70 @@ GUIAS_CANAL = {
                     {'nombre': 'Comentarios TikTok', 'url': '/tiktok/comentarios/', 'icono': 'fa fa-comment-dots', 'nivel': 'recomendado',
                      'para_que': 'Moderación de comentarios de tus videos (fase 2 de la integración).',
                      'cuando': 'Pendiente de la aprobación de la Comments API.'},
+                    {'nombre': 'Monitoreo webhook', 'url': '/tiktok/monitoreo/', 'icono': 'fa fa-heart-pulse', 'nivel': 'avanzado',
+                     'para_que': 'Auditoría de cada evento que TikTok envió: si se procesó y el error exacto si falló.',
+                     'cuando': 'Clave durante la beta — verifica que el sandbox de TikTok esté pegando al webhook.'},
+                ],
+            },
+        ],
+    },
+    'crm': {
+        'titulo': 'Centro CRM e IA',
+        'icono': 'fa fa-brain',
+        'descripcion': 'Guía del área CRM e Inteligencia Artificial: el cerebro que atiende todos los canales (WhatsApp, Instagram, Messenger, TikTok) y el proceso comercial que convierte conversaciones en ventas.',
+        'fases': [
+            {
+                'titulo': '1. Contexto del negocio',
+                'descripcion': 'Antes de entrenar nada: quién eres, qué vendes y a quién.',
+                'modulos': [
+                    {'nombre': 'Perfil Empresa', 'url': '/crm/perfil_empresa/', 'icono': 'fa fa-building', 'nivel': 'esencial',
+                     'para_que': 'Definir industria, actividad, público objetivo, catálogo de productos/servicios y respuestas con tono de marca. Alimenta el contexto de todos los agentes IA.',
+                     'cuando': 'Primero de todo — un agente sin perfil de negocio responde genérico.'},
+                    {'nombre': 'Industria', 'url': '/crm/industria/', 'icono': 'fa fa-industry', 'nivel': 'avanzado',
+                     'para_que': 'Catálogo de industrias con etapas de venta configurables (embudo).',
+                     'cuando': 'Si tu industria no aparece en el catálogo o quieres personalizar su embudo.'},
+                    {'nombre': 'Actividad Económica', 'url': '/crm/actividad_economica/', 'icono': 'fa fa-briefcase', 'nivel': 'avanzado',
+                     'para_que': 'Catálogo de actividades económicas que clasifican el perfil de empresa.',
+                     'cuando': 'Solo mantenimiento del catálogo — normalmente ya viene poblado.'},
+                ],
+            },
+            {
+                'titulo': '2. Inteligencia Artificial',
+                'descripcion': 'Crea, entrena y afina los agentes que responden en todos los canales.',
+                'modulos': [
+                    {'nombre': 'Crear Agente Rápido', 'url': '/crm/entrenamiento/wizard/', 'icono': 'fa fa-wand-magic-sparkles', 'nivel': 'esencial',
+                     'para_que': 'Wizard de 3 pasos que arma un agente IA funcional desde una descripción de tu negocio.',
+                     'cuando': 'Tu primer agente — en minutos tienes un bot respondiendo; después lo pules en Entrenamiento IA.'},
+                    {'nombre': 'Entrenamiento IA', 'url': '/crm/entrenamiento/', 'icono': 'fa fa-robot', 'nivel': 'esencial',
+                     'para_que': 'El taller completo del agente: personalidad y tono, fuentes de conocimiento (archivos, enlaces, texto), FAQs curables, herramientas (function-calling), memoria, humanización, API Keys IA, chat de prueba, evaluación con juez LLM y auditor con sugerencias.',
+                     'cuando': 'Trabajo continuo — cada vez que el bot responda mal, aquí se corrige: FAQs, contexto o prompt.'},
+                    {'nombre': 'Conocimiento RAG', 'url': '/crm/rag/', 'icono': 'fa fa-database', 'nivel': 'recomendado',
+                     'para_que': 'Colecciones de conocimiento independientes del agente: indexa documentos en su propio buscador semántico y asígnalas a sesiones.',
+                     'cuando': 'Cuando varios agentes o sesiones comparten la misma base documental (catálogos, reglamentos, manuales).'},
+                ],
+            },
+            {
+                'titulo': '3. Flujos estructurados',
+                'descripcion': 'Cuando necesitas control total del camino: menús, validaciones y APIs.',
+                'modulos': [
+                    {'nombre': 'Mensajería Instantánea (flujos)', 'url': '/crm/departamentos_chatbots/', 'icono': 'fa fa-diagram-project', 'nivel': 'recomendado',
+                     'para_que': 'Editor visual de flujos por departamento: menús, preguntas con validación, llamadas HTTP, condicionales, agendamiento y handoff a humano. Incluye generación y explicación del flujo por IA.',
+                     'cuando': 'Para procesos con pasos fijos (cotizadores, triaje, agendamiento) donde la IA libre no basta.'},
+                    {'nombre': 'Endpoints API', 'url': '/crm/endpoints_api/', 'icono': 'fa fa-plug-circle-bolt', 'nivel': 'avanzado',
+                     'para_que': 'Registrar endpoints y credenciales (bearer/basic/apikey) reutilizables en nodos HTTP de flujos y en herramientas del agente IA.',
+                     'cuando': 'Cuando el bot deba consultar o escribir en tus sistemas (ERP, e-commerce, CRM externo).'},
+                ],
+            },
+            {
+                'titulo': '4. Proceso comercial',
+                'descripcion': 'De conversación a venta: el pipeline multicanal y tu cartera de clientes.',
+                'modulos': [
+                    {'nombre': 'Pipeline de ventas', 'url': '/crm/pipeline/', 'icono': 'fa fa-table-columns', 'nivel': 'recomendado',
+                     'para_que': 'Tablero Kanban de oportunidades donde conviven conversaciones de todos los canales (WhatsApp, Instagram, Messenger, TikTok): etapas con probabilidad, valor estimado, comentarios y forecast; al ganar reporta Purchase a Meta CAPI.',
+                     'cuando': 'Cuando vendes con seguimiento — cada lead prometedor se asigna al tablero desde su bandeja de conversaciones.'},
+                    {'nombre': 'Clientes', 'url': '/crm/cliente/', 'icono': 'fa fa-users', 'nivel': 'recomendado',
+                     'para_que': 'Cartera de clientes con trazabilidad de origen por canal (chatbot, cotizador, agenda, manual) y recurrencia.',
+                     'cuando': 'Para revisar quién compra, por dónde llegó y cuántas veces vuelve.'},
                 ],
             },
         ],

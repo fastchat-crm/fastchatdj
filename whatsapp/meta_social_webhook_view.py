@@ -183,7 +183,7 @@ def _procesar_post_social(request, ConfigCls, canal):
     secret = get_meta_app_secret()
     firma_valida = _validar_hmac(raw_body, sig, secret)
 
-    EventoMetaRecibido.objects.create(
+    evento_log = EventoMetaRecibido.objects.create(
         config_meta=None,
         tipo_evento=f'{canal}:{payload.get("object", "unknown")}',
         payload_json=payload,
@@ -192,8 +192,12 @@ def _procesar_post_social(request, ConfigCls, canal):
     )
 
     if not firma_valida and secret:
+        evento_log.error_procesamiento = 'Firma HMAC inválida (X-Hub-Signature-256 no coincide con app_secret).'
+        evento_log.save(update_fields=['error_procesamiento'])
         return JsonResponse({'ok': False, 'error': 'invalid_signature'}, status=401)
     if not config:
+        evento_log.error_procesamiento = f'Sin configuración {canal} que coincida con el destinatario del payload (unknown_target).'
+        evento_log.save(update_fields=['error_procesamiento'])
         return JsonResponse({'ok': True, 'warning': 'unknown_target'}, status=200)
 
     sesion: SesionWhatsApp = config.sesion
@@ -215,8 +219,12 @@ def _procesar_post_social(request, ConfigCls, canal):
                     guardar_comentario_instagram(sesion, config, change.get('value') or {})
                 elif canal == 'messenger' and change.get('field') == 'feed':
                     guardar_comentario_facebook(sesion, config, change.get('value') or {})
+        evento_log.procesado = True
+        evento_log.save(update_fields=['procesado'])
     except Exception as e:
         logger.exception("Error procesando %s webhook: %s", canal, e)
+        evento_log.error_procesamiento = str(e)[:2000]
+        evento_log.save(update_fields=['error_procesamiento'])
         _traza(
             etapa='error_general', sesion=sesion, nivel='error',
             detalle={f'{canal}_webhook_error': str(e)},

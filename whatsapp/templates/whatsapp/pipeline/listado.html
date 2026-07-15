@@ -89,7 +89,7 @@
                             <span class="kanban-card-avatar">{{ ct.contacto_nombre|default:ct.contacto_numero|slice:":1" }}</span>
                             <div style="flex:1; min-width:0;">
                                 <div class="kanban-card-name">{{ ct.contacto_nombre|default:"(sin nombre)" }}</div>
-                                <div class="kanban-card-phone"><i class="fa fa-phone"></i> {{ ct.contacto_numero }}</div>
+                                <div class="kanban-card-phone" title="Canal: {{ card.canal_label }}"><i class="{{ card.canal_icono }}"></i> {{ ct.contacto_numero }}</div>
                             </div>
                             {% if c.conversacion_finalizada %}
                                 <span class="kanban-card-state ended" title="Conversacion finalizada"><i class="fa fa-check"></i> Finalizada</span>
@@ -338,8 +338,8 @@
             <div class="modal-body">
                 <p class="mb-2">
                     Es un <strong>tablero Kanban</strong> que organiza tus oportunidades de venta en columnas por etapa.
-                    Cada conversación de WhatsApp/IG/Messenger se vuelve una <strong>tarjeta</strong> con valor estimado,
-                    probabilidad y fecha de cierre — y avanza arrastrandose entre etapas.
+                    Cada conversación de cualquier canal (WhatsApp, Instagram, Messenger o TikTok) se vuelve una <strong>tarjeta</strong> con valor estimado,
+                    probabilidad y fecha de cierre — y avanza arrastrandose entre etapas. El botón "Ir" abre la bandeja del canal de origen.
                 </p>
                 <ol class="small mb-2">
                     <li class="mb-1"><strong>Crea un pipeline</strong> con "Nuevo pipeline" o usa <strong>"Generar con IA"</strong> para armar uno completo en 5 segundos.</li>
@@ -682,11 +682,12 @@ function pipeRenderVerCard(j){
             '<div class="pipe-conv-avatar">' + pipeEscape(inicial) + '</div>' +
             '<div class="pipe-conv-info">' +
                 '<h6>' + pipeEscape(conv.nombre || '(sin nombre)') + '</h6>' +
-                '<div class="pipe-conv-phone"><i class="fa fa-phone me-1"></i>' + pipeEscape(conv.numero || '—') + '</div>' +
+                '<div class="pipe-conv-phone"><i class="' + pipeEscape(conv.canal_icono || 'fa fa-phone') + ' me-1"></i>' + pipeEscape(conv.numero || '—') + '</div>' +
             '</div>' +
             '<span class="pipe-conv-state-pill ' + stateClass + '"><i class="fa fa-' + (conv.finalizada ? 'check' : 'circle') + ' me-1"></i>' + pipeEscape(conv.estado) + '</span>' +
         '</div>' +
         '<div class="pipe-conv-meta">' +
+            '<div class="pipe-conv-meta-item"><div class="label">Canal</div><div class="value"><i class="' + pipeEscape(conv.canal_icono || 'fa fa-comment') + ' me-1"></i>' + pipeEscape(conv.canal_label || 'WhatsApp') + '</div></div>' +
             '<div class="pipe-conv-meta-item"><div class="label">Etapa</div><div class="value"><i class="fa fa-flag me-1" style="color:' + pipeEscape(card.etapa_color) + '"></i>' + pipeEscape(card.etapa) + '</div></div>' +
             '<div class="pipe-conv-meta-item"><div class="label">Asignó</div><div class="value">' + pipeEscape(card.usuario) + '</div></div>' +
             '<div class="pipe-conv-meta-item"><div class="label">Fecha asignación</div><div class="value">' + pipeEscape(card.fecha_creacion) + '</div></div>' +
