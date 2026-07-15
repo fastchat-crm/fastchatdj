@@ -2273,7 +2273,8 @@ nav.top {
     }
 
     .nav-cta .btn-ghost {
-        display: none
+        display: inline-flex;
+        align-items: center
     }
 
     .logo {

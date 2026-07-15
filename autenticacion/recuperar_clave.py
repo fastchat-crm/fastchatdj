@@ -25,6 +25,17 @@ activate(settings.TIME_ZONE)
 logger = logging.getLogger(__name__)
 
 
+def generarclave():
+    """Genera una clave/código aleatorio de 8 caracteres alfanuméricos.
+
+    Ya no se usa en el flujo de recuperación (ahora es por token de un solo uso),
+    pero `public/view_registro.py` la importa para generar credenciales iniciales.
+    """
+    from random import choice
+    valores = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    return ''.join(choice(valores) for _ in range(8))
+
+
 def _usuario_por_uid(uidb64):
     """Decodifica el uid del enlace y devuelve el Usuario, o None si es inválido."""
     try:
