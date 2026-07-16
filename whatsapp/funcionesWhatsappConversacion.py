@@ -324,14 +324,18 @@ def consultar_datos_red(request, canal_fijo=None):
         cliente; solo el nombre push que llega en cada webhook.
       - Baileys: foto vía getUserImage del Node + nombre/alias de contacts_list.
       - TikTok: nickname/avatar llegan solo en el webhook (API beta sin perfil).
-    Si obtiene nombre/foto y el contacto no los tiene, los persiste."""
+    Si obtiene nombre/foto y el contacto no los tiene, los persiste.
+    Devuelve `{'result': True, 'data': <html>}` — el partial
+    `_modal_datos_red.html` con dos columnas: lo que respondió la red (con el
+    endpoint/campo de origen) y lo guardado en BD (tabla.campo), para validar
+    lado a lado."""
     from core.funciones_adicionales import get_image_as_base64
     from .permisos_sesion import puede_ver_conversacion
     from .view_conversaciones import canal_conversacion_permitido
     try:
         conversacion = ConversacionWhatsApp.objects.select_related(
             'contacto', 'contacto__sesion'
-        ).get(pk=int(request.GET['pk']))
+        ).get(pk=int(request.GET.get('pk') or request.GET.get('id')))
     except Exception as ex:
         return JsonResponse({'result': False, 'message': f'No se encontró la conversación: {ex}'})
     if not puede_ver_conversacion(request.user, conversacion):
@@ -366,11 +370,16 @@ def consultar_datos_red(request, canal_fijo=None):
             raw = perfil.get('raw') or {}
             nombre_red = perfil.get('nombre') or ''
             foto = perfil.get('foto') or ''
+            if raw.get('fuente') == 'conversations_fallback':
+                origen_msn = f'Graph API · GET /{{page_id}}/conversations?user_id={external_id} → participants.name'
+                nota += ' El perfil directo no está disponible (app sin Advanced Access); el nombre se obtuvo del endpoint de Conversations.'
+            else:
+                origen_msn = f'Graph API · GET /{external_id}?fields=first_name,last_name,profile_pic'
             datos = [
-                {'label': 'Nombre', 'valor': nombre_red},
-                {'label': 'Nombre (first_name)', 'valor': raw.get('first_name') or ''},
-                {'label': 'Apellido (last_name)', 'valor': raw.get('last_name') or ''},
-                {'label': 'PSID', 'valor': str(external_id)},
+                {'label': 'Nombre', 'valor': nombre_red, 'origen': origen_msn},
+                {'label': 'Nombre (first_name)', 'valor': raw.get('first_name') or '', 'origen': 'campo first_name'},
+                {'label': 'Apellido (last_name)', 'valor': raw.get('last_name') or '', 'origen': 'campo last_name'},
+                {'label': 'PSID', 'valor': str(external_id), 'origen': 'id page-scoped del webhook (sender.id)'},
             ]
         elif proveedor == 'instagram':
             from meta.perfiles import obtener_perfil_usuario_instagram
@@ -390,29 +399,30 @@ def consultar_datos_red(request, canal_fijo=None):
             raw = perfil.get('raw') or {}
             nombre_red = perfil.get('nombre') or ''
             foto = perfil.get('foto') or ''
+            origen_ig = f'Graph API · GET /{external_id}?fields=name,username,profile_pic,follower_count,...'
             datos = [
-                {'label': 'Nombre', 'valor': raw.get('name') or ''},
-                {'label': 'Username', 'valor': ('@' + raw['username']) if raw.get('username') else ''},
-                {'label': 'Seguidores', 'valor': raw.get('follower_count', '')},
-                {'label': 'Sigue a la cuenta', 'valor': _si_no(raw.get('is_user_follow_business'))},
-                {'label': 'La cuenta lo sigue', 'valor': _si_no(raw.get('is_business_follow_user'))},
-                {'label': 'IGSID', 'valor': str(external_id)},
+                {'label': 'Nombre', 'valor': raw.get('name') or '', 'origen': origen_ig},
+                {'label': 'Username', 'valor': ('@' + raw['username']) if raw.get('username') else '', 'origen': 'campo username'},
+                {'label': 'Seguidores', 'valor': raw.get('follower_count', ''), 'origen': 'campo follower_count (requiere permiso)'},
+                {'label': 'Sigue a la cuenta', 'valor': _si_no(raw.get('is_user_follow_business')), 'origen': 'campo is_user_follow_business'},
+                {'label': 'La cuenta lo sigue', 'valor': _si_no(raw.get('is_business_follow_user')), 'origen': 'campo is_business_follow_user'},
+                {'label': 'IGSID', 'valor': str(external_id), 'origen': 'id del webhook (sender.id)'},
             ]
         elif proveedor == 'meta':
             red = 'WhatsApp Cloud API'
             nota = 'La API oficial de WhatsApp no permite consultar el perfil del cliente; solo se dispone del nombre push que Meta envía con cada mensaje y de la identidad cross-app.'
             datos = [
-                {'label': 'Número (wa_id)', 'valor': contacto.contacto_numero or ''},
-                {'label': 'Nombre (push)', 'valor': contacto.contacto_nombre or ''},
-                {'label': 'Meta User ID (cross-app)', 'valor': contacto.meta_user_id or ''},
+                {'label': 'Número (wa_id)', 'valor': contacto.contacto_numero or '', 'origen': 'webhook Meta · contacts[].wa_id'},
+                {'label': 'Nombre (push)', 'valor': contacto.contacto_nombre or '', 'origen': 'webhook Meta · contacts[].profile.name'},
+                {'label': 'Meta User ID (cross-app)', 'valor': contacto.meta_user_id or '', 'origen': 'webhook Meta · contacts[].user_id (EC.xxx)'},
             ]
         elif proveedor == 'tiktok':
             red = 'TikTok'
             nota = 'TikTok Business Messaging (beta) solo entrega nickname y avatar dentro del propio webhook; no existe endpoint de perfil consultable.'
             datos = [
-                {'label': 'Open ID', 'valor': str(external_id)},
-                {'label': 'Nickname (webhook)', 'valor': contacto.contacto_nombre or ''},
-                {'label': 'Avatar guardado', 'valor': 'Sí' if contacto.contacto_foto else 'No'},
+                {'label': 'Open ID', 'valor': str(external_id), 'origen': 'webhook TikTok · sender.open_id'},
+                {'label': 'Nickname (webhook)', 'valor': contacto.contacto_nombre or '', 'origen': 'webhook TikTok · sender.nickname'},
+                {'label': 'Avatar guardado', 'valor': 'Sí' if contacto.contacto_foto else 'No', 'origen': 'webhook TikTok · sender.avatar'},
             ]
         else:
             import json as _json
@@ -434,10 +444,10 @@ def consultar_datos_red(request, canal_fijo=None):
                     pass
             nombre_red = nombre_agenda or alias_push
             datos = [
-                {'label': 'Número', 'valor': contacto.contacto_numero or ''},
-                {'label': 'Nombre en agenda', 'valor': nombre_agenda},
-                {'label': 'Alias (push name)', 'valor': alias_push},
-                {'label': 'Foto de perfil', 'valor': 'Disponible' if foto else 'No disponible'},
+                {'label': 'Número', 'valor': contacto.contacto_numero or '', 'origen': 'webhook Baileys · from (JID)'},
+                {'label': 'Nombre en agenda', 'valor': nombre_agenda, 'origen': 'Node Baileys · ConfigBaileys.contacts_list → name'},
+                {'label': 'Alias (push name)', 'valor': alias_push, 'origen': 'Node Baileys · ConfigBaileys.contacts_list → notify'},
+                {'label': 'Foto de perfil', 'valor': 'Disponible' if foto else 'No disponible', 'origen': 'Node Baileys · GET /getUserImage'},
             ]
     except Exception as ex:
         return JsonResponse({'result': False, 'message': f'Error consultando la red: {ex}'})
@@ -455,14 +465,42 @@ def consultar_datos_red(request, canal_fijo=None):
     if actualizado:
         contacto.save(request)
 
+    bd = [
+        {'campo': 'Nombre del contacto', 'valor': contacto.contacto_nombre or '',
+         'tabla': 'whatsapp_contacto', 'campo_db': 'contacto_nombre'},
+        {'campo': 'Número / ID', 'valor': contacto.contacto_numero or '',
+         'tabla': 'whatsapp_contacto', 'campo_db': 'contacto_numero'},
+        {'campo': 'JID interno', 'valor': contacto.from_number or '',
+         'tabla': 'whatsapp_contacto', 'campo_db': 'from_number'},
+        {'campo': 'ID externo (PSID/IGSID/wa_id)', 'valor': contacto.external_id or '',
+         'tabla': 'whatsapp_contacto', 'campo_db': 'external_id'},
+        {'campo': 'Canal', 'valor': contacto.canal or '',
+         'tabla': 'whatsapp_contacto', 'campo_db': 'canal'},
+        {'campo': 'Meta User ID', 'valor': contacto.meta_user_id or '',
+         'tabla': 'whatsapp_contacto', 'campo_db': 'meta_user_id'},
+        {'campo': 'Foto guardada', 'valor': 'Sí' if contacto.contacto_foto else 'No',
+         'tabla': 'whatsapp_contacto', 'campo_db': 'contacto_foto'},
+        {'campo': 'Proveedor de atención (snapshot)', 'valor': conversacion.proveedor_atencion or '',
+         'tabla': 'whatsapp_conversacionwhatsapp', 'campo_db': 'proveedor_atencion'},
+        {'campo': 'Sesión / proveedor actual', 'valor': f'{sesion.nombre or sesion.session_id} · {proveedor}',
+         'tabla': 'whatsapp_sesionwhatsapp', 'campo_db': 'nombre / proveedor'},
+    ]
+
     log(f"Consultó datos de red ({red}) del contacto {contacto.contacto_numero}",
         request, "view", obj=conversacion.id)
+    ctx = {
+        'red': red,
+        'nota': nota,
+        'foto_red': foto,
+        'datos_red': datos,
+        'bd': bd,
+        'foto_bd': contacto.contacto_foto or '',
+        'actualizado': ', '.join(actualizado),
+        'conversacion': conversacion,
+    }
     return JsonResponse({
         'result': True,
-        'red': red,
-        'foto': foto,
-        'datos': datos,
-        'nota': nota,
+        'data': render_to_string('whatsapp/conversaciones/_modal_datos_red.html', ctx, request=request),
         'actualizado': ', '.join(actualizado),
     })
 

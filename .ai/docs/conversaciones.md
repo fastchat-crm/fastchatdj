@@ -61,19 +61,27 @@ proveedor/duración/error/status) cuando falla o tarda >5s — revisar
 `/whatsapp/trazas/` para diagnosticar "no se envió"/"demoró" en Messenger/IG.
 
 **Acción `consultar_datos_red` (2026-07-16):** ítem "Consultar datos de la red"
-en el offcanvas de acciones (activas) y en el dropdown de finalizadas. GET
-`?action=consultar_datos_red&pk=<conv>` → handler compartido
-`funcionesWhatsappConversacion.consultar_datos_red(request, canal_fijo)`:
-consulta en vivo al proveedor lo que expone de ese cliente y devuelve
-`{result, red, foto, datos: [{label, valor}], nota, actualizado}` que el JS
-muestra en un `Swal.fire`. Por proveedor: Messenger → User Profile API
-(nombre/foto, sin username/email); Instagram → name/username/foto +
-follower_count y flags follow (según permisos); WhatsApp Cloud → sin endpoint
-de perfil (solo push name + meta_user_id guardados); Baileys → `getUserImage`
-del Node + nombre/alias de `contacts_list`; TikTok → solo lo que trajo el
-webhook (nickname/avatar, API beta). Si obtiene nombre/foto y el contacto no
-los tenía, los persiste y el front recarga el sidebar. Valida
-`puede_ver_conversacion` + `canal_conversacion_permitido`.
+(id `consultar_datos_red`, clase `form_modal`) en el offcanvas de acciones
+(activas) y en el dropdown de finalizadas — usa el flujo `formModal` genérico.
+GET `?action=consultar_datos_red&id=<conv>` (acepta `pk` o `id`) → handler
+compartido `funcionesWhatsappConversacion.consultar_datos_red(request,
+canal_fijo)`: consulta en vivo al proveedor y devuelve `{result, data: html}`
+renderizando `whatsapp/conversaciones/_modal_datos_red.html` — modal de dos
+columnas estilo formulario: izquierda lo que respondió la red (cada campo con
+su origen: endpoint Graph / campo del webhook) y derecha lo guardado en BD con
+`tabla.campo` (`whatsapp_contacto.contacto_nombre`, `external_id`, `canal`,
+`meta_user_id`, `whatsapp_conversacionwhatsapp.proveedor_atencion`, etc.), con
+ambas fotos para comparar. Por proveedor: Messenger → User Profile API
+(nombre/foto; fallback `GET /{page_id}/conversations?user_id=<psid>` →
+`participants.name` cuando la app no tiene Advanced Access y el GET directo al
+PSID da error 100.33); Instagram → name/username/foto + follower_count y flags
+follow (según permisos); WhatsApp Cloud → sin endpoint de perfil (solo push
+name + meta_user_id guardados); Baileys → `getUserImage` del Node +
+nombre/alias de `contacts_list`; TikTok → solo lo que trajo el webhook. En
+fallo Meta el mensaje incluye el error crudo de Graph + diagnóstico del token
+(`meta/perfiles.py::diagnosticar_token` — GET /me: vivo y a qué página
+pertenece) + page_id/PSID. Si obtiene nombre/foto y el contacto no los tenía,
+los persiste. Valida `puede_ver_conversacion` + `canal_conversacion_permitido`.
 
 **Proveedores de transporte** soportados (snapshot en `ConversacionWhatsApp.proveedor_atencion`):
 Meta Cloud API, Baileys (Node), Instagram DM, Messenger. Selección vía dispatcher

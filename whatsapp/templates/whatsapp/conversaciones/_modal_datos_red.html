@@ -1,0 +1,48 @@
+<div class="container-fluid">
+    <div class="row mb-2">
+        <div class="col-12 d-flex align-items-center gap-2">
+            <span class="badge bg-primary">{{ red }}</span>
+            <span class="badge bg-light text-dark border">Conv #{{ conversacion.id }}</span>
+            {% if actualizado %}
+                <span class="badge bg-success"><i class="fa fa-check me-1"></i>Contacto actualizado: {{ actualizado }}</span>
+            {% endif %}
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-6">
+            <h6 class="border-bottom pb-1 mb-2"><i class="fa fa-satellite-dish me-1 text-info"></i>Respuesta de la red (en vivo)</h6>
+            {% if foto_red %}
+                <div class="text-center mb-2">
+                    <img src="{{ foto_red }}" alt="foto red" style="width:84px;height:84px;border-radius:50%;object-fit:cover;">
+                    <div><small class="text-muted">Foto devuelta por la red</small></div>
+                </div>
+            {% endif %}
+            {% for d in datos_red %}
+                <div class="mb-2">
+                    <label class="form-label mb-0 small fw-bold">{{ d.label }}</label>
+                    <input type="text" class="form-control form-control-sm" value="{{ d.valor }}" readonly>
+                    <small class="text-muted">{{ d.origen }}</small>
+                </div>
+            {% endfor %}
+            {% if nota %}
+                <div class="alert alert-info py-2 small mb-0">{{ nota }}</div>
+            {% endif %}
+        </div>
+        <div class="col-md-6">
+            <h6 class="border-bottom pb-1 mb-2"><i class="fa fa-database me-1 text-secondary"></i>Guardado en la base de datos</h6>
+            {% if foto_bd %}
+                <div class="text-center mb-2">
+                    <img src="{{ foto_bd }}" alt="foto guardada" style="width:84px;height:84px;border-radius:50%;object-fit:cover;">
+                    <div><small class="text-muted">whatsapp_contacto.contacto_foto</small></div>
+                </div>
+            {% endif %}
+            {% for d in bd %}
+                <div class="mb-2">
+                    <label class="form-label mb-0 small fw-bold">{{ d.campo }}</label>
+                    <input type="text" class="form-control form-control-sm" value="{{ d.valor }}" readonly>
+                    <small class="text-muted">{{ d.tabla }}.{{ d.campo_db }}</small>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>

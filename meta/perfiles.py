@@ -156,6 +156,20 @@ def obtener_perfil_usuario_messenger(config_fb, psid, timeout=4):
         timeout=timeout,
     )
     if not data:
+        # Fallback: con la app en modo desarrollo / sin Advanced Access de
+        # pages_messaging, GET /{psid} devuelve 100.33 para usuarios sin rol
+        # en la app. El endpoint de Conversations de la página sí expone el
+        # nombre del participante con acceso estándar.
+        nombre_conv = _nombre_desde_conversations(config_fb, psid, timeout=timeout)
+        if nombre_conv:
+            return {
+                'ok':       True,
+                'error':    '',
+                'nombre':   nombre_conv,
+                'username': '',
+                'foto':     '',
+                'raw':      {'name': nombre_conv, 'fuente': 'conversations_fallback'},
+            }
         return {'ok': False, 'error': error, 'nombre': '', 'username': '', 'foto': '', 'raw': {}}
     nombre = (data.get('name')
               or ' '.join(x for x in (data.get('first_name'), data.get('last_name')) if x)).strip()
@@ -167,6 +181,35 @@ def obtener_perfil_usuario_messenger(config_fb, psid, timeout=4):
         'foto':     data.get('profile_pic') or '',
         'raw':      data,
     }
+
+
+def _nombre_desde_conversations(config_fb, psid, timeout=4):
+    """GET /{page_id}/conversations?user_id={psid}&fields=participants — devuelve
+    el nombre del participante que no es la página, o '' si no se pudo."""
+    try:
+        r = requests.get(
+            build_graph_url(f'/{config_fb.page_id}/conversations'),
+            params={
+                'access_token': config_fb.access_token,
+                'user_id': psid,
+                'fields': 'participants',
+            },
+            timeout=timeout,
+        )
+    except Exception:
+        return ''
+    if r.status_code != 200:
+        return ''
+    try:
+        for conv in (r.json().get('data') or []):
+            for p in ((conv.get('participants') or {}).get('data') or []):
+                if str(p.get('id')) == str(psid) and p.get('name'):
+                    return p['name'].strip()
+                if str(p.get('id')) != str(config_fb.page_id) and p.get('name'):
+                    return p['name'].strip()
+    except Exception:
+        return ''
+    return ''
 
 
 def obtener_perfil_usuario_instagram(config_ig, igsid, timeout=4):
