@@ -195,7 +195,9 @@ def _procesar_post_social(request, ConfigCls, canal):
         procesado=False,
     )
 
-    if not firma_valida and secret:
+    # `_validar_hmac` devuelve True en modo permisivo sin secret; `not firma_valida`
+    # cubre firma inválida con secret y secret ausente en modo estricto.
+    if not firma_valida:
         evento_log.error_procesamiento = 'Firma HMAC inválida (X-Hub-Signature-256 no coincide con app_secret).'
         evento_log.save(update_fields=['error_procesamiento'])
         return JsonResponse({'ok': False, 'error': 'invalid_signature'}, status=401)

@@ -1171,8 +1171,34 @@ def process_incoming_message(session, event_data, channel_layer):
             pass
 
 
+def _descargar_media_url(url, filename):
+    """Descarga los bytes de un adjunto entregado como URL (Instagram/Messenger
+    entregan la media por URL del CDN de Meta, no en base64)."""
+    try:
+        import mimetypes
+        import requests
+        r = requests.get(url, timeout=20)
+        r.raise_for_status()
+        if '.' not in filename:
+            ctype = (r.headers.get('content-type') or '').split(';')[0].strip()
+            ext = mimetypes.guess_extension(ctype) if ctype else None
+            if ext:
+                filename = f'{filename}{ext}'
+        return ContentFile(r.content, filename)
+    except Exception as e:
+        logger.exception("No se pudo descargar media desde URL %s: %s", str(url)[:120], e)
+        return None
+
+
 def save_media_file(media_base64, filename):
     try:
+        # Instagram/Messenger entregan el adjunto como URL (dict {'url': ...})
+        # en vez de base64: se descargan los bytes del CDN de Meta y se guardan
+        # igual que el resto. Antes reventaba en b64decode y la media se perdía.
+        if isinstance(media_base64, dict) and media_base64.get('url'):
+            return _descargar_media_url(media_base64['url'], filename)
+        if isinstance(media_base64, str) and media_base64.startswith(('http://', 'https://')):
+            return _descargar_media_url(media_base64, filename)
         file_data = base64.b64decode(media_base64)
         return ContentFile(file_data, filename)
     except Exception as e:

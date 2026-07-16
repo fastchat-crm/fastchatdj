@@ -70,6 +70,11 @@ with open(os.path.join(BASE_DIR, 'credenciales.json')) as json_file:
     META_APP_SECRET     = data.get('META_APP_SECRET', '')
     META_CONFIG_ID      = data.get('META_CONFIG_ID', '')
     META_API_VERSION    = data.get('META_API_VERSION', 'v22.0')
+    # Modo estricto de firma de webhooks Meta: sin app_secret configurado se
+    # RECHAZA el evento (en vez de aceptarlo sin validar). Recomendado en
+    # producción con una sola Meta App y su app_secret cargado. Poner en False
+    # solo durante un setup inicial sin secret.
+    META_WEBHOOK_FAIL_CLOSED = data.get('META_WEBHOOK_FAIL_CLOSED', True)
 
     _chatbot_emails = data.get('CHATBOT_ERROR_NOTIFY_EMAILS', ['hllerenaa1h@gmail.com'])
     if isinstance(_chatbot_emails, str):

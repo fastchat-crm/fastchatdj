@@ -14,14 +14,36 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _fail_closed() -> bool:
+    """True si el modo estricto está activo (`META_WEBHOOK_FAIL_CLOSED=True`):
+    sin `app_secret` no se acepta ningún evento (mejor un outage visible que
+    procesar eventos spoofeados en silencio)."""
+    try:
+        from django.conf import settings
+        return bool(getattr(settings, 'META_WEBHOOK_FAIL_CLOSED', False))
+    except Exception:
+        return False
+
+
 def validar_firma_hmac(raw_body: bytes, signature_header: str, app_secret: str | None) -> bool:
     """Compara `X-Hub-Signature-256` contra HMAC(app_secret, body).
 
-    Si no hay `app_secret` configurado devolvemos True (modo permisivo para
-    setup inicial — el operador debe setearlo para endurecer). Si hay app_secret
-    pero no llegó header de firma, rechazamos.
+    Con `app_secret` configurado: valida y rechaza firmas inválidas (fail-closed).
+    Sin `app_secret`: por defecto acepta (permisivo para setup inicial) emitiendo
+    warning; con `META_WEBHOOK_FAIL_CLOSED=True` rechaza (recomendado en prod).
+    Si hay app_secret pero no llegó header de firma, rechazamos.
     """
     if not app_secret:
+        if _fail_closed():
+            logger.error(
+                "Webhook Meta RECHAZADO: app_secret no configurado y modo estricto "
+                "activo (META_WEBHOOK_FAIL_CLOSED). Configura el App Secret."
+            )
+            return False
+        logger.warning(
+            "Webhook Meta aceptado SIN validar firma (app_secret no configurado) — "
+            "activa META_WEBHOOK_FAIL_CLOSED=True en producción para cerrar el fail-open."
+        )
         return True
     if not signature_header:
         return False

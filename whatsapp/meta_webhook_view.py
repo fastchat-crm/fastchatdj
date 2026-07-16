@@ -225,7 +225,10 @@ def _procesar_evento(request):
         procesado=False,
     )
 
-    if not firma_valida and app_secret_org:
+    # `_validar_firma_hmac` ya devuelve True en modo permisivo sin secret, así que
+    # `not firma_valida` cubre: firma inválida con secret, o secret ausente en
+    # modo estricto. En ambos casos rechazamos.
+    if not firma_valida:
         evento.error_procesamiento = 'firma_hmac_invalida'
         evento.save(update_fields=['error_procesamiento'])
         logger.warning("Meta webhook: firma HMAC invalida para phone_number_id=%s", phone_number_id)
@@ -258,14 +261,20 @@ def _procesar_evento(request):
 def _validar_firma_hmac(raw_body: bytes, signature_header: str, app_secret: str) -> bool:
     """Compara X-Hub-Signature-256 contra HMAC(app_secret_org, body).
 
-    Si no hay app_secret devuelve True (modo permisivo para setup inicial). OJO:
-    esto es fail-OPEN — en producción configura SIEMPRE el app_secret para
-    cerrar la puerta a eventos spoofeados. Se emite un warning por cada evento
-    aceptado sin validar para que sea visible en logs/monitoreo."""
+    Con app_secret: valida y rechaza firmas inválidas (fail-closed). Sin
+    app_secret: por defecto acepta con warning; con META_WEBHOOK_FAIL_CLOSED=True
+    rechaza (recomendado en producción)."""
     if not app_secret:
+        from django.conf import settings
+        if getattr(settings, 'META_WEBHOOK_FAIL_CLOSED', False):
+            logger.error(
+                "Webhook Meta RECHAZADO: app_secret no configurado y modo estricto "
+                "activo (META_WEBHOOK_FAIL_CLOSED)."
+            )
+            return False
         logger.warning(
             "Webhook Meta aceptado SIN validar firma (app_secret no configurado) — "
-            "configura el App Secret para cerrar este fail-open."
+            "activa META_WEBHOOK_FAIL_CLOSED=True en producción para cerrar el fail-open."
         )
         return True
     if not signature_header:
