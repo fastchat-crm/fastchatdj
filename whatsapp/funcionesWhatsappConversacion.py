@@ -351,8 +351,9 @@ def consultar_datos_red(request, canal_fijo=None):
             red = 'Facebook Messenger'
             nota = 'Messenger solo expone nombre y foto del usuario — no hay username, email ni teléfono.'
             perfil = obtener_perfil_usuario_messenger(getattr(sesion, 'config_messenger', None), external_id)
-            if not perfil:
-                return JsonResponse({'result': False, 'message': 'Meta no devolvió el perfil (token vencido, permisos o PSID inválido).'})
+            if not (perfil and perfil.get('ok')):
+                detalle = (perfil or {}).get('error') or 'sin detalle'
+                return JsonResponse({'result': False, 'message': f'Meta no devolvió el perfil. Detalle: {detalle}'})
             raw = perfil.get('raw') or {}
             nombre_red = perfil.get('nombre') or ''
             foto = perfil.get('foto') or ''
@@ -367,8 +368,9 @@ def consultar_datos_red(request, canal_fijo=None):
             red = 'Instagram'
             nota = 'Instagram expone nombre, username y foto; seguidores y flags de follow dependen de los permisos de la app. No hay email ni teléfono.'
             perfil = obtener_perfil_usuario_instagram(getattr(sesion, 'config_instagram', None), external_id)
-            if not perfil:
-                return JsonResponse({'result': False, 'message': 'Meta no devolvió el perfil (token vencido, permisos o IGSID inválido).'})
+            if not (perfil and perfil.get('ok')):
+                detalle = (perfil or {}).get('error') or 'sin detalle'
+                return JsonResponse({'result': False, 'message': f'Meta no devolvió el perfil. Detalle: {detalle}'})
             raw = perfil.get('raw') or {}
             nombre_red = perfil.get('nombre') or ''
             foto = perfil.get('foto') or ''

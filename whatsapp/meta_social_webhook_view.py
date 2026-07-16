@@ -305,11 +305,11 @@ def _enriquecer_perfil_social(config, sesion, evento, canal):
             cache.set(cache_key, perfil, 6 * 3600)
             _traza(
                 etapa='webhook_recibido', sesion=sesion, numero=str(sender_id),
-                nivel='info' if perfil else 'warning',
+                nivel='info' if perfil.get('ok') else 'warning',
                 detalle={'perfil_social': canal,
                          'resultado': {k: v for k, v in perfil.items() if k != 'raw'} or 'sin_datos'},
             )
-        if not perfil:
+        if not (perfil and perfil.get('ok')):
             return
         if perfil.get('nombre') and not evento.get('pushName') and not tiene_nombre:
             evento['pushName'] = perfil['nombre']

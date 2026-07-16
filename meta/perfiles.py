@@ -88,33 +88,56 @@ def validar_messenger_desde_graph(session, config_fb, timeout=10):
     }
 
 
+def _graph_get_usuario(access_token, objeto_id, listas_campos, timeout=4):
+    """GET /{objeto_id} probando sets de campos en orden (el set completo puede
+    fallar por permisos). Devuelve `(data|None, error:str)` con el error crudo
+    de Graph (código + mensaje) para diagnóstico."""
+    ultimo_error = ''
+    for campos in listas_campos:
+        try:
+            r = requests.get(
+                build_graph_url(f'/{objeto_id}'),
+                params={'access_token': access_token, 'fields': campos},
+                timeout=timeout,
+            )
+        except Exception as e:
+            return None, f'Error de conexión con Graph: {e}'
+        if r.status_code == 200:
+            return r.json(), ''
+        try:
+            err = (r.json().get('error') or {})
+            ultimo_error = f"HTTP {r.status_code} — código {err.get('code')}"
+            if err.get('error_subcode'):
+                ultimo_error += f'.{err.get("error_subcode")}'
+            ultimo_error += f": {err.get('message', '')}"
+        except Exception:
+            ultimo_error = f'HTTP {r.status_code}: {r.text[:200]}'
+        ultimo_error = ultimo_error[:400]
+    return None, ultimo_error
+
+
 def obtener_perfil_usuario_messenger(config_fb, psid, timeout=4):
     """User Profile API de Messenger para un PSID.
 
     Messenger solo expone nombre y foto del usuario (`first_name`, `last_name`,
     `profile_pic`) — NO hay username, email ni teléfono en esta API.
-    Devuelve dict {'nombre', 'username', 'foto', 'raw'} o None si falla.
+    Devuelve dict {'ok', 'error', 'nombre', 'username', 'foto', 'raw'}.
     """
     if not (config_fb and config_fb.access_token and psid):
-        return None
-    data = None
-    for campos in ('first_name,last_name,profile_pic', 'name,profile_pic'):
-        try:
-            r = requests.get(
-                build_graph_url(f'/{psid}'),
-                params={'access_token': config_fb.access_token, 'fields': campos},
-                timeout=timeout,
-            )
-        except Exception:
-            return None
-        if r.status_code == 200:
-            data = r.json()
-            break
+        return {'ok': False, 'error': 'Sin ConfigMessenger/access_token o PSID vacío.',
+                'nombre': '', 'username': '', 'foto': '', 'raw': {}}
+    data, error = _graph_get_usuario(
+        config_fb.access_token, psid,
+        ('first_name,last_name,profile_pic', 'name,profile_pic'),
+        timeout=timeout,
+    )
     if not data:
-        return None
+        return {'ok': False, 'error': error, 'nombre': '', 'username': '', 'foto': '', 'raw': {}}
     nombre = (data.get('name')
               or ' '.join(x for x in (data.get('first_name'), data.get('last_name')) if x)).strip()
     return {
+        'ok':       True,
+        'error':    '',
         'nombre':   nombre,
         'username': '',
         'foto':     data.get('profile_pic') or '',
@@ -128,28 +151,19 @@ def obtener_perfil_usuario_instagram(config_ig, igsid, timeout=4):
     Expone `name`, `username`, `profile_pic` y (según permisos de la app)
     `follower_count`, `is_user_follow_business`, `is_business_follow_user`.
     NO hay email ni teléfono. Si el set completo falla (permisos), reintenta
-    con el set mínimo. Devuelve dict {'nombre', 'username', 'foto', 'raw'} o None.
+    con el set mínimo. Devuelve dict {'ok', 'error', 'nombre', 'username', 'foto', 'raw'}.
     """
     if not (config_ig and config_ig.access_token and igsid):
-        return None
-    data = None
-    for campos in (
-        'name,username,profile_pic,follower_count,is_user_follow_business,is_business_follow_user',
-        'name,username,profile_pic',
-    ):
-        try:
-            r = requests.get(
-                build_graph_url(f'/{igsid}'),
-                params={'access_token': config_ig.access_token, 'fields': campos},
-                timeout=timeout,
-            )
-        except Exception:
-            return None
-        if r.status_code == 200:
-            data = r.json()
-            break
+        return {'ok': False, 'error': 'Sin ConfigInstagram/access_token o IGSID vacío.',
+                'nombre': '', 'username': '', 'foto': '', 'raw': {}}
+    data, error = _graph_get_usuario(
+        config_ig.access_token, igsid,
+        ('name,username,profile_pic,follower_count,is_user_follow_business,is_business_follow_user',
+         'name,username,profile_pic'),
+        timeout=timeout,
+    )
     if not data:
-        return None
+        return {'ok': False, 'error': error, 'nombre': '', 'username': '', 'foto': '', 'raw': {}}
     username = data.get('username') or ''
     nombre = (data.get('name') or '').strip()
     if nombre and username:
@@ -157,6 +171,8 @@ def obtener_perfil_usuario_instagram(config_ig, igsid, timeout=4):
     elif username:
         nombre = f'@{username}'
     return {
+        'ok':       True,
+        'error':    '',
         'nombre':   nombre,
         'username': username,
         'foto':     data.get('profile_pic') or '',
