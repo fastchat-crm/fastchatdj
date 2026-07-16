@@ -82,6 +82,26 @@ fallo Meta el mensaje incluye el error crudo de Graph + diagnóstico del token
 (`meta/perfiles.py::diagnosticar_token` — GET /me: vivo y a qué página
 pertenece) + page_id/PSID. Si obtiene nombre/foto y el contacto no los tenía,
 los persiste. Valida `puede_ver_conversacion` + `canal_conversacion_permitido`.
+La lógica de consulta vive en `_datos_red_de(conversacion)` (levanta NameError
+con mensaje diagnóstico) y la autorización en `_conversacion_para_datos_red`.
+El modal incluye botón "Actualizar contacto con estos datos" → POST
+`action=aplicar_datos_red` (`aplicar_datos_red(request, canal_fijo)`): a
+diferencia del GET (solo completa lo que falta), SOBREESCRIBE
+`contacto_nombre`/`contacto_foto` con lo que devuelva la red; el JS cierra el
+modal, actualiza header/sidebar y muestra Swal. El enriquecimiento automático
+del webhook usa cache key `perfil_social_v2_<canal>_<sender>` (v2 = bust tras
+agregar el fallback de Conversations, para reintentar perfiles que habían
+quedado cacheados como fallo).
+
+**Contactos por red (2026-07-16):** `whatsapp/view_contacto.py::contactoView`
+acepta `canal_fijo`. Sin él (módulo `/whatsapp/contacto/`) filtra sesiones a
+`PROVEEDORES_WHATSAPP`; con él, al proveedor de la red. Wrappers:
+`/facebook/contactos/`, `/instagram/contactos/`, `/tiktok/contactos/`
+(`<app>/view_contactos.py`). El filtro aplica al listado, duplicados,
+combo de sesiones y form de alta; en canales sociales el template oculta
+"Nuevo contacto"/"Importar" (los contactos nacen del webhook). Para usuarios
+staff no-superuser hay que registrar el módulo (url `/facebook/contactos/`,
+etc.) en Seguridad → Módulos y asignarlo al grupo.
 
 **Proveedores de transporte** soportados (snapshot en `ConversacionWhatsApp.proveedor_atencion`):
 Meta Cloud API, Baileys (Node), Instagram DM, Messenger. Selección vía dispatcher

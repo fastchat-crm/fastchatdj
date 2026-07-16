@@ -53,13 +53,14 @@
     {# ───────── Toolbar ───────── #}
     <div class="cont-toolbar">
     <div class="">
+        {% if not canal_fijo %}
         <a href="javascript:void(0);" class="btn btn-success btn-sm" onclick="formModal(0, 'Agregar {{ titulo }}', 'add')">
             <i class="fas fa-plus-circle me-2"></i> Nuevo {{ titulo }}
         </a>
         <a href="javascript:void(0);" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalImportarContactos">
             <i class="fas fa-file-import me-2"></i> Importar contactos
         </a>
-
+        {% endif %}
     </div>
         <div class="cont-count">
             <b>{{ list_count }}</b> contacto{{ list_count|pluralize }}

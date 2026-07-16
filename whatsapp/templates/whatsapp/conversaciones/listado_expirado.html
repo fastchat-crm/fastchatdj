@@ -813,6 +813,34 @@ $(document).ready(function() {
         });
     });
 
+    $(document).on('click', '#btn-aplicar-datos-red', function(e) {
+        e.preventDefault();
+        const id = $(this).data('id');
+        if (!id) { return; }
+        const tok = $('input[name="csrfmiddlewaretoken"]').first().val()
+            || (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+        pantallaespera();
+        $.post(window.location.pathname, { action: 'aplicar_datos_red', id: id, csrfmiddlewaretoken: tok }, function(r) {
+            $.unblockUI();
+            if (!r || r.result !== true) {
+                if (typeof mensajeWarning === 'function') mensajeWarning((r && r.message) || 'No se pudo actualizar el contacto.');
+                return;
+            }
+            const modalEl = document.querySelector('.modal.show');
+            if (modalEl && window.bootstrap) {
+                const inst = bootstrap.Modal.getInstance(modalEl);
+                if (inst) { inst.hide(); }
+            }
+            Swal.fire({ title: 'Listo', text: r.message, type: 'success' });
+            if (r.nombre) { $('#contacto-nombre').text(r.nombre); }
+            if (r.foto) { $('#contacto-foto').attr('src', r.foto); }
+            cargarConversaciones();
+        }, 'json').fail(function() {
+            $.unblockUI();
+            if (typeof mensajeWarning === 'function') mensajeWarning('Error de conexión al actualizar el contacto.');
+        });
+    });
+
     // ── Acciones del dropdown (cambiar clasificación) ──────────────────
     $(document).on('click', '#dropdowns-btn .form_modal', function(e) {
         e.preventDefault();

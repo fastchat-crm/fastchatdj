@@ -45,4 +45,15 @@
             {% endfor %}
         </div>
     </div>
+    {% if puede_aplicar %}
+        <div class="row mt-2">
+            <div class="col-12 text-end">
+                <button type="button" class="btn btn-primary btn-sm" id="btn-aplicar-datos-red"
+                        data-id="{{ conversacion.id }}"
+                        title="Sobreescribe el nombre y la foto del contacto con lo que devolvió la red">
+                    <i class="fa fa-rotate me-1"></i>Actualizar contacto con estos datos
+                </button>
+            </div>
+        </div>
+    {% endif %}
 </div>

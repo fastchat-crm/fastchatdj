@@ -336,6 +336,9 @@ def conversacionesFinalizadasView(request, canal_fijo=None):
                     return JsonResponse({'error': False})
                 elif action == 'cambiar-clasificacion':
                     return cambiar_clasificacion_post(request)
+                elif action == 'aplicar_datos_red':
+                    from .funcionesWhatsappConversacion import aplicar_datos_red
+                    return aplicar_datos_red(request, canal_fijo=canal_fijo)
                 elif action == 'cambiar-nombre-contacto':
                     return cambiar_nombre_contacto_post(request)
                 elif action == 'marcar-reactivar':

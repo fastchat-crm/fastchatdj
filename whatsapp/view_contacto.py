@@ -55,14 +55,26 @@ def _guardar_campos_personalizados(request, contacto):
 
 @login_required
 @secure_module
-def contactoView(request):
-    data = {'titulo': 'Contacto',
-            'modulo': 'Whatsapp',
+def contactoView(request, canal_fijo=None):
+    from .view_conversaciones import BRANDING_INBOX_CANAL, PROVEEDORES_WHATSAPP
+    branding = BRANDING_INBOX_CANAL.get(canal_fijo, BRANDING_INBOX_CANAL[None])
+    data = {'titulo': f"Contactos {branding['nombre']}" if canal_fijo else 'Contacto',
+            'modulo': branding['nombre'] if canal_fijo else 'Whatsapp',
             'ruta': request.path,
+            'canal_fijo': canal_fijo or '',
+            'canal_branding': branding,
             'fecha': str(date.today())
             }
     model = Contacto
     Formulario = ContactoForm
+    # Aislamiento por canal: cada red ve solo los contactos de sus sesiones.
+    # Sin canal_fijo (módulo WhatsApp) se excluyen las sesiones sociales.
+    if canal_fijo:
+        filtro_proveedor_sesion = Q(proveedor=canal_fijo)
+        filtro_proveedor_contacto = Q(sesion__proveedor=canal_fijo)
+    else:
+        filtro_proveedor_sesion = Q(proveedor__in=PROVEEDORES_WHATSAPP)
+        filtro_proveedor_contacto = Q(sesion__proveedor__in=PROVEEDORES_WHATSAPP)
 
     if request.method == 'POST':
         res_json = []
@@ -316,7 +328,7 @@ def contactoView(request):
             if action == 'add':
                 try:
                     data["form"] = form = AddContactoForm()
-                    form.fields['sesion'].queryset = SesionWhatsApp.objects.filter(status=True, usuario=request.user).distinct()
+                    form.fields['sesion'].queryset = SesionWhatsApp.objects.filter(filtro_proveedor_sesion, status=True, usuario=request.user).distinct()
                     form.fields['numero_telefono'].initial = '593'
                     data["campos_personalizados"] = _campos_para_contacto(None)
                     template = get_template("whatsapp/contacto/form.html")
@@ -395,17 +407,17 @@ def contactoView(request):
         # Excluimos contactos cuya sesión esté soft-deleted (sesion.status=False).
         # Sin esto, un contacto que vivía en 2 sesiones aparecía como "duplicado"
         # incluso después de borrar lógicamente una de las sesiones.
-        criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True, sesion__status=True, sesion__usuario=request.user), ''
+        criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True, sesion__status=True, sesion__usuario=request.user) & filtro_proveedor_contacto, ''
         id = request.GET.get('id', '')
         solo_duplicados = request.GET.get('solo_duplicados', '')
-        mis_sesiones = SesionWhatsApp.objects.filter(status=True, usuario=request.user).distinct()
+        mis_sesiones = SesionWhatsApp.objects.filter(filtro_proveedor_sesion, status=True, usuario=request.user).distinct()
         sesion_id = leer_sesion_id(request)
         sesion_id = str(sesion_id) if sesion_id else ''
 
         # Números que aparecen en más de una sesión ACTIVA del usuario.
         # Filtramos sesion__status=True para no contar sesiones soft-deleted.
         numeros_duplicados = set(
-            model.objects.filter(status=True, sesion__status=True, sesion__usuario=request.user)
+            model.objects.filter(filtro_proveedor_contacto, status=True, sesion__status=True, sesion__usuario=request.user)
             .values('contacto_numero')
             .annotate(_n=DbCount('sesion', distinct=True))
             .filter(_n__gt=1)
@@ -416,7 +428,7 @@ def contactoView(request):
         dup_sesiones = {}
         if numeros_duplicados:
             for row in (
-                model.objects.filter(status=True, sesion__status=True, sesion__usuario=request.user, contacto_numero__in=numeros_duplicados)
+                model.objects.filter(filtro_proveedor_contacto, status=True, sesion__status=True, sesion__usuario=request.user, contacto_numero__in=numeros_duplicados)
                 .values('contacto_numero', 'sesion__nombre', 'sesion__numero')
                 .order_by('contacto_numero', 'sesion__nombre')
             ):

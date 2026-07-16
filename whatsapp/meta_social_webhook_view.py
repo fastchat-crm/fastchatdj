@@ -290,7 +290,7 @@ def _enriquecer_perfil_social(config, sesion, evento, canal):
         tiene_foto = bool(contacto and contacto.contacto_foto)
         if tiene_nombre and tiene_foto:
             return
-        cache_key = f'perfil_social_{canal}_{sender_id}'
+        cache_key = f'perfil_social_v2_{canal}_{sender_id}'
         perfil = cache.get(cache_key)
         if perfil is None:
             from meta.perfiles import (

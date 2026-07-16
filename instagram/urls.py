@@ -8,6 +8,7 @@ from .view_conversaciones import (
     conversacionesFinalizadasInstagramView,
     conversacionesPendienteReconexionInstagramView,
 )
+from .view_contactos import contactosInstagramView
 from .view_cuentas import cuentasView
 from .view_monitoreo import monitoreoInstagramView
 from .view_posts import publicacionesView
@@ -38,6 +39,11 @@ instagram_urls = (
         "nombre": "Conversaciones pendiente reconexión Instagram",
         "url": 'conversaciones-pendiente-reconexion/',
         "vista": conversacionesPendienteReconexionInstagramView,
+    },
+    {
+        "nombre": "Contactos Instagram",
+        "url": 'contactos/',
+        "vista": contactosInstagramView,
     },
     {
         "nombre": "Comentarios Instagram",

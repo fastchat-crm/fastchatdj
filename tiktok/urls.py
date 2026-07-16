@@ -6,6 +6,7 @@ from .view_conversaciones import (
     conversacionesTikTokView,
     conversacionesFinalizadasTikTokView,
 )
+from .view_contactos import contactosTikTokView
 from .view_cuentas import cuentasView
 from .view_monitoreo import monitoreoTikTokView
 from .webhook_view import tiktok_webhook
@@ -30,6 +31,11 @@ tiktok_urls = (
         "nombre": "Conversaciones finalizadas TikTok",
         "url": 'conversaciones-finalizadas/',
         "vista": conversacionesFinalizadasTikTokView,
+    },
+    {
+        "nombre": "Contactos TikTok",
+        "url": 'contactos/',
+        "vista": contactosTikTokView,
     },
     {
         "nombre": "Comentarios TikTok",

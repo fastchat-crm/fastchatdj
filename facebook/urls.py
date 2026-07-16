@@ -7,6 +7,7 @@ from .view_conversaciones import (
     conversacionesFacebookView,
     conversacionesFinalizadasFacebookView,
 )
+from .view_contactos import contactosFacebookView
 from .view_cuentas import cuentasView
 from .view_monitoreo import monitoreoFacebookView
 from .view_posts import publicacionesView
@@ -32,6 +33,11 @@ facebook_urls = (
         "nombre": "Conversaciones finalizadas Facebook",
         "url": 'conversaciones-finalizadas/',
         "vista": conversacionesFinalizadasFacebookView,
+    },
+    {
+        "nombre": "Contactos Facebook",
+        "url": 'contactos/',
+        "vista": contactosFacebookView,
     },
     {
         "nombre": "Comentarios Facebook",
