@@ -34,6 +34,10 @@ el canal.
 > `/tiktok/webhook/`.** La antigua `/whatsapp/tiktok_webhook/` sigue respondiendo pero
 > está deprecada.
 
+## Comprobar conectividad
+
+Acción POST `diagnostico` en `view_cuentas` → `whatsapp.diagnostico_social.diagnosticar_conexion(sesion)` (módulo compartido). Como la API está en beta y no hay prueba de perfil en vivo, valida credenciales, vigencia del token (`token_expira_en`), identificador, el último `error_mensaje` registrado y el webhook (verificado + `client_secret`). El kebab de la card tiene "Comprobar conectividad" que lo muestra en un modal. Card y menú propios de la app.
+
 ## Pendiente al aprobar la API
 
 1. Validar shape real del payload del webhook y del endpoint de envío contra el sandbox.

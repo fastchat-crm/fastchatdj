@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block head %}
-    <link rel="stylesheet" href="/static/stylenew/sesiones.css?v2.1">
+    <link rel="stylesheet" href="/static/stylenew/sesiones.css?v2.2">
     <link rel="stylesheet" href="/static/css/instagram/cuentas_listado.css?v1.3">
 {% endblock %}
 
@@ -88,6 +88,9 @@
                                 <div class="kebab-heading">Acciones de sesión</div>
                                 <button type="button" class="kebab-item btn-probar" data-id="{{ s.id }}">
                                     <i class="fa fa-plug text-success"></i> Probar conexión
+                                </button>
+                                <button type="button" class="kebab-item btn-diag" data-id="{{ s.id }}">
+                                    <i class="fa fa-stethoscope text-primary"></i> Comprobar conectividad
                                 </button>
                                 <button type="button" class="kebab-item btn-edit"
                                         data-id="{{ s.id }}" data-nombre="{{ s.nombre }}"
@@ -437,6 +440,44 @@
 
             document.querySelectorAll('.btn-probar').forEach(btn =>
                 btn.addEventListener('click', () => accion('probar', btn.dataset.id)));
+
+            function diagStepsHtml(diag) {
+                let html = '<div class="diag-wrap"><p class="diag-resumen">' + (diag.resumen || '') + '</p><ul class="diag-steps">';
+                (diag.pasos || []).forEach(p => {
+                    const cls = p.ok ? 'diag-ok' : 'diag-fail';
+                    const ico = p.ok ? 'fa-circle-check' : 'fa-circle-xmark';
+                    let cuerpo = '<div class="diag-label">' + p.label + '</div>';
+                    if (p.detalle) cuerpo += '<div class="diag-detalle">' + p.detalle + '</div>';
+                    if (p.solucion && !p.ok) cuerpo += '<div class="diag-sol"><i class="fa fa-lightbulb"></i> ' + p.solucion + '</div>';
+                    html += '<li class="diag-step ' + cls + '"><span class="diag-ico"><i class="fa ' + ico + '"></i></span><div class="diag-body">' + cuerpo + '</div></li>';
+                });
+                html += '</ul></div>';
+                return html;
+            }
+
+            async function diagnosticar(id) {
+                const fd = new FormData();
+                fd.append('action', 'diagnostico');
+                fd.append('pk', id);
+                fd.append('csrfmiddlewaretoken', csrf());
+                const r = await fetch('', {method: 'POST', body: fd});
+                const j = await r.json();
+                if (j.error) {
+                    mensajeWarning(j.message || 'No se pudo diagnosticar.');
+                    return;
+                }
+                const diag = j.diagnostico || {};
+                Swal.fire({
+                    title: diag.ok ? 'Conexión correcta' : 'Diagnóstico de conexión',
+                    html: diagStepsHtml(diag),
+                    type: diag.ok ? 'success' : 'warning',
+                    width: 560,
+                    confirmButtonText: 'Cerrar'
+                });
+            }
+
+            document.querySelectorAll('.btn-diag').forEach(btn =>
+                btn.addEventListener('click', () => diagnosticar(btn.dataset.id)));
             document.querySelectorAll('.btn-toggle').forEach(btn =>
                 btn.addEventListener('change', () => accion('toggle_activo', btn.dataset.id)));
             document.querySelectorAll('.btn-del').forEach(btn =>

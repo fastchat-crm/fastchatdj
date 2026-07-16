@@ -49,6 +49,10 @@ crear un proveedor `facebook` nuevo.
 - **Envío saliente**: dispatcher `get_whatsapp_service` → `MessengerService`
   (ya estaba registrado).
 
+## Comprobar conectividad
+
+Acción POST `diagnostico` en `view_cuentas` → `whatsapp.diagnostico_social.diagnosticar_conexion(sesion)` (módulo compartido con IG/TikTok). Devuelve pasos con causa+solución (token, Page ID, respuesta de Graph mapeada a causa legible vía `_causa_graph`, webhook verificado) y sincroniza `SesionWhatsApp.estado`. El kebab de la card tiene "Comprobar conectividad" que lo muestra en un modal. Card y menú propios de la app.
+
 ## Checklist del administrador (pendientes del developer)
 
 1. `makemigrations whatsapp` + `migrate` — el choice `facebook` en

@@ -28,3 +28,4 @@
 - Visibilidad: dueño de la sesión o superuser (cuentas); `sesiones_vista_completa` (conversaciones/posts).
 - El webhook del canal vive en `instagram/webhook_view.py` → **`/instagram/webhook/`** (canónica; usa esta al configurar el panel de Meta). La implementación es compartida con Messenger en `whatsapp/meta_social_webhook_view.py`. Alias legacy deprecado: `/whatsapp/instagram_webhook/`.
 - Guía de tokens para clientes: Documentación in-app, slug `conectar-instagram-tiktok`.
+- **Comprobar conectividad**: acción POST `diagnostico` en `view_cuentas` → `whatsapp.diagnostico_social.diagnosticar_conexion(sesion)` (módulo compartido). Devuelve pasos con causa+solución (token, IG User ID, respuesta de Graph mapeada a causa legible, webhook verificado) y sincroniza `SesionWhatsApp.estado`. El kebab de la card tiene el botón "Comprobar conectividad" que lo pinta en un modal. Card y menú son propios de la app (no comparten `_card.html`).

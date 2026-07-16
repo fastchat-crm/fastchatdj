@@ -97,6 +97,14 @@ def _procesar_accion(request):
                 'message': f"Conectado a la página {perfil.get('name', '')} · {perfil.get('fan_count', 0)} seguidores.",
             })
 
+        if action == 'diagnostico':
+            sesion = _sesion_del_usuario(request, int(request.POST.get('pk', 0)))
+            if not sesion:
+                return JsonResponse({'error': True, 'message': 'Página no encontrada.'})
+            from whatsapp.diagnostico_social import diagnosticar_conexion
+            diag = diagnosticar_conexion(sesion)
+            return JsonResponse({'error': False, 'diagnostico': diag})
+
         if action == 'toggle_activo':
             sesion = _sesion_del_usuario(request, int(request.POST.get('pk', 0)))
             if not sesion:

@@ -97,6 +97,14 @@ def _procesar_accion(request):
                 'message': f"Conectado como @{perfil.get('username', '')} · {perfil.get('followers_count', 0)} seguidores.",
             })
 
+        if action == 'diagnostico':
+            sesion = _sesion_del_usuario(request, int(request.POST.get('pk', 0)))
+            if not sesion:
+                return JsonResponse({'error': True, 'message': 'Cuenta no encontrada.'})
+            from whatsapp.diagnostico_social import diagnosticar_conexion
+            diag = diagnosticar_conexion(sesion)
+            return JsonResponse({'error': False, 'diagnostico': diag})
+
         if action == 'toggle_activo':
             sesion = _sesion_del_usuario(request, int(request.POST.get('pk', 0)))
             if not sesion:
