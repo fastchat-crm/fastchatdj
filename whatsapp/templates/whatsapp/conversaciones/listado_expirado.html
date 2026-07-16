@@ -51,9 +51,11 @@
                 <a href="javascript:void(0)" class="cs-tab-btn active">
                     <i class="fa fa-check-circle me-1"></i>Finalizadas
                 </a>
+                {% if canal_branding.tiene_pendientes %}
                 <a href="{{ canal_branding.url_pendientes }}" class="cs-tab-btn cs-tab-link bloqueo_pantalla">
                     <i class="fa fa-hourglass-half me-1"></i>Pendientes
                 </a>
+                {% endif %}
             </div>
 
             <div class="cs-exp-filter-zone">

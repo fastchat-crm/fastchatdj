@@ -349,20 +349,30 @@ sesiones y textos del modal sin-sesiones). Los wrappers solo pasan `canal_fijo`:
 
 Desde 2026-07-16 las pestañas Finalizadas y Pendientes también son per-canal:
 cada app (`facebook/`, `instagram/`, `tiktok/`) registra
-`conversaciones-finalizadas/` y `conversaciones-pendiente-reconexion/` como
-wrappers de las vistas compartidas de `whatsapp/` con su `canal_fijo`
-(`facebook/view_conversaciones.py`, etc. — antes las pestañas mandaban al
-inbox de WhatsApp). `BRANDING_INBOX_CANAL` ganó las claves
-`url_conversaciones`, `url_finalizadas` y `url_pendientes`, y los tres
-templates (`listado.html`, `listado_expirado.html`,
-`listado_pendiente_reconexion.html`) las usan en tabs, AJAX
-(`load_conversations`, `ver_mensajes`, `transcribe_audio`, `_fbUrl`), alert de
-sesión pausada y modal `#modalSinSesiones` — no volver a hardcodear
-`/whatsapp/...` en esos templates. Las respuestas JSON con `url` de redirección
-(`marcar-resuelto`, `terminar-sin-despedida`, `send` reactivador,
+`conversaciones-finalizadas/` (y `conversaciones-pendiente-reconexion/` solo
+en Instagram) como wrappers de las vistas compartidas de `whatsapp/` con su
+`canal_fijo` (`facebook/view_conversaciones.py`, etc. — antes las pestañas
+mandaban al inbox de WhatsApp). `BRANDING_INBOX_CANAL` ganó las claves
+`url_conversaciones`, `url_finalizadas`, `url_pendientes` y
+`tiene_pendientes`, y los tres templates (`listado.html`,
+`listado_expirado.html`, `listado_pendiente_reconexion.html`) las usan en
+tabs, AJAX (`load_conversations`, `ver_mensajes`, `transcribe_audio`,
+`_fbUrl`), alert de sesión pausada y modal `#modalSinSesiones` — no volver a
+hardcodear `/whatsapp/...` en esos templates. Las respuestas JSON con `url` de
+redirección (`marcar-resuelto`, `terminar-sin-despedida`, `send` reactivador,
 `marcar-reactivar`, deep-link `?conv=`) también salen de `branding`.
 Los nuevos módulos por canal deben registrarse en seguridad (sincronizar
 módulos desde `sub_urls`) para usuarios no superuser.
+
+**Messenger y TikTok no tienen Pendientes** (`tiene_pendientes=False`): el
+inbox muestra solo Abiertas y Finalizadas, y no existen las rutas
+`/facebook|tiktok/conversaciones-pendiente-reconexion/`. El ciclo de vida es
+un solo hilo por contacto: el asesor finaliza a mano y, si el cliente vuelve a
+escribir, `ConversacionWhatsApp.obtener_o_crear_activa` (whatsapp/models.py)
+REABRE la última conversación finalizada del contacto (proveedor 'messenger' o
+'tiktok') en vez de crear una nueva — el historial completo queda en el mismo
+hilo. WhatsApp e Instagram conservan el flujo clásico (nueva conversación tras
+finalizar, salvo sonda `pendiente_reconexion`).
 
 El tema de color por canal sigue viniendo de `base_chat.html`
 (`body.canal-{{ canal_fijo }}` + `chat_tema_canal.css`). Para agregar un canal:

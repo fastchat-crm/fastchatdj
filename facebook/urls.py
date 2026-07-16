@@ -6,7 +6,6 @@ from .view_reglas import reglasComentariosFacebookView
 from .view_conversaciones import (
     conversacionesFacebookView,
     conversacionesFinalizadasFacebookView,
-    conversacionesPendienteReconexionFacebookView,
 )
 from .view_cuentas import cuentasView
 from .view_monitoreo import monitoreoFacebookView
@@ -33,11 +32,6 @@ facebook_urls = (
         "nombre": "Conversaciones finalizadas Facebook",
         "url": 'conversaciones-finalizadas/',
         "vista": conversacionesFinalizadasFacebookView,
-    },
-    {
-        "nombre": "Conversaciones pendiente reconexión Facebook",
-        "url": 'conversaciones-pendiente-reconexion/',
-        "vista": conversacionesPendienteReconexionFacebookView,
     },
     {
         "nombre": "Comentarios Facebook",

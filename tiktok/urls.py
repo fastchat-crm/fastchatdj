@@ -5,7 +5,6 @@ from .view_comentarios import comentariosTikTokView
 from .view_conversaciones import (
     conversacionesTikTokView,
     conversacionesFinalizadasTikTokView,
-    conversacionesPendienteReconexionTikTokView,
 )
 from .view_cuentas import cuentasView
 from .view_monitoreo import monitoreoTikTokView
@@ -31,11 +30,6 @@ tiktok_urls = (
         "nombre": "Conversaciones finalizadas TikTok",
         "url": 'conversaciones-finalizadas/',
         "vista": conversacionesFinalizadasTikTokView,
-    },
-    {
-        "nombre": "Conversaciones pendiente reconexión TikTok",
-        "url": 'conversaciones-pendiente-reconexion/',
-        "vista": conversacionesPendienteReconexionTikTokView,
     },
     {
         "nombre": "Comentarios TikTok",

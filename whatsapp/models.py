@@ -1109,6 +1109,30 @@ class ConversacionWhatsApp(ModeloBase):
                     'pendiente_reconexion', 'reconectada',
                 ])
                 return pendiente, False
+            # Messenger y TikTok no manejan "pendientes de reconexión": el
+            # asesor finaliza a mano y, si el cliente vuelve a escribir, se
+            # REABRE la última conversación finalizada (un solo hilo por
+            # contacto, como en la app nativa) en vez de crear una nueva.
+            if proveedor_snapshot in ('messenger', 'tiktok'):
+                finalizada = (
+                    cls.objects
+                    .filter(contacto=contacto, estado_conversacion=1, status=True)
+                    .order_by('-fecha_fin_conversacion', '-id')
+                    .first()
+                )
+                if finalizada:
+                    finalizada.estado_conversacion = 0
+                    finalizada.conversacion_finalizada = False
+                    finalizada.fecha_fin_conversacion = None
+                    finalizada.despedida_enviado = False
+                    finalizada.duracion_conversacion = None
+                    finalizada.fecha_hora_expira = expira
+                    finalizada.save(update_fields=[
+                        'estado_conversacion', 'conversacion_finalizada',
+                        'fecha_fin_conversacion', 'despedida_enviado',
+                        'duracion_conversacion', 'fecha_hora_expira',
+                    ])
+                    return finalizada, False
             conv = cls.objects.create(
                 contacto=contacto,
                 fecha_hora_expira=expira,
