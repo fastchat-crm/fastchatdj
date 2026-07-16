@@ -112,6 +112,8 @@ def conversacionesPendienteReconexionView(request):
             try:
                 pk = int(request.GET['pk'])
                 conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
+                if not puede_ver_conversacion(request.user, conversacion):
+                    return JsonResponse({"result": False, 'message': 'No autorizado.'})
                 data['conversacion'] = conversacion
                 template = get_template("whatsapp/conversaciones/modal_resumen_conversacion.html")
                 return JsonResponse({"result": True, 'data': template.render(data)})
@@ -164,6 +166,8 @@ def conversacionesPendienteReconexionView(request):
 
     criterio = request.GET.get('criterio', '').strip()
     filtro_clasificacion = request.GET.get('clasificacion', '').strip()
+    if filtro_clasificacion and not filtro_clasificacion.isdigit():
+        filtro_clasificacion = ''
 
     filtros = Q(contacto__status=True, status=True,
                 contacto__sesion__in=sesiones_visibles(request.user),

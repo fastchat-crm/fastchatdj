@@ -262,6 +262,9 @@ def _estadisticas_conversacion(conversacion):
 def cambiar_clasificacion_get(request):
     try:
         filtro = ConversacionWhatsApp.objects.get(pk=int(request.GET['id']))
+        from .permisos_sesion import puede_ver_conversacion
+        if not puede_ver_conversacion(request.user, filtro):
+            return JsonResponse({'result': False, 'message': 'No autorizado.'})
         form = CambiarClasificacionForm(instance=filtro)
         ctx = {
             'form': form,
@@ -314,6 +317,9 @@ def cambiar_clasificacion_post(request):
 def cambiar_nombre_contacto_get(request):
     try:
         filtro = ConversacionWhatsApp.objects.get(pk=int(request.GET['id']))
+        from .permisos_sesion import puede_ver_conversacion
+        if not puede_ver_conversacion(request.user, filtro):
+            return JsonResponse({'result': False, 'message': 'No autorizado.'})
         form = CambiarNombreContactoForm(instance=filtro.contacto)
         ctx = {
             'form': form,
@@ -331,6 +337,9 @@ def cambiar_nombre_contacto_get(request):
 
 def historial_cliente_list(request, conversacion):
     from django.db.models import Count, Q as _Q
+    from .permisos_sesion import puede_ver_conversacion
+    if not puede_ver_conversacion(request.user, conversacion):
+        return JsonResponse({'error': True, 'message': 'No autorizado.'})
     contacto = conversacion.contacto
     qs = (
         ConversacionWhatsApp.objects
@@ -363,6 +372,9 @@ def historial_cliente_list(request, conversacion):
 
 def historial_cliente_mensajes(request, conversacion):
     from .models import MensajeWhatsApp
+    from .permisos_sesion import puede_ver_conversacion
+    if not puede_ver_conversacion(request.user, conversacion):
+        return JsonResponse({'error': True, 'message': 'No autorizado.'})
     mensajes = (
         MensajeWhatsApp.objects
         .filter(conversacion=conversacion, status=True)
@@ -423,6 +435,9 @@ def listar_plantillas_meta(request):
     try:
         pk = int(request.GET['pk'])
         conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
+        from .permisos_sesion import puede_ver_conversacion
+        if not puede_ver_conversacion(request.user, conversacion):
+            return JsonResponse({'error': True, 'message': 'No autorizado.'})
         sesion = conversacion.sesion
         if not getattr(sesion, 'es_meta', False):
             return JsonResponse({'error': False, 'plantillas': [], 'motivo': 'sesion_no_meta'})
@@ -557,6 +572,10 @@ def enviar_plantilla_reconexion(request):
     params_header = _json.loads(request.POST.get('params_header_json') or '[]')
 
     conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
+
+    from .permisos_sesion import puede_ver_conversacion
+    if not puede_ver_conversacion(request.user, conversacion):
+        return JsonResponse({'error': True, 'message': 'No autorizado.'})
 
     sesion = conversacion.sesion
     if not getattr(sesion, 'es_meta', False):

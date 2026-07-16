@@ -147,28 +147,30 @@ def _handshake_generico(request, ConfigCls, canal, emoji):
     return HttpResponse(challenge, content_type='text/plain', status=200)
 
 
-def _resolver_config_por_payload(payload, ConfigCls, canal):
-    """Identifica a qué ConfigInstagram/Messenger pertenece el evento."""
+def _resolver_config_por_entry(entry_id, ConfigCls, canal):
+    """Identifica a qué ConfigInstagram/Messenger pertenece UN entry concreto.
+
+    Meta agrupa en un mismo POST entries de páginas/cuentas de distintos
+    tenants suscritas a la misma app. Resolver la config por-entry (y no una
+    sola vez para todo el payload) evita que los mensajes de una empresa se
+    procesen bajo la sesión de otra. Se filtra `sesion__status=True` para no
+    atender sesiones eliminadas (soft-delete).
+    """
+    if not entry_id:
+        return None
     try:
-        for entry in payload.get('entry') or []:
-            page_or_ig_id = entry.get('id')
-            if canal == 'instagram':
-                cfg = ConfigCls.objects.filter(
-                    ig_user_id=page_or_ig_id
-                ).select_related('sesion').first()
-                if cfg:
-                    return cfg
-                cfg = ConfigCls.objects.filter(
-                    page_id=page_or_ig_id
-                ).select_related('sesion').first()
-                if cfg:
-                    return cfg
-            else:
-                cfg = ConfigCls.objects.filter(
-                    page_id=page_or_ig_id
-                ).select_related('sesion').first()
-                if cfg:
-                    return cfg
+        if canal == 'instagram':
+            cfg = ConfigCls.objects.filter(
+                ig_user_id=entry_id, sesion__status=True
+            ).select_related('sesion').first()
+            if cfg:
+                return cfg
+            return ConfigCls.objects.filter(
+                page_id=entry_id, sesion__status=True
+            ).select_related('sesion').first()
+        return ConfigCls.objects.filter(
+            page_id=entry_id, sesion__status=True
+        ).select_related('sesion').first()
     except Exception:
         logger.exception("Error resolviendo config %s", canal)
     return None
@@ -181,15 +183,16 @@ def _procesar_post_social(request, ConfigCls, canal):
     except Exception:
         return JsonResponse({'error': 'invalid_json'}, status=400)
 
-    config = _resolver_config_por_payload(payload, ConfigCls, canal)
     sig = request.headers.get('X-Hub-Signature-256', '')
     from .common_meta import get_meta_app_secret
     secret = get_meta_app_secret()
     firma_valida = _validar_hmac(raw_body, sig, secret)
 
+    # `object` es controlado por el emisor: truncar a la longitud del campo
+    # evita un DataError 500 con valores largos.
     evento_log = EventoMetaRecibido.objects.create(
         config_meta=None,
-        tipo_evento=f'{canal}:{payload.get("object", "unknown")}',
+        tipo_evento=f'{canal}:{payload.get("object", "unknown")}'[:50],
         payload_json=payload,
         firma_valida=firma_valida,
         procesado=False,
@@ -201,29 +204,33 @@ def _procesar_post_social(request, ConfigCls, canal):
         evento_log.error_procesamiento = 'Firma HMAC inválida (X-Hub-Signature-256 no coincide con app_secret).'
         evento_log.save(update_fields=['error_procesamiento'])
         return JsonResponse({'ok': False, 'error': 'invalid_signature'}, status=401)
-    if not config:
-        evento_log.error_procesamiento = f'Sin configuración {canal} que coincida con el destinatario del payload (unknown_target).'
-        evento_log.save(update_fields=['error_procesamiento'])
-        return JsonResponse({'ok': True, 'warning': 'unknown_target'}, status=200)
 
-    sesion: SesionWhatsApp = config.sesion
     channel_layer = get_channel_layer()
+    hubo_config = False
+    errores = []
 
-    # Ids propios de la cuenta (page / ig_user): sirven para descartar los
-    # "echoes" — Meta reentrega los mensajes que envía la propia cuenta; si se
-    # procesan como entrantes, el bot terminaría respondiéndose a sí mismo.
-    own_ids = set()
-    for attr in ('ig_user_id', 'page_id'):
-        val = getattr(config, attr, None)
-        if val:
-            own_ids.add(str(val))
+    # Cada entry se resuelve a su propia config/sesión: un batch multi-página de
+    # Meta puede mezclar tenants. El try por-entry aísla el fallo de un entry
+    # para no abortar el lote completo.
+    for entry in payload.get('entry') or []:
+        config = _resolver_config_por_entry(entry.get('id'), ConfigCls, canal)
+        if not config:
+            continue
+        hubo_config = True
+        sesion: SesionWhatsApp = config.sesion
 
-    try:
-        for entry in payload.get('entry') or []:
-            messaging_blocks = entry.get('messaging') or []
-            for m in messaging_blocks:
-                evento_interno = _social_a_evento_interno(m, canal, own_ids)
-                if evento_interno:
+        # Ids propios de la cuenta (page / ig_user): sirven para descartar los
+        # "echoes" — Meta reentrega los mensajes que envía la propia cuenta; si
+        # se procesan como entrantes, el bot terminaría respondiéndose a sí mismo.
+        own_ids = set()
+        for attr in ('ig_user_id', 'page_id'):
+            val = getattr(config, attr, None)
+            if val:
+                own_ids.add(str(val))
+
+        try:
+            for m in entry.get('messaging') or []:
+                for evento_interno in _social_a_eventos_internos(m, canal, own_ids):
                     process_incoming_message(sesion, evento_interno, channel_layer)
             for m in entry.get('messages') or []:
                 evento_interno = _social_a_evento_interno_v2(m, canal, own_ids)
@@ -234,60 +241,90 @@ def _procesar_post_social(request, ConfigCls, canal):
                     guardar_comentario_instagram(sesion, config, change.get('value') or {})
                 elif canal == 'messenger' and change.get('field') == 'feed':
                     guardar_comentario_facebook(sesion, config, change.get('value') or {})
+        except Exception as e:
+            logger.exception("Error procesando %s webhook (entry %s): %s", canal, entry.get('id'), e)
+            errores.append(str(e)[:500])
+            _traza(
+                etapa='error_general', sesion=sesion, nivel='error',
+                detalle={f'{canal}_webhook_error': str(e)},
+            )
+
+    if not hubo_config:
+        evento_log.error_procesamiento = f'Sin configuración {canal} que coincida con el destinatario del payload (unknown_target).'
+        evento_log.save(update_fields=['error_procesamiento'])
+        return JsonResponse({'ok': True, 'warning': 'unknown_target'}, status=200)
+
+    if errores:
+        evento_log.error_procesamiento = ' | '.join(errores)[:2000]
+        evento_log.save(update_fields=['error_procesamiento'])
+    else:
         evento_log.procesado = True
         evento_log.save(update_fields=['procesado'])
-    except Exception as e:
-        logger.exception("Error procesando %s webhook: %s", canal, e)
-        evento_log.error_procesamiento = str(e)[:2000]
-        evento_log.save(update_fields=['error_procesamiento'])
-        _traza(
-            etapa='error_general', sesion=sesion, nivel='error',
-            detalle={f'{canal}_webhook_error': str(e)},
-        )
 
     return JsonResponse({'ok': True}, status=200)
 
 
-def _social_a_evento_interno(m: dict, canal: str, own_ids=None) -> dict | None:
-    """Traduce el shape `messaging` del legacy Messenger/IG al interno."""
+def _social_a_eventos_internos(m: dict, canal: str, own_ids=None) -> list:
+    """Traduce el shape `messaging` del legacy Messenger/IG al interno.
+
+    Devuelve una lista: un evento por adjunto (Messenger/IG permiten varios
+    adjuntos en un mismo mensaje) o un único evento de texto. Antes se procesaba
+    solo el primer adjunto y el resto se perdía en silencio.
+    """
     sender_id = (m.get('sender') or {}).get('id')
     if not sender_id:
-        return None
+        return []
+    # Eventos sin `message` (delivery, read, postback, reaction) no son mensajes
+    # entrantes: descartarlos evita crear MensajeWhatsApp vacíos.
+    if not m.get('message'):
+        return []
     msg = m.get('message') or {}
     if msg.get('is_echo'):
-        return None
+        return []
     # Echo/self: el emisor es la propia cuenta (page/ig_user).
     if own_ids and str(sender_id) in own_ids:
-        return None
+        return []
     text = msg.get('text', '')
     referral = m.get('referral') or msg.get('referral') or {}
+    base_id = msg.get('mid') or m.get('timestamp')
 
-    evento = {
-        'id':        msg.get('mid') or m.get('timestamp'),
-        'from':      f"{sender_id}@s.whatsapp.net",
-        'timestamp': int(m.get('timestamp', 0) // 1000) if m.get('timestamp') else None,
-        'pushName':  '',
-        'message':   {'conversation': text or ''},
-        'fromMe':    False,
-        'userImage': None,
-        '_canal':    canal,
-        '_external_id': sender_id,
-    }
-    if referral:
-        evento['_referral'] = referral
-    # Adjuntos
-    for att in msg.get('attachments') or []:
+    def _nuevo_evento(evento_id):
+        evento = {
+            'id':        evento_id,
+            'from':      f"{sender_id}@s.whatsapp.net",
+            'timestamp': int(m.get('timestamp', 0) // 1000) if m.get('timestamp') else None,
+            'pushName':  '',
+            'message':   {'conversation': text or ''},
+            'fromMe':    False,
+            'userImage': None,
+            '_canal':    canal,
+            '_external_id': sender_id,
+        }
+        if referral:
+            evento['_referral'] = referral
+        return evento
+
+    adjuntos = [a for a in (msg.get('attachments') or []) if (a.get('payload') or {}).get('url')]
+    if not adjuntos:
+        return [_nuevo_evento(base_id)]
+
+    eventos = []
+    for idx, att in enumerate(adjuntos):
         tipo = att.get('type', 'file')
         url = (att.get('payload') or {}).get('url')
-        if url:
-            evento['mediaData'] = {'url': url}
-            evento['mediaType'] = {
-                'image': 'imageMessage', 'video': 'videoMessage',
-                'audio': 'audioMessage', 'file': 'documentMessage',
-            }.get(tipo, 'documentMessage')
-            evento['caption'] = text or tipo
-            break
-    return evento
+        # id único por adjunto para no colisionar en la deduplicación aguas abajo.
+        evento = _nuevo_evento(f'{base_id}_{idx}' if idx else base_id)
+        # El texto acompaña solo al primer adjunto.
+        if idx:
+            evento['message'] = {'conversation': ''}
+        evento['mediaData'] = {'url': url}
+        evento['mediaType'] = {
+            'image': 'imageMessage', 'video': 'videoMessage',
+            'audio': 'audioMessage', 'file': 'documentMessage',
+        }.get(tipo, 'documentMessage')
+        evento['caption'] = (text or tipo) if idx == 0 else tipo
+        eventos.append(evento)
+    return eventos
 
 
 def _social_a_evento_interno_v2(m: dict, canal: str, own_ids=None) -> dict | None:

@@ -350,6 +350,7 @@
                 form.reset();
                 form.action.value = 'add';
                 form.pk.value = '';
+                form.access_token.required = true;
                 zona.style.display = 'none';
                 abrirModal('Enlazar un nuevo canal');
             });
@@ -450,6 +451,8 @@
                 form.nombre.value = btn.dataset.nombre;
                 form.page_id.value = btn.dataset.page;
                 form.page_name.value = btn.dataset.pagename;
+                form.access_token.required = false;
+                form.access_token.placeholder = 'Dejá vacío para conservar el token actual';
                 zona.style.display = 'none';
                 abrirModal('Editar sesión Facebook');
             }

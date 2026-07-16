@@ -90,13 +90,47 @@ def guardar_cuenta(request, sesion=None):
     username = (request.POST.get('username') or '').strip().lstrip('@')
     access_token = (request.POST.get('access_token') or '').strip()
 
-    if not nombre or not ig_user_id or not page_id or not access_token:
-        return {'success': False, 'error': 'Nombre, IG User ID, Page ID y Access Token son obligatorios.'}
+    if not nombre or not ig_user_id or not page_id:
+        return {'success': False, 'error': 'Nombre, IG User ID y Page ID son obligatorios.'}
+    if sesion is None and not access_token:
+        return {'success': False, 'error': 'El Access Token es obligatorio al conectar la cuenta.'}
+
+    # Unicidad de ig_user_id entre sesiones activas: sin esto, editar una sesión
+    # y pegar el IG User ID de otra empresa creaba dos ConfigInstagram con el
+    # mismo id y el webhook enrutaba los DMs a un tenant arbitrario.
+    conflicto = ConfigInstagram.objects.filter(ig_user_id=ig_user_id, sesion__status=True)
+    if sesion is not None:
+        conflicto = conflicto.exclude(sesion=sesion)
+    if conflicto.exists():
+        return {'success': False, 'error': 'Ese IG User ID ya está conectado en otra sesión.'}
 
     if sesion is None:
         session_id = f'instagram-{ig_user_id}'
-        if SesionWhatsApp.objects.filter(session_id=session_id).exists():
+        existente = SesionWhatsApp.objects.filter(session_id=session_id).first()
+        if existente and existente.status:
             return {'success': False, 'error': 'Esa cuenta de Instagram ya está conectada.'}
+        if existente and not existente.status:
+            # Reactivar una sesión previamente eliminada (soft-delete) en vez de
+            # chocar con el session_id único e impedir la reconexión.
+            existente.status = True
+            existente.activo = True
+            existente.nombre = nombre
+            existente.numero = username or ig_user_id
+            existente.estado = 'pendiente'
+            existente.usuario = request.user
+            existente.save()
+            sesion = existente
+            config = getattr(sesion, 'config_instagram', None)
+            if config is None:
+                config = ConfigInstagram(sesion=sesion, webhook_verify_token=generar_verify_token())
+            config.status = True
+            config.ig_user_id = ig_user_id
+            config.page_id = page_id
+            config.username = username
+            config.access_token = access_token
+            config.save()
+            probar_conexion(sesion)
+            return {'success': True, 'sesion': sesion}
         sesion = SesionWhatsApp.objects.create(
             nombre=nombre,
             numero=username or ig_user_id,
@@ -116,6 +150,7 @@ def guardar_cuenta(request, sesion=None):
     else:
         sesion.nombre = nombre
         sesion.numero = username or ig_user_id
+        sesion.session_id = f'instagram-{ig_user_id}'
         sesion.save()
         config = getattr(sesion, 'config_instagram', None)
         if config is None:
@@ -123,7 +158,8 @@ def guardar_cuenta(request, sesion=None):
         config.ig_user_id = ig_user_id
         config.page_id = page_id
         config.username = username
-        config.access_token = access_token
+        if access_token:
+            config.access_token = access_token
         config.save()
 
     probar_conexion(sesion)

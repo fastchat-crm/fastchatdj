@@ -21,14 +21,41 @@ def guardar_cuenta(request, sesion=None):
     business_id = (request.POST.get('business_id') or '').strip()
     access_token = (request.POST.get('access_token') or '').strip()
     refresh_token = (request.POST.get('refresh_token') or '').strip()
+    client_secret = (request.POST.get('client_secret') or '').strip()
 
     if not nombre or not username:
         return {'success': False, 'error': 'Nombre y @username son obligatorios.'}
 
     if sesion is None:
         session_id = f'tiktok-{username}'
-        if SesionWhatsApp.objects.filter(session_id=session_id).exists():
+        existente = SesionWhatsApp.objects.filter(session_id=session_id).first()
+        if existente and existente.status:
             return {'success': False, 'error': 'Esa cuenta de TikTok ya está registrada.'}
+        if existente and not existente.status:
+            # Reactivar una sesión previamente eliminada (soft-delete) en vez de
+            # chocar con el session_id único e impedir el re-registro.
+            existente.status = True
+            existente.activo = True
+            existente.nombre = nombre
+            existente.numero = username
+            existente.estado = 'pendiente'
+            existente.usuario = request.user
+            existente.save()
+            sesion = existente
+            config = getattr(sesion, 'config_tiktok', None)
+            if config is None:
+                config = ConfigTikTok(sesion=sesion, webhook_verify_token=generar_verify_token())
+            config.status = True
+            config.username = username
+            config.business_id = business_id
+            if access_token:
+                config.access_token = access_token
+            if refresh_token:
+                config.refresh_token = refresh_token
+            if client_secret:
+                config.client_secret = client_secret
+            config.save()
+            return {'success': True, 'sesion': sesion}
         sesion = SesionWhatsApp.objects.create(
             nombre=nombre,
             numero=username,
@@ -43,6 +70,7 @@ def guardar_cuenta(request, sesion=None):
             business_id=business_id,
             access_token=access_token,
             refresh_token=refresh_token,
+            client_secret=client_secret,
             webhook_verify_token=generar_verify_token(),
         )
     else:
@@ -58,6 +86,8 @@ def guardar_cuenta(request, sesion=None):
             config.access_token = access_token
         if refresh_token:
             config.refresh_token = refresh_token
+        if client_secret:
+            config.client_secret = client_secret
         config.save()
 
     return {'success': True, 'sesion': sesion}

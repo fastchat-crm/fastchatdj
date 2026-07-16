@@ -46,13 +46,16 @@ def _handshake(request):
              or request.GET.get('hub.verify_token') or '')
     if challenge is None:
         return JsonResponse({'ok': True, 'canal': 'tiktok', 'estado': 'landing'})
-    if token:
-        config = ConfigTikTok.objects.filter(webhook_verify_token=token).first()
-        if not config:
-            logger.warning("tiktok webhook: verify token no coincide (prefix=%s)", token[:8])
-            return HttpResponse('forbidden', content_type='text/plain', status=403)
-        config.webhook_verificado_en = timezone.now()
-        config.save(update_fields=['webhook_verificado_en'])
+    # Exigir verify_token válido antes de responder el challenge: sin esto,
+    # cualquiera podía completar la verificación del endpoint sin conocer token.
+    if not token:
+        return HttpResponse('missing_verify_token', content_type='text/plain', status=400)
+    config = ConfigTikTok.objects.filter(webhook_verify_token=token).first()
+    if not config:
+        logger.warning("tiktok webhook: verify token no coincide (prefix=%s)", token[:8])
+        return HttpResponse('forbidden', content_type='text/plain', status=403)
+    config.webhook_verificado_en = timezone.now()
+    config.save(update_fields=['webhook_verificado_en'])
     return HttpResponse(challenge, content_type='text/plain', status=200)
 
 
@@ -70,12 +73,12 @@ def _resolver_config(payload):
                 posibles.append(str(valor))
     for valor in posibles:
         cfg = ConfigTikTok.objects.filter(
-            business_id=valor
+            business_id=valor, sesion__status=True
         ).select_related('sesion').first()
         if cfg:
             return cfg
         cfg = ConfigTikTok.objects.filter(
-            open_id=valor
+            open_id=valor, sesion__status=True
         ).select_related('sesion').first()
         if cfg:
             return cfg
@@ -115,21 +118,30 @@ def _procesar_post(request):
 
     config = _resolver_config(payload)
     firma_ok, verificable = _firma_valida_tiktok(request, config)
-    if verificable and not firma_ok:
-        logger.warning("tiktok webhook: firma HMAC inválida — evento rechazado")
+
+    from django.conf import settings
+    fail_closed = getattr(settings, 'META_WEBHOOK_FAIL_CLOSED', True)
+    tipo_evento = f"tiktok:{payload.get('event', payload.get('type', 'unknown'))}"[:50]
+
+    # Rechazar si la firma es verificable e inválida, o si no es verificable
+    # (ConfigTikTok sin client_secret) y estamos en modo fail-closed (default).
+    # Igual que el webhook Meta: no se procesan eventos sin autenticar.
+    if (verificable and not firma_ok) or (not verificable and fail_closed):
+        motivo = 'firma_hmac_invalida' if verificable else 'sin_client_secret_fail_closed'
+        logger.warning("tiktok webhook: evento rechazado (%s)", motivo)
         EventoMetaRecibido.objects.create(
             config_meta=None,
-            tipo_evento=f"tiktok:{payload.get('event', payload.get('type', 'unknown'))}",
+            tipo_evento=tipo_evento,
             payload_json=payload,
             firma_valida=False,
             procesado=False,
-            error_procesamiento='firma_hmac_invalida',
+            error_procesamiento=motivo,
         )
         return JsonResponse({'error': 'invalid_signature'}, status=401)
 
     evento_log = EventoMetaRecibido.objects.create(
         config_meta=None,
-        tipo_evento=f"tiktok:{payload.get('event', payload.get('type', 'unknown'))}",
+        tipo_evento=tipo_evento,
         payload_json=payload,
         firma_valida=firma_ok,
         procesado=False,
@@ -154,18 +166,24 @@ def _procesar_post(request):
         if val:
             own_ids.add(str(val))
 
-    try:
-        eventos = payload.get('events') or [payload]
-        for evento in eventos:
+    errores = []
+    eventos = payload.get('events') or [payload]
+    for evento in eventos:
+        # try por-evento: un evento malformado no debe abortar el resto del lote.
+        try:
             interno = _a_evento_interno(evento, own_ids)
             if interno:
                 process_incoming_message(sesion, interno, channel_layer)
+        except Exception as e:
+            logger.exception("Error procesando evento tiktok: %s", e)
+            errores.append(str(e)[:500])
+
+    if errores:
+        evento_log.error_procesamiento = ' | '.join(errores)[:2000]
+        evento_log.save(update_fields=['error_procesamiento'])
+    else:
         evento_log.procesado = True
         evento_log.save(update_fields=['procesado'])
-    except Exception as e:
-        logger.exception("Error procesando tiktok webhook: %s", e)
-        evento_log.error_procesamiento = str(e)[:2000]
-        evento_log.save(update_fields=['error_procesamiento'])
 
     return JsonResponse({'ok': True}, status=200)
 
@@ -189,10 +207,14 @@ def _a_evento_interno(evento: dict, own_ids=None) -> dict | None:
         texto = msg['text']
     elif msg.get('content'):
         texto = str(msg['content'])
+    try:
+        ts = int(float(evento['timestamp'])) if evento.get('timestamp') else None
+    except (TypeError, ValueError):
+        ts = None
     return {
         'id':        msg.get('message_id') or msg.get('id') or evento.get('event_id'),
         'from':      f"{sender_id}@s.whatsapp.net",
-        'timestamp': int(evento['timestamp']) if evento.get('timestamp') else None,
+        'timestamp': ts,
         'pushName':  sender.get('nickname') or '',
         'message':   {'conversation': texto or ''},
         'fromMe':    False,

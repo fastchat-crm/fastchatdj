@@ -63,3 +63,11 @@ Acción POST `diagnostico` en `view_cuentas` → `whatsapp.diagnostico_social.di
    sidebar (resetea el catálogo y re-vincula roles).
 4. Activar el switch del canal Messenger en la configuración global
    (`canales_activos.messenger`) si no lo está.
+
+## Hardening 2026-07-16 (ultrareview)
+
+- **Webhook por-entry (cross-tenant):** `whatsapp/meta_social_webhook_view.py` resuelve la config **por cada `entry`** (`_resolver_config_por_entry`, filtra `sesion__status=True`), no una vez para todo el payload. Un batch multi-página de Meta ya no procesa los mensajes de otra empresa bajo la sesión del primer entry. `tipo_evento` se trunca a 50, el `except` es por-entry (un entry malo no aborta el lote) y los eventos `messaging` sin `message` (delivery/read/postback) se descartan. `_social_a_eventos_internos` emite un evento por adjunto (antes solo el primero).
+- **Unicidad de `page_id`:** `funciones_cuentas.guardar_cuenta` rechaza un `page_id` ya usado por otra sesión activa (alta y edición) y mantiene `session_id` en sync — cierra el desvío de webhooks por config duplicada y el reclamo de páginas ajenas.
+- **Reconexión tras eliminar:** el alta reactiva la sesión soft-borrada (mismo `session_id`) en vez de bloquear para siempre; `delete` también apaga `activo`.
+- **Editar sin re-pegar token:** el Access Token es obligatorio solo al conectar; en edición se conserva el actual si se deja vacío.
+- **Monitoreo con scoping:** `/facebook/monitoreo/` (`view_monitoreo_social`) acota los eventos por pertenencia (id destino del payload vs. sesiones visibles); no-superusuarios ya no ven DMs de otros tenants.

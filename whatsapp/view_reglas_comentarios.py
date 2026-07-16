@@ -70,7 +70,9 @@ def reglasComentariosView(request, canal='instagram'):
                     return JsonResponse({'error': False, 'reload': True})
 
                 if action == 'change':
-                    regla = ReglaComentario.objects.get(pk=int(request.POST['pk']), status=True)
+                    regla = ReglaComentario.objects.get(
+                        pk=int(request.POST['pk']), status=True, sesion__usuario=request.user,
+                    )
                     _aplicar_campos(regla, request)
                     error = _validar(regla)
                     if error:
@@ -79,13 +81,17 @@ def reglasComentariosView(request, canal='instagram'):
                     return JsonResponse({'error': False, 'reload': True})
 
                 if action == 'delete':
-                    regla = ReglaComentario.objects.get(pk=int(request.POST['id']), status=True)
+                    regla = ReglaComentario.objects.get(
+                        pk=int(request.POST['id']), status=True, sesion__usuario=request.user,
+                    )
                     regla.status = False
                     regla.save()
                     return JsonResponse({'error': False})
 
                 if action == 'toggle_activa':
-                    regla = ReglaComentario.objects.get(pk=int(request.POST['id']), status=True)
+                    regla = ReglaComentario.objects.get(
+                        pk=int(request.POST['id']), status=True, sesion__usuario=request.user,
+                    )
                     regla.activa = not regla.activa
                     regla.save()
                     return JsonResponse({'error': False, 'activa': regla.activa})

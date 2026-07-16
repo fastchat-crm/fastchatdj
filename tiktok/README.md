@@ -44,3 +44,11 @@ Acción POST `diagnostico` en `view_cuentas` → `whatsapp.diagnostico_social.di
 2. Flujo OAuth de conexión (reemplaza la carga manual de tokens en sesiones) + refresh de tokens (cron).
 3. Comentarios: cron `comment/list` → `ComentarioSocial(canal='tiktok')` + responder vía API.
 4. `/tiktok/publicaciones/` espejo de `instagram/view_posts.py` (grilla de videos + modal de comentarios tipo post) — requiere la Display/Comments API aprobada; el patrón ya está construido en Instagram.
+
+## Hardening 2026-07-16 (ultrareview)
+
+- **Webhook fail-closed:** `webhook_view._procesar_post` rechaza (401) cuando la firma es verificable e inválida **o** cuando no hay `client_secret` y `META_WEBHOOK_FAIL_CLOSED` (default `True`) — antes procesaba sin firma. El handshake GET ahora exige `verify_token`. Para operar, el form de cuentas captura **`client_secret`** (nuevo campo, `funciones_cuentas`/`cuentas/listado.html`).
+- **Resolución con status:** `_resolver_config` filtra `sesion__status=True`; sesiones eliminadas ya no procesan mensajes. `delete` apaga `activo`.
+- **Robustez:** `tipo_evento` truncado a 50, parseo seguro de `timestamp`, y `try` por-evento (un evento malo no aborta el lote).
+- **Reconexión / re-registro:** el alta reactiva la sesión soft-borrada en vez de bloquear por `session_id` único.
+- **Monitoreo con scoping:** `/tiktok/monitoreo/` acota los eventos por pertenencia (business_id/open_id del payload vs. sesiones visibles).

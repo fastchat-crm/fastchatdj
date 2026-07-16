@@ -84,13 +84,46 @@ def guardar_cuenta(request, sesion=None):
     page_name = (request.POST.get('page_name') or '').strip()
     access_token = (request.POST.get('access_token') or '').strip()
 
-    if not nombre or not page_id or not access_token:
-        return {'success': False, 'error': 'Nombre, Page ID y Access Token son obligatorios.'}
+    if not nombre or not page_id:
+        return {'success': False, 'error': 'Nombre y Page ID son obligatorios.'}
+    if sesion is None and not access_token:
+        return {'success': False, 'error': 'El Access Token es obligatorio al conectar la página.'}
+
+    # Unicidad de page_id entre sesiones activas: sin esto, editar una sesión y
+    # pegar el Page ID de otra empresa creaba dos ConfigMessenger con el mismo
+    # page_id y el webhook enrutaba los mensajes a un tenant arbitrario.
+    conflicto = ConfigMessenger.objects.filter(page_id=page_id, sesion__status=True)
+    if sesion is not None:
+        conflicto = conflicto.exclude(sesion=sesion)
+    if conflicto.exists():
+        return {'success': False, 'error': 'Ese Page ID ya está conectado en otra sesión.'}
 
     if sesion is None:
         session_id = f'messenger-{page_id}'
-        if SesionWhatsApp.objects.filter(session_id=session_id).exists():
+        existente = SesionWhatsApp.objects.filter(session_id=session_id).first()
+        if existente and existente.status:
             return {'success': False, 'error': 'Esa página de Facebook ya está conectada.'}
+        if existente and not existente.status:
+            # Reactivar una sesión previamente eliminada (soft-delete) en vez de
+            # chocar con el session_id único e impedir la reconexión.
+            existente.status = True
+            existente.activo = True
+            existente.nombre = nombre
+            existente.numero = page_name or page_id
+            existente.estado = 'pendiente'
+            existente.usuario = request.user
+            existente.save()
+            sesion = existente
+            config = getattr(sesion, 'config_messenger', None)
+            if config is None:
+                config = ConfigMessenger(sesion=sesion, webhook_verify_token=generar_verify_token())
+            config.status = True
+            config.page_id = page_id
+            config.page_name = page_name
+            config.access_token = access_token
+            config.save()
+            probar_conexion(sesion)
+            return {'success': True, 'sesion': sesion}
         sesion = SesionWhatsApp.objects.create(
             nombre=nombre,
             numero=page_name or page_id,
@@ -109,13 +142,15 @@ def guardar_cuenta(request, sesion=None):
     else:
         sesion.nombre = nombre
         sesion.numero = page_name or page_id
+        sesion.session_id = f'messenger-{page_id}'
         sesion.save()
         config = getattr(sesion, 'config_messenger', None)
         if config is None:
             config = ConfigMessenger(sesion=sesion, webhook_verify_token=generar_verify_token())
         config.page_id = page_id
         config.page_name = page_name
-        config.access_token = access_token
+        if access_token:
+            config.access_token = access_token
         config.save()
 
     probar_conexion(sesion)

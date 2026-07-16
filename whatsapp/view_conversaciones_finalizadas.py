@@ -131,11 +131,13 @@ def conversacionesFinalizadasView(request):
                     **_estadisticas_conversacion(conversacion),
                 })
             except Exception as ex:
-                pass
+                return JsonResponse({'error': True, 'message': str(ex)})
         elif action == 'ver_resumen_conversacion':
             try:
                 pk = int(request.GET['pk'])
                 conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
+                if not puede_ver_conversacion(request.user, conversacion):
+                    return JsonResponse({"result": False, 'message': 'No autorizado.'})
                 data['conversacion'] = conversacion
                 template = get_template("whatsapp/conversaciones/modal_resumen_conversacion.html")
                 return JsonResponse({"result": True, 'data': template.render(data)})
@@ -145,6 +147,8 @@ def conversacionesFinalizadasView(request):
             try:
                 from .view_conversaciones import _clientes_de_conversacion
                 conv = get_object_or_404(ConversacionWhatsApp, pk=int(request.GET['id']))
+                if not puede_ver_conversacion(request.user, conv):
+                    return JsonResponse({'result': False, 'message': 'No autorizado.'})
                 clientes = _clientes_de_conversacion(conv)
                 ctx = {'clientes': clientes, 'conv': conv}
                 template = get_template('whatsapp/conversaciones/_modal_ficha_cliente.html')
@@ -350,6 +354,22 @@ def conversacionesFinalizadasView(request):
     fecha_hasta = request.GET.get('fecha_hasta', '').strip()
     filtro_sentimiento = request.GET.get('sentimiento', '').strip()
     filtro_clasificacion = request.GET.get('clasificacion', '').strip()
+
+    from datetime import datetime as _dt
+
+    def _fecha_valida(valor):
+        try:
+            _dt.strptime(valor, '%Y-%m-%d')
+            return True
+        except (ValueError, TypeError):
+            return False
+
+    if fecha_desde and not _fecha_valida(fecha_desde):
+        fecha_desde = ''
+    if fecha_hasta and not _fecha_valida(fecha_hasta):
+        fecha_hasta = ''
+    if filtro_clasificacion and not filtro_clasificacion.isdigit():
+        filtro_clasificacion = ''
 
     filtros = Q(contacto__status=True, status=True,
                 contacto__sesion__in=sesiones_visibles(request.user),

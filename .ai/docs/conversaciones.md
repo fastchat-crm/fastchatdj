@@ -747,3 +747,11 @@ JsonResponse({pendiente: true, mensaje_html})
 | `whatsapp/templates/whatsapp/conversaciones/form.html` | Modal genérico |
 | `static/stylenew/conversacion_plantillas.css` | CSS panel plantillas Meta |
 | `static/stylenew/conversaciones.css` | CSS layout chat |
+
+## Hardening 2026-07-16 (ultrareview)
+
+Regla: **toda acción por `pk`/`id` de conversación valida `puede_ver_conversacion(request.user, conv)`** (`permisos_sesion.py`). El guard vive dentro de los helpers compartidos de `funcionesWhatsappConversacion.py` (`cambiar_clasificacion_get`, `cambiar_nombre_contacto_get`, `historial_cliente_list`, `historial_cliente_mensajes`, `listar_plantillas_meta`, `enviar_plantilla_reconexion`), así que las tres vistas (abiertas, finalizadas, pendiente-reconexión) quedan cubiertas por igual. Además:
+
+- **`enviar_plantilla_meta`** entró al set `ACCIONES_CONV` (era IDOR de escritura facturable). `transcribe_audio` y `feedback-mensaje` validan vía `msg.conversacion`.
+- **Finalizadas/pendiente:** `ver_resumen_conversacion` y `ficha_cliente` validan pertenencia; el `except: pass` de `ver_mensajes` ahora devuelve JSON de error; fechas/`clasificacion` inválidas ya no dan 500.
+- **Consumers (`consumers.py`):** `SessionConsumer.connect` exige propiedad de la sesión (`rol_en_sesion`) antes de aceptar — cierra la fuga del QR de Baileys (secuestro de cuenta). `ChatConsumer` valida en `connect` y en cada query usa `puede_ver_conversacion` (antes filtraba solo por dueño, rompiendo el chat en vivo para asesores/supervisores). `SessionRoomConsumer` gatea `connect` y aplica el filtro por rol asesor en `get_conversacion_data`.

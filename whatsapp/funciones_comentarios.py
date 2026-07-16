@@ -38,11 +38,15 @@ def _persistir_comentario(sesion, canal, comment_id, campos):
     """Crea el ComentarioSocial (si no es duplicado) y dispara el motor de reglas."""
     if not comment_id:
         return None
-    if ComentarioSocial.objects.filter(comment_id=str(comment_id)).exists():
-        return None
-    comentario = ComentarioSocial.objects.create(
-        sesion=sesion, canal=canal, comment_id=str(comment_id), **campos,
+    # get_or_create es atómico contra el índice único de comment_id: dos entregas
+    # concurrentes del mismo webhook no crean duplicados ni corren las reglas dos
+    # veces (Meta reentrega webhooks con normalidad).
+    comentario, creado = ComentarioSocial.objects.get_or_create(
+        comment_id=str(comment_id),
+        defaults={'sesion': sesion, 'canal': canal, **campos},
     )
+    if not creado:
+        return None
     try:
         procesar_reglas_comentario(comentario)
     except Exception:

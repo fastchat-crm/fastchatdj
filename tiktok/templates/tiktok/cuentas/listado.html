@@ -255,6 +255,12 @@
                                 <label class="form-label">Refresh Token (OAuth)</label>
                                 <textarea name="refresh_token" class="form-control" rows="2"></textarea>
                             </div>
+                            <div class="mb-3">
+                                <label class="form-label">Client Secret (verificación de webhook)</label>
+                                <input type="password" name="client_secret" class="form-control" maxlength="255"
+                                       autocomplete="new-password"
+                                       placeholder="Necesario para validar la firma de los webhooks entrantes">
+                            </div>
                             <div class="pane-actions">
                                 <button type="button" class="conex-btn conex-btn-light" id="btn-cancelar-modal">
                                     Cancelar

@@ -1,5 +1,7 @@
 """Cuentas Instagram conectadas: listado, conexión manual con autodetección
 desde token, prueba de conexión y activación/desactivación."""
+from urllib.parse import quote
+
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.http import JsonResponse
@@ -38,7 +40,7 @@ def cuentasView(request):
             | Q(config_instagram__username__icontains=criterio)
         )
         data['criterio'] = criterio
-        url_vars += f'&criterio={criterio}'
+        url_vars += f'&criterio={quote(criterio)}'
 
     listado = qs.order_by('nombre')
     data['list_count'] = listado.count()
@@ -120,6 +122,7 @@ def _procesar_accion(request):
             if not sesion:
                 return JsonResponse({'error': True, 'message': 'Cuenta no encontrada.'})
             sesion.status = False
+            sesion.activo = False
             sesion.save()
             log('Cuenta Instagram eliminada', request, 'delete', obj=sesion.id)
             return JsonResponse({'error': False, 'message': 'Cuenta eliminada.'})

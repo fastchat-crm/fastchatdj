@@ -399,7 +399,10 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
     if request.method == 'GET' and 'action' in request.GET:
         data['action'] = action = request.GET['action']
         if action == 'ver_mensajes':
-            pk = int(request.GET['pk'])
+            try:
+                pk = int(request.GET['pk'])
+            except (KeyError, ValueError):
+                return JsonResponse({'error': True, 'message': 'Parámetro pk inválido.'})
             conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
             if not puede_ver_conversacion(request.user, conversacion):
                 return JsonResponse({'error': True, 'message': 'Not authorized.'})
@@ -598,6 +601,7 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                 ACCIONES_CONV = {
                     'asignar-conversacion', 'toggle-bot', 'toggle-bloquear-cierre',
                     'reiniciar-flujo', 'marcar-resuelto', 'terminar-sin-despedida',
+                    'enviar_plantilla_meta',
                 }
                 if action in ACCIONES_CONV:
                     _pk_conv = request.POST.get('pk') or request.POST.get('id')
@@ -1080,6 +1084,8 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                     _cache.set(lock_tr, True, 300)
                     service = WhatsAppService()
                     msg = MensajeWhatsApp.objects.select_related('conversacion__contacto__sesion').get(id=msg_id_tr)
+                    if not puede_ver_conversacion(request.user, msg.conversacion):
+                        return JsonResponse({'error': True, 'message': 'No autorizado.'})
                     service.transcribe_audio(msg, 'small', msg.conversacion.contacto.sesion.language.split('-')[0])
                     return JsonResponse({})
 
@@ -1093,6 +1099,9 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                     msg = MensajeWhatsApp.objects.select_related(
                         'conversacion__contacto__sesion__agente_ia'
                     ).get(pk=msg_id)
+
+                    if not puede_ver_conversacion(request.user, msg.conversacion):
+                        return JsonResponse({'error': True, 'message': 'No autorizado.'})
 
                     # Crear o actualizar feedback
                     feedback, _ = FeedbackMensajeBot.objects.update_or_create(

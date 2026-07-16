@@ -29,3 +29,14 @@
 - El webhook del canal vive en `instagram/webhook_view.py` → **`/instagram/webhook/`** (canónica; usa esta al configurar el panel de Meta). La implementación es compartida con Messenger en `whatsapp/meta_social_webhook_view.py`. Alias legacy deprecado: `/whatsapp/instagram_webhook/`.
 - Guía de tokens para clientes: Documentación in-app, slug `conectar-instagram-tiktok`.
 - **Comprobar conectividad**: acción POST `diagnostico` en `view_cuentas` → `whatsapp.diagnostico_social.diagnosticar_conexion(sesion)` (módulo compartido). Devuelve pasos con causa+solución (token, IG User ID, respuesta de Graph mapeada a causa legible, webhook verificado) y sincroniza `SesionWhatsApp.estado`. El menú de acciones es un **offcanvas lateral** (propio de la app, no comparte `_card.html`) que clona el `[data-kebab-menu]` de la card; las acciones usan delegación de eventos para funcionar dentro del offcanvas. Incluye, en secciones al estilo del tablero WhatsApp: "Comprobar conectividad" (modal con pasos, valores escapados anti-XSS), "Ver trazabilidad (errores)" → `/instagram/monitoreo/`, y "Analytics de esta sesión" → `/whatsapp/analytics/?sesion=<id>` (analytics es multicanal). Las opciones exclusivas de WhatsApp Cloud (plantillas, campañas, revalidar número) NO aplican a este canal.
+
+## Hardening 2026-07-16 (ultrareview)
+
+- **Webhook por-entry (cross-tenant):** el receiver compartido (`whatsapp/meta_social_webhook_view.py`) resuelve la config **por `entry`** con `sesion__status=True`; los DMs de una cuenta ya no caen en la sesión de otra empresa en un batch multi-cuenta.
+- **Unicidad de `ig_user_id`:** `funciones_cuentas.guardar_cuenta` rechaza un `ig_user_id` ya usado por otra sesión activa (alta y edición) y sincroniza `session_id` — cierra el desvío de webhooks por config duplicada.
+- **Reconexión tras eliminar:** el alta reactiva la sesión soft-borrada; `delete` apaga `activo`; el webhook ya no atiende sesiones eliminadas.
+- **Editar sin re-pegar token:** Access Token obligatorio solo al conectar; en edición se conserva el actual si se deja vacío.
+- **Monitoreo con scoping:** `/instagram/monitoreo/` acota por pertenencia (id del payload vs. sesiones visibles).
+- **XSS en comentarios de posts:** el caption del modal usa `textContent` en vez de `innerHTML` (`publicaciones/listado.html`).
+- **Reglas comentario→DM:** `view_reglas_comentarios` valida `sesion__usuario` en change/delete/toggle (antes IDOR).
+- **Race de comentarios:** `funciones_comentarios._persistir_comentario` usa `get_or_create` atómico sobre `comment_id`.

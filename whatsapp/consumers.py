@@ -5,7 +5,8 @@ from channels.db import database_sync_to_async
 from django.conf import settings
 from django.template import Context, Template
 from django.template.loader import render_to_string
-from .models import ConversacionWhatsApp, MensajeWhatsApp
+from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp
+from .permisos_sesion import puede_ver_conversacion, rol_en_sesion
 from .services import WhatsAppService, get_whatsapp_service
 
 
@@ -21,10 +22,29 @@ class ChatConsumer(AsyncWebsocketConsumer):
         self.user = self.scope.get('user')
         self.room_group_name = f'chat_{self.conversacion_id}'
 
+        # Autorización: solo usuarios que pueden ver la conversación se unen al
+        # grupo. Sin esto, un anónimo/otro tenant recibía la presencia y los
+        # nombres de los agentes de una conversación ajena.
+        if not await self._puede_ver_conversacion():
+            await self.close()
+            return
+
         # Unirse al grupo de la conversación
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
 
         await self.accept()
+
+    @database_sync_to_async
+    def _puede_ver_conversacion(self):
+        u = self.user
+        if not u or not getattr(u, 'id', None):
+            return False
+        conv = ConversacionWhatsApp.objects.filter(
+            id=self.conversacion_id
+        ).select_related('contacto__sesion').first()
+        if not conv:
+            return False
+        return puede_ver_conversacion(u, conv)
 
     async def disconnect(self, close_code):
         # Abandonar el grupo de la conversación
@@ -82,9 +102,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def send_presence_update(self, conversacion_id):
         conversacion = ConversacionWhatsApp.objects.filter(
-            contacto__sesion__usuario__id=self.user.id, id=conversacion_id
-        ).first()
-        if not conversacion:
+            id=conversacion_id
+        ).select_related('contacto__sesion').first()
+        if not conversacion or not puede_ver_conversacion(self.user, conversacion):
             return
         whatsapp_service = get_whatsapp_service(conversacion.sesion)
         whatsapp_service.send_presence_update(conversacion.sesion.session_id, conversacion.from_number)
@@ -92,9 +112,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def quit_presence_update(self, conversacion_id):
         conversacion = ConversacionWhatsApp.objects.filter(
-            contacto__sesion__usuario__id=self.user.id, id=conversacion_id
-        ).first()
-        if not conversacion:
+            id=conversacion_id
+        ).select_related('contacto__sesion').first()
+        if not conversacion or not puede_ver_conversacion(self.user, conversacion):
             return
         whatsapp_service = get_whatsapp_service(conversacion.sesion)
         whatsapp_service.quit_presence_update(conversacion.sesion.session_id, conversacion.from_number)
@@ -102,7 +122,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def get_messages_html(self, conversacion_id):
         try:
-            conversacion = ConversacionWhatsApp.objects.filter(contacto__sesion__usuario__id=self.user.id, id=conversacion_id).first()
+            conversacion = ConversacionWhatsApp.objects.filter(
+                id=conversacion_id
+            ).select_related('contacto__sesion').first()
+            if not conversacion or not puede_ver_conversacion(self.user, conversacion):
+                return ""
             mensajes = MensajeWhatsApp.objects.filter(
                 conversacion=conversacion
             ).order_by('fecha')
@@ -121,6 +145,13 @@ class SessionConsumer(AsyncWebsocketConsumer):
         self.room_group_name = f'whatsapp_session_{self.session_id}'
         self.user = self.scope.get('user')
 
+        # Autorización: este canal difunde el QR de vinculación de Baileys. Sin
+        # validar propiedad de la sesión, un anónimo/otro tenant podía escuchar
+        # el QR y secuestrar el número. Solo dueño/participante/superuser entran.
+        if not await self._puede_ver_sesion():
+            await self.close()
+            return
+
         # Unirse al grupo de la conversación
         await self.channel_layer.group_add(
             self.room_group_name,
@@ -128,6 +159,16 @@ class SessionConsumer(AsyncWebsocketConsumer):
         )
 
         await self.accept()
+
+    @database_sync_to_async
+    def _puede_ver_sesion(self):
+        u = self.user
+        if not u or not getattr(u, 'id', None):
+            return False
+        sesion = SesionWhatsApp.objects.filter(id=self.session_id).first()
+        if not sesion:
+            return False
+        return rol_en_sesion(u, sesion) is not None
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(
@@ -163,6 +204,12 @@ class SessionRoomConsumer(AsyncWebsocketConsumer):
         self.room_group_name = f'whatsapp_sessionroom_{self.session_id}'
         self.user = self.scope.get('user')
 
+        # Autorización: solo quien puede ver la sesión se une a su sala de
+        # notificaciones (evita fuga de previews/nombres entre tenants).
+        if not await self._puede_ver_sesion():
+            await self.close()
+            return
+
         # Unirse al grupo de la conversación
         await self.channel_layer.group_add(
             self.room_group_name,
@@ -170,6 +217,16 @@ class SessionRoomConsumer(AsyncWebsocketConsumer):
         )
 
         await self.accept()
+
+    @database_sync_to_async
+    def _puede_ver_sesion(self):
+        u = self.user
+        if not u or not getattr(u, 'id', None):
+            return False
+        sesion = SesionWhatsApp.objects.filter(id=self.session_id).first()
+        if not sesion:
+            return False
+        return rol_en_sesion(u, sesion) is not None
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(
@@ -185,13 +242,10 @@ class SessionRoomConsumer(AsyncWebsocketConsumer):
             ).select_related('contacto', 'contacto__sesion').first()
             if not conversacion:
                 return {'html': '', 'nombre': '', 'preview': ''}
-            sesion_conv = conversacion.contacto.sesion
-            permitido = (
-                getattr(self.user, 'is_superuser', False)
-                or sesion_conv.usuario_id == getattr(self.user, 'id', None)
-                or sesion_conv.es_participante(self.user)
-            )
-            if not permitido:
+            # Respeta el filtro por rol: un asesor solo ve conversaciones
+            # asignadas a él o sin asignar (puede_ver_conversacion), no las de
+            # otros asesores de la misma sesión.
+            if not puede_ver_conversacion(self.user, conversacion):
                 return {'html': '', 'nombre': '', 'preview': ''}
             from datetime import timedelta as _td
             from django.utils import timezone as _tz
