@@ -295,6 +295,9 @@ BRANDING_INBOX_CANAL = {
         'nombre': 'WhatsApp',
         'icono': 'fab fa-whatsapp',
         'url_sesiones': '/whatsapp/sesiones/',
+        'url_conversaciones': '/whatsapp/conversaciones/',
+        'url_finalizadas': '/whatsapp/conversaciones-finalizadas/',
+        'url_pendientes': '/whatsapp/conversaciones-pendiente-reconexion/',
         'vacio_titulo': 'Aún no hay sesiones de WhatsApp',
         'vacio_texto': 'Para ver conversaciones primero necesitás conectar al menos un canal (WhatsApp, Instagram o Messenger).',
         'vacio_boton': 'Crear o conectar una sesión',
@@ -304,6 +307,9 @@ BRANDING_INBOX_CANAL = {
         'nombre': 'Instagram',
         'icono': 'fab fa-instagram',
         'url_sesiones': '/instagram/sesiones/',
+        'url_conversaciones': '/instagram/conversaciones/',
+        'url_finalizadas': '/instagram/conversaciones-finalizadas/',
+        'url_pendientes': '/instagram/conversaciones-pendiente-reconexion/',
         'vacio_titulo': 'Aún no hay sesiones de Instagram',
         'vacio_texto': 'Para ver conversaciones primero necesitás conectar al menos una cuenta de Instagram.',
         'vacio_boton': 'Conectar cuenta de Instagram',
@@ -313,6 +319,9 @@ BRANDING_INBOX_CANAL = {
         'nombre': 'Facebook',
         'icono': 'fab fa-facebook',
         'url_sesiones': '/facebook/sesiones/',
+        'url_conversaciones': '/facebook/conversaciones/',
+        'url_finalizadas': '/facebook/conversaciones-finalizadas/',
+        'url_pendientes': '/facebook/conversaciones-pendiente-reconexion/',
         'vacio_titulo': 'Aún no hay páginas de Facebook',
         'vacio_texto': 'Para ver conversaciones primero necesitás conectar al menos una página de Facebook.',
         'vacio_boton': 'Conectar página de Facebook',
@@ -322,6 +331,9 @@ BRANDING_INBOX_CANAL = {
         'nombre': 'TikTok',
         'icono': 'fab fa-tiktok',
         'url_sesiones': '/tiktok/sesiones/',
+        'url_conversaciones': '/tiktok/conversaciones/',
+        'url_finalizadas': '/tiktok/conversaciones-finalizadas/',
+        'url_pendientes': '/tiktok/conversaciones-pendiente-reconexion/',
         'vacio_titulo': 'Aún no hay sesiones de TikTok',
         'vacio_texto': 'Para ver conversaciones primero necesitás registrar al menos una cuenta de TikTok.',
         'vacio_boton': 'Registrar cuenta de TikTok',
@@ -376,7 +388,7 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
             ).first()
             if conv_obj:
                 if conv_obj.conversacion_finalizada:
-                    return redirect(f'/whatsapp/conversaciones-finalizadas/?conv={conv_token}')
+                    return redirect(f"{branding['url_finalizadas']}?conv={conv_token}")
                 auto_open_conv_id = conv_obj.id
                 if conv_obj.contacto and conv_obj.contacto.sesion:
                     sesion_id = conv_obj.contacto.sesion.id
@@ -1050,7 +1062,7 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                         ' Despedida no enviada — revisá /whatsapp/trazas/ filtrando fin_conversacion.'
                     res_json.append({
                         'error': False,
-                        'url': '/whatsapp/conversaciones-finalizadas/',
+                        'url': branding['url_finalizadas'],
                         'message': f'Conversación cerrada.{msg_extra}',
                         'despedida_enviada': filtro.despedida_enviado,
                     })
@@ -1063,7 +1075,7 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                     except Exception as ex:
                         raise NameError(f'No se encontró la conversación: {ex}')
                     filtro.cerrar(enviar_despedida=False)
-                    res_json.append({'error': False, 'url': '/whatsapp/conversaciones-finalizadas/'})
+                    res_json.append({'error': False, 'url': branding['url_finalizadas']})
                     request.session['contactoId'] = encrypt(filtro.id)
                     log(f"Conversación marcada como resuelta {filtro.id}", request, "change", obj=filtro.id)
                     return JsonResponse(res_json, safe=False)

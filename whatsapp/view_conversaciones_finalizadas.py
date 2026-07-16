@@ -43,17 +43,25 @@ from .funcionesWhatsappConversacion import (
 
 @login_required
 @secure_module
-def conversacionesFinalizadasView(request):
+def conversacionesFinalizadasView(request, canal_fijo=None):
+    from .view_conversaciones import BRANDING_INBOX_CANAL
+    branding = BRANDING_INBOX_CANAL.get(canal_fijo, BRANDING_INBOX_CANAL[None])
     data = {
-        'titulo': 'Conversaciones WhatsApp',
-        'modulo': 'Conversaciones WhatsApp',
-        'ruta': request.path
+        'titulo': branding['titulo'],
+        'modulo': branding['titulo'],
+        'ruta': request.path,
+        'canal_fijo': canal_fijo or '',
+        'canal_branding': branding,
     }
     addData(request, data)
 
     # Sesiones visibles del usuario (status=True). Incluye pausadas para que el
     # selector y el filtro respeten la sesión marcada en request.session.
+    # Con canal_fijo (wrappers /instagram/, /facebook/ y /tiktok/) el listado
+    # queda acotado a las sesiones de ese proveedor, igual que en activas.
     sesiones = sesiones_visibles(request.user).order_by('-ultima_conexion')
+    if canal_fijo:
+        sesiones = sesiones.filter(proveedor=canal_fijo)
     data['sesiones'] = sesiones
 
     # Sesión seleccionada (por defecto la primera)
@@ -293,7 +301,7 @@ def conversacionesFinalizadasView(request):
                     return JsonResponse({
                         'error': False,
                         'reactivada': True,
-                        'url': '/whatsapp/conversaciones/',
+                        'url': branding['url_conversaciones'],
                         'mensaje_html': render_to_string(
                             'whatsapp/conversaciones/mensaje_enviado_partial.html',
                             {'mensaje': mensaje}, request=request,
@@ -341,7 +349,7 @@ def conversacionesFinalizadasView(request):
                     filtro.duracion_conversacion = None
                     filtro.save(request)
                     request.session['contactoId'] = encrypt(filtro.id)
-                    res_json.append({'error': False, 'url': '/whatsapp/conversaciones/'})
+                    res_json.append({'error': False, 'url': branding['url_conversaciones']})
                     log(f"Conversación marcada como reactivada {filtro.id}", request, "change", obj=filtro.id)
                     messages.success(request, f'Conversación reactivada correctamente.')
                     return JsonResponse(res_json, safe=False)
@@ -372,7 +380,7 @@ def conversacionesFinalizadasView(request):
         filtro_clasificacion = ''
 
     filtros = Q(contacto__status=True, status=True,
-                contacto__sesion__in=sesiones_visibles(request.user),
+                contacto__sesion__in=sesiones,
                 contacto__sesion__status=True,
                 estado_conversacion=1)
     url_vars = ''

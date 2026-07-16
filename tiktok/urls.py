@@ -2,7 +2,11 @@ from django.urls import re_path
 
 from .view_centro import centroTikTokView
 from .view_comentarios import comentariosTikTokView
-from .view_conversaciones import conversacionesTikTokView
+from .view_conversaciones import (
+    conversacionesTikTokView,
+    conversacionesFinalizadasTikTokView,
+    conversacionesPendienteReconexionTikTokView,
+)
 from .view_cuentas import cuentasView
 from .view_monitoreo import monitoreoTikTokView
 from .webhook_view import tiktok_webhook
@@ -22,6 +26,16 @@ tiktok_urls = (
         "nombre": "Conversaciones TikTok",
         "url": 'conversaciones/',
         "vista": conversacionesTikTokView,
+    },
+    {
+        "nombre": "Conversaciones finalizadas TikTok",
+        "url": 'conversaciones-finalizadas/',
+        "vista": conversacionesFinalizadasTikTokView,
+    },
+    {
+        "nombre": "Conversaciones pendiente reconexión TikTok",
+        "url": 'conversaciones-pendiente-reconexion/',
+        "vista": conversacionesPendienteReconexionTikTokView,
     },
     {
         "nombre": "Comentarios TikTok",

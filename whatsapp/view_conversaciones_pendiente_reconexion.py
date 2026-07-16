@@ -32,15 +32,21 @@ from .funcionesWhatsappConversacion import (
 
 @login_required
 @secure_module
-def conversacionesPendienteReconexionView(request):
+def conversacionesPendienteReconexionView(request, canal_fijo=None):
+    from .view_conversaciones import BRANDING_INBOX_CANAL
+    branding = BRANDING_INBOX_CANAL.get(canal_fijo, BRANDING_INBOX_CANAL[None])
     data = {
-        'titulo': 'Pending Reconnection',
-        'modulo': 'Conversaciones WhatsApp',
-        'ruta': request.path
+        'titulo': branding['titulo'],
+        'modulo': branding['titulo'],
+        'ruta': request.path,
+        'canal_fijo': canal_fijo or '',
+        'canal_branding': branding,
     }
     addData(request, data)
 
     sesiones = sesiones_visibles(request.user).order_by('-ultima_conexion')
+    if canal_fijo:
+        sesiones = sesiones.filter(proveedor=canal_fijo)
     data['sesiones'] = sesiones
 
     sesion_id = leer_sesion_id(request)
@@ -152,14 +158,14 @@ def conversacionesPendienteReconexionView(request):
                     try:
                         filtro = ConversacionWhatsApp.objects.get(pk=int(request.POST['id']))
                     except Exception as ex:
-                        raise NameError(f'Conversation not found: {ex}')
+                        raise NameError(f'No se encontró la conversación: {ex}')
                     if not puede_ver_conversacion(request.user, filtro):
-                        return JsonResponse({'error': True, 'message': 'Not authorized.'})
+                        return JsonResponse({'error': True, 'message': 'No autorizado.'})
                     filtro.pendiente_reconexion = False
                     filtro.reconectada = False
                     filtro.save(request)
-                    log(f"Pending reconnection discarded for conversation {filtro.id}", request, "change", obj=filtro.id)
-                    messages.success(request, 'Pending reconnection discarded.')
+                    log(f"Reconexión pendiente descartada para la conversación {filtro.id}", request, "change", obj=filtro.id)
+                    messages.success(request, 'Reconexión pendiente descartada.')
                     return JsonResponse({'error': False, 'reload': True})
         except Exception as ex:
             return JsonResponse({'error': True, 'message': str(ex)})
@@ -170,7 +176,7 @@ def conversacionesPendienteReconexionView(request):
         filtro_clasificacion = ''
 
     filtros = Q(contacto__status=True, status=True,
-                contacto__sesion__in=sesiones_visibles(request.user),
+                contacto__sesion__in=sesiones,
                 contacto__sesion__status=True)
     url_vars = ''
 

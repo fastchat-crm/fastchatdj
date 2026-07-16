@@ -23,8 +23,10 @@ difieren en queryset, footer y acciones permitidas.
   sin sesiones (`sesion_seleccionada=None`, caso TikTok) mostraba conversaciones de TODOS los
   canales. El modal `#modalSinSesiones` de `listado.html` también es per-canal (copy + link a
   `/instagram/sesiones/` o `/tiktok/sesiones/`). Mantener ese scoping al agregar filtros.
-- `whatsapp/view_conversaciones_finalizadas.py:35` → `conversacionesFinalizadasView`
-  — chats cerrados (`estado_conversacion=1`).
+- `whatsapp/view_conversaciones_finalizadas.py` → `conversacionesFinalizadasView(request, canal_fijo=None)`
+  — chats cerrados (`estado_conversacion=1`). Acepta `canal_fijo` igual que activas (2026-07-16).
+- `whatsapp/view_conversaciones_pendiente_reconexion.py` → `conversacionesPendienteReconexionView(request, canal_fijo=None)`
+  — chats pendientes de reconexión. Acepta `canal_fijo` igual que activas (2026-07-16).
 
 **Proveedores de transporte** soportados (snapshot en `ConversacionWhatsApp.proveedor_atencion`):
 Meta Cloud API, Baileys (Node), Instagram DM, Messenger. Selección vía dispatcher
@@ -344,6 +346,23 @@ sesiones y textos del modal sin-sesiones). Los wrappers solo pasan `canal_fijo`:
 | `/instagram/conversaciones/` | `instagram` |
 | `/facebook/conversaciones/` | `messenger` |
 | `/tiktok/conversaciones/` | `tiktok` |
+
+Desde 2026-07-16 las pestañas Finalizadas y Pendientes también son per-canal:
+cada app (`facebook/`, `instagram/`, `tiktok/`) registra
+`conversaciones-finalizadas/` y `conversaciones-pendiente-reconexion/` como
+wrappers de las vistas compartidas de `whatsapp/` con su `canal_fijo`
+(`facebook/view_conversaciones.py`, etc. — antes las pestañas mandaban al
+inbox de WhatsApp). `BRANDING_INBOX_CANAL` ganó las claves
+`url_conversaciones`, `url_finalizadas` y `url_pendientes`, y los tres
+templates (`listado.html`, `listado_expirado.html`,
+`listado_pendiente_reconexion.html`) las usan en tabs, AJAX
+(`load_conversations`, `ver_mensajes`, `transcribe_audio`, `_fbUrl`), alert de
+sesión pausada y modal `#modalSinSesiones` — no volver a hardcodear
+`/whatsapp/...` en esos templates. Las respuestas JSON con `url` de redirección
+(`marcar-resuelto`, `terminar-sin-despedida`, `send` reactivador,
+`marcar-reactivar`, deep-link `?conv=`) también salen de `branding`.
+Los nuevos módulos por canal deben registrarse en seguridad (sincronizar
+módulos desde `sub_urls`) para usuarios no superuser.
 
 El tema de color por canal sigue viniendo de `base_chat.html`
 (`body.canal-{{ canal_fijo }}` + `chat_tema_canal.css`). Para agregar un canal:

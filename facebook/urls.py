@@ -3,7 +3,11 @@ from django.urls import re_path
 from .view_centro import centroFacebookView
 from .view_comentarios import comentariosFacebookView
 from .view_reglas import reglasComentariosFacebookView
-from .view_conversaciones import conversacionesFacebookView
+from .view_conversaciones import (
+    conversacionesFacebookView,
+    conversacionesFinalizadasFacebookView,
+    conversacionesPendienteReconexionFacebookView,
+)
 from .view_cuentas import cuentasView
 from .view_monitoreo import monitoreoFacebookView
 from .view_posts import publicacionesView
@@ -24,6 +28,16 @@ facebook_urls = (
         "nombre": "Conversaciones Facebook",
         "url": 'conversaciones/',
         "vista": conversacionesFacebookView,
+    },
+    {
+        "nombre": "Conversaciones finalizadas Facebook",
+        "url": 'conversaciones-finalizadas/',
+        "vista": conversacionesFinalizadasFacebookView,
+    },
+    {
+        "nombre": "Conversaciones pendiente reconexión Facebook",
+        "url": 'conversaciones-pendiente-reconexion/',
+        "vista": conversacionesPendienteReconexionFacebookView,
     },
     {
         "nombre": "Comentarios Facebook",
