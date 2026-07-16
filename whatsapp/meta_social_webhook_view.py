@@ -187,9 +187,8 @@ def _procesar_post_social(request, ConfigCls, canal):
         return JsonResponse({'error': 'invalid_json'}, status=400)
 
     sig = request.headers.get('X-Hub-Signature-256', '')
-    from .common_meta import get_meta_app_secret
-    secret = get_meta_app_secret()
-    firma_valida = _validar_hmac(raw_body, sig, secret)
+    from meta.credenciales import get_meta_app_secrets
+    firma_valida = _validar_hmac(raw_body, sig, get_meta_app_secrets())
 
     # `object` es controlado por el emisor: truncar a la longitud del campo
     # evita un DataError 500 con valores largos.

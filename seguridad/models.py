@@ -321,6 +321,14 @@ class CredencialMetaApp(ModeloBase):
         verbose_name='Meta App Secret',
         help_text='Secret de la App. Se guarda cifrado.'
     )
+    app_secrets_extra = EncryptedTextField(
+        blank=True, null=True,
+        verbose_name='App Secrets adicionales',
+        help_text='Un app_secret por línea. Solo si usás más de una Meta App '
+                  '(ej. una app para WhatsApp Cloud y otra para Messenger/Instagram): '
+                  'las firmas de los webhooks se validan contra el secret principal '
+                  'y contra estos. Se guarda cifrado.'
+    )
     config_id = models.CharField(
         max_length=50, blank=True, default='',
         verbose_name='Embedded Signup Config ID',

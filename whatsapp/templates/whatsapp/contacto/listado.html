@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load templatefunctions static %}
 {% block head %}
-    <link rel="stylesheet" href="{% static 'stylenew/contacto.css' %}">
+    <link rel="stylesheet" href="/static/stylenew/contacto.css?v1.1">
 {% endblock %}
 {% block content %}
 
@@ -83,22 +83,42 @@
 
                 {# ── Header con identificación de la sesión ── #}
                 <div class="cont-card-header">
-                    <a href="/whatsapp/conversaciones/?sesion={{ l.sesion.id|encrypt_id }}"
+                    <a href="{{ canal_branding.url_conversaciones }}?sesion={{ l.sesion.id|encrypt_id }}"
                        class="cont-sesion-badge"
                        title="Sesión: {{ l.sesion.nombre|default:l.sesion.numero }}">
                         {% if l.sesion.es_meta and l.sesion.config_meta.foto %}
                             <img class="cont-sesion-avatar" src="{{ l.sesion.config_meta.foto }}" alt="">
                         {% elif l.sesion.es_baileys and l.sesion.config_baileys.foto %}
                             <img class="cont-sesion-avatar" src="{{ l.sesion.config_baileys.foto }}" alt="">
+                        {% elif l.sesion.es_messenger %}
+                            <span class="cont-sesion-avatar is-icon is-messenger">
+                                <i class="fab fa-facebook-messenger"></i>
+                            </span>
+                        {% elif l.sesion.es_instagram %}
+                            <span class="cont-sesion-avatar is-icon is-instagram">
+                                <i class="fab fa-instagram"></i>
+                            </span>
+                        {% elif l.sesion.es_tiktok %}
+                            <span class="cont-sesion-avatar is-icon is-tiktok">
+                                <i class="fab fa-tiktok"></i>
+                            </span>
                         {% else %}
                             <span class="cont-sesion-avatar is-icon {% if l.sesion.es_meta %}is-meta{% else %}is-baileys{% endif %}">
                                 <i class="fab fa-whatsapp"></i>
                             </span>
                         {% endif %}
                         <span class="cont-sesion-name">{{ l.sesion.nombre|default:l.sesion.numero|default:'Sesión' }}</span>
-                        <span class="cont-sesion-canal {% if l.sesion.es_meta %}is-meta{% else %}is-baileys{% endif %}">
-                            {% if l.sesion.es_meta %}Cloud{% else %}Web{% endif %}
-                        </span>
+                        {% if l.sesion.es_messenger %}
+                            <span class="cont-sesion-canal is-messenger">Messenger</span>
+                        {% elif l.sesion.es_instagram %}
+                            <span class="cont-sesion-canal is-instagram">Instagram</span>
+                        {% elif l.sesion.es_tiktok %}
+                            <span class="cont-sesion-canal is-tiktok">TikTok</span>
+                        {% else %}
+                            <span class="cont-sesion-canal {% if l.sesion.es_meta %}is-meta{% else %}is-baileys{% endif %}">
+                                {% if l.sesion.es_meta %}Cloud{% else %}Web{% endif %}
+                            </span>
+                        {% endif %}
                     </a>
                     <div class="dropdown">
                         <button class="cont-kebab" type="button" id="dropdownMenuButton-{{ l.pk }}"
@@ -161,9 +181,23 @@
                         </span>
                     {% endif %}
                     {% if l.from_number %}
-                        <span class="cont-meta" title="WhatsApp ID">
-                            <i class="fab fa-whatsapp"></i> {{ l.from_number|truncatechars:18 }}
-                        </span>
+                        {% if l.sesion.es_messenger %}
+                            <span class="cont-meta" title="PSID de Messenger">
+                                <i class="fab fa-facebook-messenger"></i> {{ l.contacto_numero|truncatechars:18 }}
+                            </span>
+                        {% elif l.sesion.es_instagram %}
+                            <span class="cont-meta" title="IGSID de Instagram">
+                                <i class="fab fa-instagram"></i> {{ l.contacto_numero|truncatechars:18 }}
+                            </span>
+                        {% elif l.sesion.es_tiktok %}
+                            <span class="cont-meta" title="Open ID de TikTok">
+                                <i class="fab fa-tiktok"></i> {{ l.contacto_numero|truncatechars:18 }}
+                            </span>
+                        {% else %}
+                            <span class="cont-meta" title="WhatsApp ID">
+                                <i class="fab fa-whatsapp"></i> {{ l.from_number|truncatechars:18 }}
+                            </span>
+                        {% endif %}
                     {% endif %}
                     {# Atribución: contacto que entró por Click-to-WhatsApp ad #}
                     {% if l.referral_meta %}
@@ -205,7 +239,9 @@
         </div>
     </div>
 
-    {% include "whatsapp/contacto/modal_importar.html" %}
+    {% if not canal_fijo %}
+        {% include "whatsapp/contacto/modal_importar.html" %}
+    {% endif %}
 {% endblock %}
 
 {% block jscript %}

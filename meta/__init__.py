@@ -31,6 +31,7 @@ from meta.urls import (
 from meta.credenciales import (
     get_meta_app_credentials,
     get_meta_app_secret,
+    get_meta_app_secrets,
     get_meta_config_id,
 )
 from meta.webhook import (
@@ -48,7 +49,7 @@ __all__ = [
     # urls
     'GRAPH_API_VERSION', 'build_graph_url', 'build_fb_url',
     # credenciales
-    'get_meta_app_credentials', 'get_meta_app_secret', 'get_meta_config_id',
+    'get_meta_app_credentials', 'get_meta_app_secret', 'get_meta_app_secrets', 'get_meta_config_id',
     # webhook
     'validar_firma_hmac', 'responder_handshake',
     'extraer_phone_number_id', 'extraer_ig_user_id', 'extraer_page_id',

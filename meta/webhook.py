@@ -25,15 +25,23 @@ def _fail_closed() -> bool:
         return False
 
 
-def validar_firma_hmac(raw_body: bytes, signature_header: str, app_secret: str | None) -> bool:
+def validar_firma_hmac(raw_body: bytes, signature_header: str, app_secret) -> bool:
     """Compara `X-Hub-Signature-256` contra HMAC(app_secret, body).
 
-    Con `app_secret` configurado: valida y rechaza firmas inválidas (fail-closed).
-    Sin `app_secret`: por defecto acepta (permisivo para setup inicial) emitiendo
+    `app_secret` acepta un str o una lista de secrets: instalaciones con más
+    de una Meta App (una para WhatsApp Cloud, otra para Messenger/IG) reciben
+    webhooks firmados con secrets distintos — la firma es válida si coincide
+    con CUALQUIERA de los configurados (`get_meta_app_secrets`).
+    Con secret(s) configurado(s): valida y rechaza firmas inválidas (fail-closed).
+    Sin secret: por defecto acepta (permisivo para setup inicial) emitiendo
     warning; con `META_WEBHOOK_FAIL_CLOSED=True` rechaza (recomendado en prod).
-    Si hay app_secret pero no llegó header de firma, rechazamos.
+    Si hay secret pero no llegó header de firma, rechazamos.
     """
-    if not app_secret:
+    if isinstance(app_secret, (list, tuple, set)):
+        secretos = [s for s in app_secret if s]
+    else:
+        secretos = [app_secret] if app_secret else []
+    if not secretos:
         if _fail_closed():
             logger.error(
                 "Webhook Meta RECHAZADO: app_secret no configurado y modo estricto "
@@ -48,12 +56,15 @@ def validar_firma_hmac(raw_body: bytes, signature_header: str, app_secret: str |
     if not signature_header:
         return False
     try:
-        expected = 'sha256=' + hmac.new(
-            app_secret.encode('utf-8'),
-            raw_body,
-            hashlib.sha256,
-        ).hexdigest()
-        return hmac.compare_digest(expected, signature_header)
+        for secreto in secretos:
+            expected = 'sha256=' + hmac.new(
+                secreto.encode('utf-8'),
+                raw_body,
+                hashlib.sha256,
+            ).hexdigest()
+            if hmac.compare_digest(expected, signature_header):
+                return True
+        return False
     except Exception:
         logger.exception("Error computando HMAC")
         return False

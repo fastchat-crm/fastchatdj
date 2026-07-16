@@ -88,6 +88,9 @@
 }
 .cont-sesion-avatar.is-meta    { background: linear-gradient(135deg, #25d366, #128c7e); }
 .cont-sesion-avatar.is-baileys { background: linear-gradient(135deg, #4ade80, #16a34a); }
+.cont-sesion-avatar.is-messenger { background: linear-gradient(135deg, #00b2ff, #1877f2); }
+.cont-sesion-avatar.is-instagram { background: linear-gradient(45deg, #f9ce34, #ee2a7b, #6228d7); }
+.cont-sesion-avatar.is-tiktok    { background: #161823; }
 .cont-sesion-name {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -105,6 +108,9 @@
 }
 .cont-sesion-canal.is-meta    { background: #dcfce7; color: #166534; }
 .cont-sesion-canal.is-baileys { background: #e0e7ff; color: #3730a3; }
+.cont-sesion-canal.is-messenger { background: #dbe9ff; color: #1877f2; }
+.cont-sesion-canal.is-instagram { background: #fde7f1; color: #c13584; }
+.cont-sesion-canal.is-tiktok    { background: #e8e8ea; color: #161823; }
 
 /* ─── Body: contacto principal ─── */
 .cont-card-body {

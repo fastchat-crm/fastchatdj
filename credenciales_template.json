@@ -27,5 +27,6 @@
   "META_APP_SECRET": "",
   "META_CONFIG_ID": "",
   "META_API_VERSION": "v22.0",
+  "META_APP_SECRETS_EXTRA": [],
   "CHATBOT_ERROR_NOTIFY_EMAILS": ["hllerenaa1h@gmail.com"]
 }

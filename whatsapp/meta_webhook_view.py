@@ -213,9 +213,8 @@ def _procesar_evento(request):
     phone_number_id = _extraer_phone_number_id(payload)
     config = ConfigMeta.objects.filter(phone_number_id=phone_number_id).first() if phone_number_id else None
 
-    from .common_meta import get_meta_app_secret
-    app_secret_org = get_meta_app_secret()
-    firma_valida = _validar_firma_hmac(raw_body, signature, app_secret_org)
+    from meta.credenciales import get_meta_app_secrets
+    firma_valida = _validar_firma_hmac(raw_body, signature, get_meta_app_secrets())
 
     evento = EventoMetaRecibido.objects.create(
         config_meta=config,

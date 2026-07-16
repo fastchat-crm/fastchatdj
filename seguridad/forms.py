@@ -87,6 +87,9 @@ class CredencialMetaAppForm(ModelFormBase):
                 self.fields[k].widget.attrs['col'] = "6"
             if k == 'system_user_token':
                 self.fields[k].widget.attrs['col'] = "12"
+            if k == 'app_secrets_extra':
+                self.fields[k].widget.attrs['col'] = "12"
+                self.fields[k].widget.attrs['rows'] = 2
             if k == 'es_tech_provider':
                 self.fields[k].widget.attrs['col'] = "12"
                 self.fields[k].required = False

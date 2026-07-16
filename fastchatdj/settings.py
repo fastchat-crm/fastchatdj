@@ -70,6 +70,13 @@ with open(os.path.join(BASE_DIR, 'credenciales.json')) as json_file:
     META_APP_SECRET     = data.get('META_APP_SECRET', '')
     META_CONFIG_ID      = data.get('META_CONFIG_ID', '')
     META_API_VERSION    = data.get('META_API_VERSION', 'v22.0')
+    # App secrets adicionales para validar firmas de webhooks cuando hay más
+    # de una Meta App (ej. una app para WhatsApp Cloud y otra para
+    # Messenger/Instagram). Lista o string separado por comas.
+    _meta_secrets_extra = data.get('META_APP_SECRETS_EXTRA', [])
+    if isinstance(_meta_secrets_extra, str):
+        _meta_secrets_extra = [s.strip() for s in _meta_secrets_extra.split(',') if s.strip()]
+    META_APP_SECRETS_EXTRA = _meta_secrets_extra or []
     # Modo estricto de firma de webhooks Meta: sin app_secret configurado se
     # RECHAZA el evento (en vez de aceptarlo sin validar). Recomendado en
     # producción con una sola Meta App y su app_secret cargado. Poner en False
