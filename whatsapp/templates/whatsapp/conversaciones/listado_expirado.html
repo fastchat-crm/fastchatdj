@@ -185,6 +185,9 @@
                         <a class="dropdown-item form_modal" href="javascript:void(0)" id="ficha_cliente" title="Ficha del cliente">
                             <i class="fa fa-id-card me-2 text-primary"></i>Ficha del cliente
                         </a>
+                        <a class="dropdown-item" href="javascript:void(0)" id="consultar-datos-red" title="Consultar en la red social los datos disponibles del cliente">
+                            <i class="fa fa-satellite-dish me-2 text-info"></i>Consultar datos de la red
+                        </a>
                     </div>
                 </div>
             </div>
@@ -807,6 +810,41 @@ $(document).ready(function() {
             },
             error: function() { $.unblockUI(); alertaWarning('Error de conexión.'); },
             dataType: 'json'
+        });
+    });
+
+    $(document).on('click', '#consultar-datos-red', function(e) {
+        e.preventDefault();
+        const id = conversacionActiva;
+        if (!id) { return; }
+        pantallaespera();
+        $.get('{{ canal_branding.url_finalizadas }}', { action: 'consultar_datos_red', pk: id }, function(r) {
+            $.unblockUI();
+            if (!r || r.result !== true) {
+                if (typeof mensajeWarning === 'function') mensajeWarning((r && r.message) || 'No se pudo consultar la red.');
+                return;
+            }
+            const esc = function(v) { return $('<div>').text(v === null || v === undefined ? '' : String(v)).html(); };
+            let html = '';
+            if (r.foto) {
+                html += '<div class="text-center mb-2"><img src="' + esc(r.foto) + '" style="width:84px;height:84px;border-radius:50%;object-fit:cover;" alt="foto"></div>';
+            }
+            html += '<table class="table table-sm text-start mb-2" style="font-size:.85rem;">';
+            (r.datos || []).forEach(function(d) {
+                const val = (d.valor === '' || d.valor === null || d.valor === undefined)
+                    ? '<span class="text-muted">—</span>' : esc(d.valor);
+                html += '<tr><th style="white-space:nowrap;">' + esc(d.label) + '</th><td style="word-break:break-all;">' + val + '</td></tr>';
+            });
+            html += '</table>';
+            if (r.nota) { html += '<p class="text-muted small mb-0">' + esc(r.nota) + '</p>'; }
+            if (r.actualizado) { html += '<p class="text-success small mb-0"><i class="fa fa-check me-1"></i>Contacto actualizado (' + esc(r.actualizado) + ').</p>'; }
+            Swal.fire({ title: esc(r.red), html: html, confirmButtonText: 'Cerrar' });
+            if (r.actualizado) {
+                cargarConversaciones();
+            }
+        }, 'json').fail(function() {
+            $.unblockUI();
+            if (typeof mensajeWarning === 'function') mensajeWarning('Error de conexión al consultar la red.');
         });
     });
 

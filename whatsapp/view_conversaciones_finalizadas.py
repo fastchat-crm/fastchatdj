@@ -187,6 +187,9 @@ def conversacionesFinalizadasView(request, canal_fijo=None):
                 return historial_cliente_mensajes(request, conv)
             except Exception as ex:
                 return JsonResponse({'error': True, 'message': str(ex)})
+        elif action == 'consultar_datos_red':
+            from .funcionesWhatsappConversacion import consultar_datos_red
+            return consultar_datos_red(request, canal_fijo=canal_fijo)
         elif action == 'listar_plantillas_meta':
             return listar_plantillas_meta(request)
 

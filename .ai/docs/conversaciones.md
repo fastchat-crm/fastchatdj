@@ -49,6 +49,21 @@ difieren en queryset, footer y acciones permitidas.
   `fa-facebook-messenger` + "Messenger Workspace"); antes caía al default
   "WhatsApp Workspace".
 
+**Acción `consultar_datos_red` (2026-07-16):** ítem "Consultar datos de la red"
+en el offcanvas de acciones (activas) y en el dropdown de finalizadas. GET
+`?action=consultar_datos_red&pk=<conv>` → handler compartido
+`funcionesWhatsappConversacion.consultar_datos_red(request, canal_fijo)`:
+consulta en vivo al proveedor lo que expone de ese cliente y devuelve
+`{result, red, foto, datos: [{label, valor}], nota, actualizado}` que el JS
+muestra en un `Swal.fire`. Por proveedor: Messenger → User Profile API
+(nombre/foto, sin username/email); Instagram → name/username/foto +
+follower_count y flags follow (según permisos); WhatsApp Cloud → sin endpoint
+de perfil (solo push name + meta_user_id guardados); Baileys → `getUserImage`
+del Node + nombre/alias de `contacts_list`; TikTok → solo lo que trajo el
+webhook (nickname/avatar, API beta). Si obtiene nombre/foto y el contacto no
+los tenía, los persiste y el front recarga el sidebar. Valida
+`puede_ver_conversacion` + `canal_conversacion_permitido`.
+
 **Proveedores de transporte** soportados (snapshot en `ConversacionWhatsApp.proveedor_atencion`):
 Meta Cloud API, Baileys (Node), Instagram DM, Messenger. Selección vía dispatcher
 `get_whatsapp_service(sesion)` (`whatsapp/services.py:604`).

@@ -314,6 +314,147 @@ def cambiar_clasificacion_post(request):
     )
 
 
+def consultar_datos_red(request, canal_fijo=None):
+    """Consulta en vivo al proveedor de la sesión los datos disponibles del
+    cliente y los devuelve como filas label/valor para el modal del inbox.
+    Qué expone cada red:
+      - Messenger: nombre y foto (User Profile API) — sin username/email/teléfono.
+      - Instagram: nombre, username, foto, follower_count y flags de follow.
+      - WhatsApp Cloud (meta): la API oficial NO tiene endpoint de perfil del
+        cliente; solo el nombre push que llega en cada webhook.
+      - Baileys: foto vía getUserImage del Node + nombre/alias de contacts_list.
+      - TikTok: nickname/avatar llegan solo en el webhook (API beta sin perfil).
+    Si obtiene nombre/foto y el contacto no los tiene, los persiste."""
+    from core.funciones_adicionales import get_image_as_base64
+    from .permisos_sesion import puede_ver_conversacion
+    from .view_conversaciones import canal_conversacion_permitido
+    try:
+        conversacion = ConversacionWhatsApp.objects.select_related(
+            'contacto', 'sesion'
+        ).get(pk=int(request.GET['pk']))
+    except Exception as ex:
+        return JsonResponse({'result': False, 'message': f'No se encontró la conversación: {ex}'})
+    if not puede_ver_conversacion(request.user, conversacion):
+        return JsonResponse({'result': False, 'message': 'No autorizado.'})
+    if not canal_conversacion_permitido(conversacion.sesion, canal_fijo):
+        return JsonResponse({'result': False, 'message': 'La conversación no pertenece a este canal.'})
+
+    sesion = conversacion.sesion
+    contacto = conversacion.contacto
+    proveedor = getattr(sesion, 'proveedor', '') or 'baileys'
+    external_id = contacto.external_id or contacto.contacto_numero
+    datos, foto, nombre_red, nota = [], '', '', ''
+
+    try:
+        if proveedor == 'messenger':
+            from meta.perfiles import obtener_perfil_usuario_messenger
+            red = 'Facebook Messenger'
+            nota = 'Messenger solo expone nombre y foto del usuario — no hay username, email ni teléfono.'
+            perfil = obtener_perfil_usuario_messenger(getattr(sesion, 'config_messenger', None), external_id)
+            if not perfil:
+                return JsonResponse({'result': False, 'message': 'Meta no devolvió el perfil (token vencido, permisos o PSID inválido).'})
+            raw = perfil.get('raw') or {}
+            nombre_red = perfil.get('nombre') or ''
+            foto = perfil.get('foto') or ''
+            datos = [
+                {'label': 'Nombre', 'valor': nombre_red},
+                {'label': 'Nombre (first_name)', 'valor': raw.get('first_name') or ''},
+                {'label': 'Apellido (last_name)', 'valor': raw.get('last_name') or ''},
+                {'label': 'PSID', 'valor': str(external_id)},
+            ]
+        elif proveedor == 'instagram':
+            from meta.perfiles import obtener_perfil_usuario_instagram
+            red = 'Instagram'
+            nota = 'Instagram expone nombre, username y foto; seguidores y flags de follow dependen de los permisos de la app. No hay email ni teléfono.'
+            perfil = obtener_perfil_usuario_instagram(getattr(sesion, 'config_instagram', None), external_id)
+            if not perfil:
+                return JsonResponse({'result': False, 'message': 'Meta no devolvió el perfil (token vencido, permisos o IGSID inválido).'})
+            raw = perfil.get('raw') or {}
+            nombre_red = perfil.get('nombre') or ''
+            foto = perfil.get('foto') or ''
+            datos = [
+                {'label': 'Nombre', 'valor': raw.get('name') or ''},
+                {'label': 'Username', 'valor': ('@' + raw['username']) if raw.get('username') else ''},
+                {'label': 'Seguidores', 'valor': raw.get('follower_count', '')},
+                {'label': 'Sigue a la cuenta', 'valor': _si_no(raw.get('is_user_follow_business'))},
+                {'label': 'La cuenta lo sigue', 'valor': _si_no(raw.get('is_business_follow_user'))},
+                {'label': 'IGSID', 'valor': str(external_id)},
+            ]
+        elif proveedor == 'meta':
+            red = 'WhatsApp Cloud API'
+            nota = 'La API oficial de WhatsApp no permite consultar el perfil del cliente; solo se dispone del nombre push que Meta envía con cada mensaje y de la identidad cross-app.'
+            datos = [
+                {'label': 'Número (wa_id)', 'valor': contacto.contacto_numero or ''},
+                {'label': 'Nombre (push)', 'valor': contacto.contacto_nombre or ''},
+                {'label': 'Meta User ID (cross-app)', 'valor': contacto.meta_user_id or ''},
+            ]
+        elif proveedor == 'tiktok':
+            red = 'TikTok'
+            nota = 'TikTok Business Messaging (beta) solo entrega nickname y avatar dentro del propio webhook; no existe endpoint de perfil consultable.'
+            datos = [
+                {'label': 'Open ID', 'valor': str(external_id)},
+                {'label': 'Nickname (webhook)', 'valor': contacto.contacto_nombre or ''},
+                {'label': 'Avatar guardado', 'valor': 'Sí' if contacto.contacto_foto else 'No'},
+            ]
+        else:
+            import json as _json
+            from .services import get_whatsapp_service
+            red = 'WhatsApp (Baileys)'
+            nota = 'Baileys expone la foto de perfil pública y el nombre/alias sincronizado de la agenda del número conector.'
+            service = get_whatsapp_service(sesion)
+            foto = service.get_user_image(sesion.session_id, contacto.from_number) or ''
+            nombre_agenda, alias_push = '', ''
+            cfg_baileys = getattr(sesion, 'config_baileys', None)
+            if cfg_baileys and cfg_baileys.contacts_list:
+                try:
+                    for c in _json.loads(cfg_baileys.contacts_list or '[]'):
+                        if c.get('id') == contacto.from_number:
+                            nombre_agenda = c.get('name') or ''
+                            alias_push = c.get('notify') or ''
+                            break
+                except (ValueError, TypeError):
+                    pass
+            nombre_red = nombre_agenda or alias_push
+            datos = [
+                {'label': 'Número', 'valor': contacto.contacto_numero or ''},
+                {'label': 'Nombre en agenda', 'valor': nombre_agenda},
+                {'label': 'Alias (push name)', 'valor': alias_push},
+                {'label': 'Foto de perfil', 'valor': 'Disponible' if foto else 'No disponible'},
+            ]
+    except Exception as ex:
+        return JsonResponse({'result': False, 'message': f'Error consultando la red: {ex}'})
+
+    actualizado = []
+    if nombre_red and not contacto.contacto_nombre:
+        contacto.contacto_nombre = nombre_red
+        actualizado.append('nombre')
+    if foto and not contacto.contacto_foto:
+        try:
+            contacto.contacto_foto = f'data:image/jpg;base64,{get_image_as_base64(foto)}'
+            actualizado.append('foto')
+        except Exception:
+            pass
+    if actualizado:
+        contacto.save(request)
+
+    log(f"Consultó datos de red ({red}) del contacto {contacto.contacto_numero}",
+        request, "view", obj=conversacion.id)
+    return JsonResponse({
+        'result': True,
+        'red': red,
+        'foto': foto,
+        'datos': datos,
+        'nota': nota,
+        'actualizado': ', '.join(actualizado),
+    })
+
+
+def _si_no(valor):
+    if valor is None or valor == '':
+        return ''
+    return 'Sí' if valor else 'No'
+
+
 def cambiar_nombre_contacto_get(request):
     try:
         filtro = ConversacionWhatsApp.objects.get(pk=int(request.GET['id']))
