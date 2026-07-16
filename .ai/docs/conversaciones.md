@@ -28,6 +28,27 @@ difieren en queryset, footer y acciones permitidas.
 - `whatsapp/view_conversaciones_pendiente_reconexion.py` → `conversacionesPendienteReconexionView(request, canal_fijo=None)`
   — chats pendientes de reconexión. Acepta `canal_fijo` igual que activas (2026-07-16).
 
+**Aislamiento por canal (2026-07-16):** cada red solo ve lo suyo.
+- Sin `canal_fijo` (inbox `/whatsapp/`) las sesiones se filtran a
+  `PROVEEDORES_WHATSAPP = ('baileys', 'meta')` — ya no aparecen sesiones de
+  Instagram/Messenger/TikTok en el selector del inbox WhatsApp.
+- `canal_conversacion_permitido(sesion, canal_fijo)` (`view_conversaciones.py`)
+  valida que una conversación pertenezca al canal del inbox. Se aplica en las 3
+  vistas a: `action=ver_mensajes` (responde `{'error': True, 'canal_invalido': True}`),
+  el `contactoId` guardado en `request.session` (se ignora si es de otro canal)
+  y el deep-link `?conv=<token>` (no auto-abre convs de otro canal).
+- Las claves de `localStorage` que recuerdan la última conv abierta van
+  namespaced por canal: `wa_last_conv_finalizada[_<canal>]`,
+  `wa_last_conv_pendiente[_<canal>]` y la cola offline `wa_offline_queue[_<canal>]`
+  (sufijo solo cuando hay `canal_fijo`; WhatsApp conserva la clave histórica).
+  Antes la clave compartida hacía que `/facebook/conversaciones-finalizadas/`
+  auto-abriera la última conversación de WhatsApp. El handler `success` de
+  `cargarMensajes` en finalizadas/pendientes ahora limpia la clave y muestra el
+  `message` cuando el server responde `error: true`.
+- `base_chat.html` tiene rama `messenger` en el brand del navbar (ícono
+  `fa-facebook-messenger` + "Messenger Workspace"); antes caía al default
+  "WhatsApp Workspace".
+
 **Proveedores de transporte** soportados (snapshot en `ConversacionWhatsApp.proveedor_atencion`):
 Meta Cloud API, Baileys (Node), Instagram DM, Messenger. Selección vía dispatcher
 `get_whatsapp_service(sesion)` (`whatsapp/services.py:604`).

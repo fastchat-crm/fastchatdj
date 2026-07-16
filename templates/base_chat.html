@@ -48,6 +48,8 @@
                         <i class="fa-brands fa-instagram"></i>
                     {% elif canal_fijo == 'tiktok' %}
                         <i class="fa-brands fa-tiktok"></i>
+                    {% elif canal_fijo == 'messenger' %}
+                        <i class="fa-brands fa-facebook-messenger"></i>
                     {% elif confi.logo_sistema %}
                         <img src="/media/{{ confi.logo_sistema }}" alt="" style="width:22px;height:22px;object-fit:contain;border-radius:4px;">
                     {% else %}
@@ -56,7 +58,7 @@
                 </div>
                 <div class="chat-brand-text">
                     <span class="chat-brand-name">{{ alias|default:nombreempresa }}</span>
-                    <span class="chat-brand-sub">{% if canal_fijo == 'instagram' %}Instagram Workspace{% elif canal_fijo == 'tiktok' %}TikTok Workspace{% else %}WhatsApp Workspace{% endif %}</span>
+                    <span class="chat-brand-sub">{% if canal_fijo == 'instagram' %}Instagram Workspace{% elif canal_fijo == 'tiktok' %}TikTok Workspace{% elif canal_fijo == 'messenger' %}Messenger Workspace{% else %}WhatsApp Workspace{% endif %}</span>
                 </div>
             </a>
         </div>

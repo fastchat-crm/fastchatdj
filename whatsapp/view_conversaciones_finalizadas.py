@@ -44,7 +44,7 @@ from .funcionesWhatsappConversacion import (
 @login_required
 @secure_module
 def conversacionesFinalizadasView(request, canal_fijo=None):
-    from .view_conversaciones import BRANDING_INBOX_CANAL
+    from .view_conversaciones import BRANDING_INBOX_CANAL, PROVEEDORES_WHATSAPP, canal_conversacion_permitido
     branding = BRANDING_INBOX_CANAL.get(canal_fijo, BRANDING_INBOX_CANAL[None])
     data = {
         'titulo': branding['titulo'],
@@ -62,6 +62,8 @@ def conversacionesFinalizadasView(request, canal_fijo=None):
     sesiones = sesiones_visibles(request.user).order_by('-ultima_conexion')
     if canal_fijo:
         sesiones = sesiones.filter(proveedor=canal_fijo)
+    else:
+        sesiones = sesiones.filter(proveedor__in=PROVEEDORES_WHATSAPP)
     data['sesiones'] = sesiones
 
     # Sesión seleccionada (por defecto la primera)
@@ -71,7 +73,10 @@ def conversacionesFinalizadasView(request, canal_fijo=None):
     if contactoId:
         try:
             conversacion_selected = ConversacionWhatsApp.objects.get(pk=int(encrypt(contactoId)))
-            sesion_id = conversacion_selected.sesion.id
+            if canal_conversacion_permitido(conversacion_selected.sesion, canal_fijo):
+                sesion_id = conversacion_selected.sesion.id
+            else:
+                conversacion_selected = None
         except Exception as ex:
             raise NameError(f'No se encontró la conversación: {ex}')
 
@@ -86,7 +91,7 @@ def conversacionesFinalizadasView(request, canal_fijo=None):
             conv_obj = ConversacionWhatsApp.objects.filter(pk=conv_id_pedido).select_related(
                 'contacto', 'contacto__sesion'
             ).first()
-            if conv_obj:
+            if conv_obj and canal_conversacion_permitido(conv_obj.sesion, canal_fijo):
                 auto_open_conv_id = conv_obj.id
                 if conv_obj.contacto and conv_obj.contacto.sesion:
                     sesion_id = conv_obj.contacto.sesion.id
@@ -113,6 +118,9 @@ def conversacionesFinalizadasView(request, canal_fijo=None):
                 conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
                 if not puede_ver_conversacion(request.user, conversacion):
                     return JsonResponse({'error': True, 'message': 'Not authorized.'})
+                if not canal_conversacion_permitido(conversacion.sesion, canal_fijo):
+                    return JsonResponse({'error': True, 'canal_invalido': True,
+                                         'message': 'La conversación no pertenece a este canal.'})
                 mensajes = MensajeWhatsApp.objects.filter(conversacion=conversacion).order_by('fecha')
                 data['conversacion'] = conversacion
                 data['mensajes'] = mensajes

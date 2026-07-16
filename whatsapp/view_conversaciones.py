@@ -300,7 +300,7 @@ BRANDING_INBOX_CANAL = {
         'url_pendientes': '/whatsapp/conversaciones-pendiente-reconexion/',
         'tiene_pendientes': True,
         'vacio_titulo': 'Aún no hay sesiones de WhatsApp',
-        'vacio_texto': 'Para ver conversaciones primero necesitás conectar al menos un canal (WhatsApp, Instagram o Messenger).',
+        'vacio_texto': 'Para ver conversaciones primero necesitás conectar al menos una sesión de WhatsApp.',
         'vacio_boton': 'Crear o conectar una sesión',
     },
     'instagram': {
@@ -345,6 +345,20 @@ BRANDING_INBOX_CANAL = {
 }
 
 
+PROVEEDORES_WHATSAPP = ('baileys', 'meta')
+
+
+def canal_conversacion_permitido(sesion, canal_fijo):
+    """True si la sesión pertenece al canal del inbox actual. Sin canal_fijo
+    (inbox WhatsApp) solo se aceptan proveedores WhatsApp — evita que
+    conversaciones de Messenger/Instagram/TikTok se abran en el inbox de
+    WhatsApp y viceversa (localStorage/contactoId compartidos entre canales)."""
+    proveedor = getattr(sesion, 'proveedor', '') or ''
+    if canal_fijo:
+        return proveedor == canal_fijo
+    return proveedor in PROVEEDORES_WHATSAPP
+
+
 @login_required
 @secure_module
 def conversacionesView(request, canal_fijo=None, template='whatsapp/conversaciones/listado.html'):
@@ -365,6 +379,8 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
     sesiones = sesiones_visibles(request.user).order_by('-ultima_conexion')
     if canal_fijo:
         sesiones = sesiones.filter(proveedor=canal_fijo)
+    else:
+        sesiones = sesiones.filter(proveedor__in=PROVEEDORES_WHATSAPP)
     data['sesiones'] = sesiones
 
     # Sesión seleccionada (por defecto la primera)
@@ -374,7 +390,10 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
     if contactoId:
         try:
             conversacion_selected = ConversacionWhatsApp.objects.get(pk=int(encrypt(contactoId)))
-            sesion_id = conversacion_selected.sesion.id
+            if canal_conversacion_permitido(conversacion_selected.sesion, canal_fijo):
+                sesion_id = conversacion_selected.sesion.id
+            else:
+                conversacion_selected = None
         except Exception as ex:
             raise NameError(f'No se encontró la conversación: {ex}')
 
@@ -390,7 +409,7 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
             conv_obj = ConversacionWhatsApp.objects.filter(pk=conv_id_pedido).select_related(
                 'contacto', 'contacto__sesion'
             ).first()
-            if conv_obj:
+            if conv_obj and canal_conversacion_permitido(conv_obj.sesion, canal_fijo):
                 if conv_obj.conversacion_finalizada:
                     return redirect(f"{branding['url_finalizadas']}?conv={conv_token}")
                 auto_open_conv_id = conv_obj.id
@@ -422,6 +441,9 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
             conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
             if not puede_ver_conversacion(request.user, conversacion):
                 return JsonResponse({'error': True, 'message': 'Not authorized.'})
+            if not canal_conversacion_permitido(conversacion.sesion, canal_fijo):
+                return JsonResponse({'error': True, 'canal_invalido': True,
+                                     'message': 'La conversación no pertenece a este canal.'})
             mensajes = MensajeWhatsApp.objects.filter(conversacion=conversacion).order_by('fecha')
             data['conversacion'] = conversacion
             data['mensajes'] = mensajes

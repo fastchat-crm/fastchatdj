@@ -472,7 +472,7 @@ $(document).ready(function() {
         if (_cargandoMensajes || id == conversacionActiva) return;
         _cargandoMensajes = true;
         conversacionActiva = id;
-        try { localStorage.setItem('wa_last_conv_pendiente', String(id)); } catch (e) {}
+        try { localStorage.setItem('wa_last_conv_pendiente{% if canal_fijo %}_{{ canal_fijo }}{% endif %}', String(id)); } catch (e) {}
 
         if (chatSocket) { chatSocket.close(); chatSocket = null; }
         $('#descartar-btn, #ver-resumen-btn, #btn-control-respuestas, #btn-estadisticas, #btn-trazas').addClass('d-none').hide();
@@ -487,6 +487,12 @@ $(document).ready(function() {
             type: 'GET',
             success: function(r) {
                 _cargandoMensajes = false;
+                if (r && r.error) {
+                    try { localStorage.removeItem('wa_last_conv_pendiente{% if canal_fijo %}_{{ canal_fijo }}{% endif %}'); } catch (e) {}
+                    conversacionActiva = null;
+                    $('#mensajes-container').removeClass('is-loading').html(`<div class="p-3 text-center text-danger"><i class="fa fa-exclamation-circle me-1"></i>${r.message || 'No se pudo cargar la conversación.'}</div>`);
+                    return;
+                }
 
                 $('#mensajes-container').removeClass('is-loading').html(r.html);
                 $('#contacto-nombre').text(r.contacto_nombre || r.contacto_numero);
@@ -548,7 +554,7 @@ $(document).ready(function() {
             error: function(xhr, s, err) {
                 _cargandoMensajes = false;
                 console.error('[cargarMensajes pendiente] ajax', s, err, xhr.responseText);
-                try { localStorage.removeItem('wa_last_conv_pendiente'); } catch (e) {}
+                try { localStorage.removeItem('wa_last_conv_pendiente{% if canal_fijo %}_{{ canal_fijo }}{% endif %}'); } catch (e) {}
                 $('#mensajes-container').removeClass('is-loading').html(`<div class="p-3 text-center text-danger"><i class="fa fa-exclamation-circle me-1"></i>Error: ${err}</div>`);
             }
         });
@@ -656,7 +662,7 @@ $(document).ready(function() {
     {% if not conversacion_selected %}
     (function () {
         var saved = null;
-        try { saved = localStorage.getItem('wa_last_conv_pendiente'); } catch (e) {}
+        try { saved = localStorage.getItem('wa_last_conv_pendiente{% if canal_fijo %}_{{ canal_fijo }}{% endif %}'); } catch (e) {}
         if (!saved) return;
         setTimeout(function () {
             if (typeof cargarMensajes === 'function') cargarMensajes(saved);

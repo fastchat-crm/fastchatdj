@@ -1997,7 +1997,7 @@
         });
 
         // Enviar mensaje
-        const WA_OFFLINE_KEY = 'wa_offline_queue';
+        const WA_OFFLINE_KEY = 'wa_offline_queue{% if canal_fijo %}_{{ canal_fijo }}{% endif %}';
         let _waFlushing = false;
 
         function _waCsrf() {
