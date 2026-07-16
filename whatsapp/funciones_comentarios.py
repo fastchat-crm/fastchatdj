@@ -34,8 +34,10 @@ def _error_canal_no_soportado(canal):
     return {'success': False, 'error': f'El canal {canal} aún no soporta acciones de comentarios.'}
 
 
-def _persistir_comentario(sesion, canal, comment_id, campos):
-    """Crea el ComentarioSocial (si no es duplicado) y dispara el motor de reglas."""
+def _persistir_comentario(sesion, canal, comment_id, campos, correr_reglas=True):
+    """Crea el ComentarioSocial (si no es duplicado) y dispara el motor de reglas.
+    `correr_reglas=False` para importaciones históricas (sync desde la grilla de
+    publicaciones): un comentario viejo no debe gatillar el DM automático."""
     if not comment_id:
         return None
     # get_or_create es atómico contra el índice único de comment_id: dos entregas
@@ -47,10 +49,11 @@ def _persistir_comentario(sesion, canal, comment_id, campos):
     )
     if not creado:
         return None
-    try:
-        procesar_reglas_comentario(comentario)
-    except Exception:
-        logger.exception('Reglas de comentario fallaron para %s', comentario.comment_id)
+    if correr_reglas:
+        try:
+            procesar_reglas_comentario(comentario)
+        except Exception:
+            logger.exception('Reglas de comentario fallaron para %s', comentario.comment_id)
     return comentario
 
 
@@ -105,6 +108,51 @@ def guardar_comentario_facebook(sesion, config, value):
         'fecha_comentario': fecha,
         'payload_json': value,
     })
+
+
+def sincronizar_comentarios_publicacion(sesion, canal, media_id):
+    """Importa a ComentarioSocial los comentarios EN VIVO de una publicación que
+    aún no están en BD (llegaron antes de suscribir el webhook `feed`/`comments`
+    o sus eventos fueron rechazados). Se llama al abrir el modal de comentarios
+    de la grilla de publicaciones. Best-effort (nunca lanza): devuelve cuántos
+    creó. No corre el motor de reglas comentario→DM (son históricos)."""
+    service = service_por_canal(canal)
+    if not service:
+        return 0
+    try:
+        res = service.listar_comentarios_publicacion(sesion.session_id, media_id)
+    except Exception:
+        logger.exception('Sync de comentarios falló (%s, media %s)', canal, media_id)
+        return 0
+    if not res.get('success'):
+        logger.warning('Sync de comentarios %s media %s: %s', canal, media_id, res.get('error'))
+        return 0
+    if canal == 'facebook':
+        propio = str(getattr(getattr(sesion, 'config_messenger', None), 'page_id', '') or '')
+    else:
+        propio = str(getattr(getattr(sesion, 'config_instagram', None), 'ig_user_id', '') or '')
+    creados = 0
+    for c in res.get('comentarios') or []:
+        if propio and c.get('autor_id') == propio:
+            continue
+        fecha = timezone.now()
+        if c.get('fecha'):
+            try:
+                fecha = datetime.strptime(c['fecha'], '%Y-%m-%dT%H:%M:%S%z')
+            except (ValueError, TypeError):
+                pass
+        comentario = _persistir_comentario(sesion, canal, c.get('id'), {
+            'parent_id': c.get('parent_id') or '',
+            'media_id': str(media_id),
+            'autor_external_id': c.get('autor_id') or '',
+            'autor_username': c.get('autor_nombre') or '',
+            'texto': c.get('texto') or '',
+            'fecha_comentario': fecha,
+            'payload_json': {'origen': 'sync_publicaciones', **c},
+        }, correr_reglas=False)
+        if comentario:
+            creados += 1
+    return creados
 
 
 def _normalizar(texto):

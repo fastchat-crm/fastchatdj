@@ -37,6 +37,11 @@
                             <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-sync me-1"></i> Cargar publicaciones
                             </button>
+                            {% if cuenta_seleccionada %}
+                                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalNuevaPublicacion">
+                                    <i class="fas fa-plus-circle me-1"></i> Nueva publicación
+                                </button>
+                            {% endif %}
                         </div>
                     </div>
                 </form>
@@ -80,8 +85,21 @@
                                 &nbsp;·&nbsp;
                                 <i class="fa fa-comment"></i> {{ p.comments_count|default:0 }}
                                 &nbsp;·&nbsp;
+                                <i class="fa fa-share text-primary"></i> {{ p.shares_count|default:0 }}
+                                &nbsp;·&nbsp;
                                 <i class="fa fa-inbox"></i> {{ p.comentarios_crm }} en CRM
                             </div>
+                            {% if p.impresiones is not None or p.alcance is not None %}
+                                <div class="post-metricas mb-2" title="Métricas de alcance (insights de Meta)">
+                                    <i class="fa fa-eye text-info"></i> {{ p.impresiones|default:0 }} impresiones
+                                    &nbsp;·&nbsp;
+                                    <i class="fa fa-users text-success"></i> {{ p.alcance|default:0 }} alcance
+                                    {% if p.clics is not None %}
+                                        &nbsp;·&nbsp;
+                                        <i class="fa fa-hand-pointer"></i> {{ p.clics|default:0 }} clics
+                                    {% endif %}
+                                </div>
+                            {% endif %}
                             <div class="d-flex gap-2">
                                 <a href="{{ p.permalink }}" target="_blank" class="btn btn-sm btn-secondary">
                                     <i class="fab fa-facebook"></i> Ver post
@@ -117,6 +135,38 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body" id="cuerpoComentariosPost"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalNuevaPublicacion" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-plus-circle me-1"></i> Nueva publicación en {{ cuenta_seleccionada.nombre }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Texto de la publicación</label>
+                        <textarea id="pub-mensaje" class="form-control" rows="4" placeholder="¿Qué querés publicar?"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">URL de imagen (opcional)</label>
+                        <input type="url" id="pub-foto" class="form-control" placeholder="https://.../imagen.jpg">
+                        <small class="text-muted">Debe ser una URL pública accesible por Meta.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Link (opcional)</label>
+                        <input type="url" id="pub-link" class="form-control" placeholder="https://tusitio.com/promo">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-success" id="btn-publicar-post">
+                        <i class="fas fa-paper-plane me-1"></i> Publicar
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -201,6 +251,41 @@
 
             document.querySelectorAll('.btn-comentarios-post').forEach(btn =>
                 btn.addEventListener('click', () => cargarComentarios(btn.dataset.media, btn.dataset.caption)));
+
+            const btnPublicar = document.getElementById('btn-publicar-post');
+            if (btnPublicar) {
+                btnPublicar.addEventListener('click', async () => {
+                    const mensaje = (document.getElementById('pub-mensaje').value || '').trim();
+                    const foto = (document.getElementById('pub-foto').value || '').trim();
+                    const link = (document.getElementById('pub-link').value || '').trim();
+                    if (!mensaje && !foto && !link) {
+                        mensajeWarning('Escribí un texto, un link o la URL de una imagen.');
+                        return;
+                    }
+                    btnPublicar.disabled = true;
+                    const fd = new FormData();
+                    fd.append('action', 'publicar_post');
+                    fd.append('cuenta', '{{ cuenta_seleccionada.id|default:'' }}');
+                    fd.append('mensaje', mensaje);
+                    fd.append('foto_url', foto);
+                    fd.append('link', link);
+                    fd.append('csrfmiddlewaretoken', csrf());
+                    try {
+                        const r = await fetch('{{ ruta }}', {method: 'POST', body: fd});
+                        const j = await r.json();
+                        btnPublicar.disabled = false;
+                        if (j.error) {
+                            mensajeWarning(j.message || 'No se pudo publicar.');
+                            return;
+                        }
+                        Swal.fire({title: j.message, type: 'success', timer: 1800, showConfirmButton: false});
+                        setTimeout(() => location.reload(), 1900);
+                    } catch (e) {
+                        btnPublicar.disabled = false;
+                        mensajeWarning('Error de conexión al publicar.');
+                    }
+                });
+            }
         })();
     </script>
 {% endblock %}

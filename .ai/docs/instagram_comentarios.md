@@ -1,6 +1,21 @@
 # Comentarios de redes sociales (Instagram y Facebook) — módulo implementado
 
 > Fecha: 2026-07-08. Fase 1 de moderación de comentarios: Instagram vía webhook `comments`.
+>
+> Update 2026-07-16 — grilla de publicaciones (`view_publicaciones_social.py`):
+> (1) `action=comentarios_post` ahora SINCRONIZA en vivo antes de listar
+> (`funciones_comentarios.sincronizar_comentarios_publicacion` →
+> `listar_comentarios_publicacion` del service por canal): importa a
+> `ComentarioSocial` los comentarios hechos antes de suscribir el webhook o
+> cuyos eventos se rechazaron (sin correr reglas comentario→DM — son
+> históricos). Antes el post decía "1 comentario" (métrica Meta) y el modal
+> salía vacío. (2) `action=publicar_post` (POST): botón "Nueva publicación" en
+> la grilla — FB `POST /{page_id}/feed` o `/photos` (texto + link + foto URL);
+> IG flujo container→`media_publish` (imagen URL pública obligatoria).
+> (3) FB `listar_publicaciones` pide `shares` + insights
+> (`post_impressions`, `post_impressions_unique`, `post_clicks`) en el mismo
+> request y la grilla los muestra; si la app no tiene `read_insights`,
+> reintenta sin insights (la grilla no se rompe, solo no muestra alcance).
 > 2026-07-14: se sumó **Facebook** (canal `facebook`, proveedor `messenger`): comentarios del
 > feed de página vía webhook `feed` (`guardar_comentario_facebook`), acciones vía
 > `MessengerService` (responder = `POST /{comment_id}/comments`, ocultar = `is_hidden`,

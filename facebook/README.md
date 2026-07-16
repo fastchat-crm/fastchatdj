@@ -22,7 +22,7 @@
 | `view_contactos.py` | `/facebook/contactos/` — wrapper `contactoView(canal_fijo='messenger')`: módulo de contactos acotado a sesiones Messenger (sin alta manual/importación; los contactos nacen del webhook). |
 | `view_comentarios.py` | `/facebook/comentarios/` — wrapper `comentariosView(canal_fijo='facebook')`. |
 | `view_reglas.py` | `/facebook/reglas-comentarios/` — wrapper `reglasComentariosView(canal='facebook')`. |
-| `view_posts.py` | `/facebook/publicaciones/` — wrapper de la vista genérica `whatsapp/view_publicaciones_social.py::publicacionesSocialView(canal='facebook')` (grilla live GET `/{page_id}/posts` normalizado al shape IG + modal de moderación). |
+| `view_posts.py` | `/facebook/publicaciones/` — wrapper de la vista genérica `whatsapp/view_publicaciones_social.py::publicacionesSocialView(canal='facebook')` (grilla live GET `/{page_id}/posts` normalizado al shape IG + modal de moderación). 2026-07-16: al abrir el modal se sincronizan los comentarios en vivo del post a `ComentarioSocial`; botón "Nueva publicación" (texto/link/foto vía `MessengerService.publicar_post`); la grilla muestra shares + insights (impresiones/alcance/clics — requiere `read_insights`, degrada sin romper). |
 | `templates/facebook/` | `cuentas/listado.html`, `publicaciones/listado.html`, `publicaciones/_comentarios_post.html`. El inbox de conversaciones usa el template compartido de whatsapp. |
 | CSS | `static/css/facebook/cuentas_listado.css`, `static/css/facebook/publicaciones_listado.css`. |
 

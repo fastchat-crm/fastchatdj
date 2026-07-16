@@ -37,6 +37,11 @@
                             <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-sync me-1"></i> Cargar publicaciones
                             </button>
+                            {% if cuenta_seleccionada %}
+                                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalNuevaPublicacion">
+                                    <i class="fas fa-plus-circle me-1"></i> Nueva publicación
+                                </button>
+                            {% endif %}
                         </div>
                     </div>
                 </form>
@@ -123,6 +128,34 @@
         </div>
     </div>
 
+    <div class="modal fade" id="modalNuevaPublicacion" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-plus-circle me-1"></i> Nueva publicación en {{ cuenta_seleccionada.nombre }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">URL de imagen (obligatoria)</label>
+                        <input type="url" id="pub-foto" class="form-control" placeholder="https://.../imagen.jpg">
+                        <small class="text-muted">Instagram exige una imagen con URL pública (JPG recomendado).</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Caption</label>
+                        <textarea id="pub-mensaje" class="form-control" rows="4" placeholder="Texto de la publicación, hashtags..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-success" id="btn-publicar-post">
+                        <i class="fas fa-paper-plane me-1"></i> Publicar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <form id="formAccionComentario" class="d-none">{% csrf_token %}</form>
 {% endblock %}
 
@@ -203,6 +236,39 @@
                             if (res.value) postAccion({action: 'enviar_dm', pk: btn.dataset.pk, texto: res.value});
                         });
                     }));
+            }
+
+            const btnPublicar = document.getElementById('btn-publicar-post');
+            if (btnPublicar) {
+                btnPublicar.addEventListener('click', async () => {
+                    const mensaje = (document.getElementById('pub-mensaje').value || '').trim();
+                    const foto = (document.getElementById('pub-foto').value || '').trim();
+                    if (!foto) {
+                        mensajeWarning('Instagram requiere la URL pública de una imagen.');
+                        return;
+                    }
+                    btnPublicar.disabled = true;
+                    const fd = new FormData();
+                    fd.append('action', 'publicar_post');
+                    fd.append('cuenta', '{{ cuenta_seleccionada.id|default:'' }}');
+                    fd.append('mensaje', mensaje);
+                    fd.append('foto_url', foto);
+                    fd.append('csrfmiddlewaretoken', csrf());
+                    try {
+                        const r = await fetch('{{ ruta }}', {method: 'POST', body: fd});
+                        const j = await r.json();
+                        btnPublicar.disabled = false;
+                        if (j.error) {
+                            mensajeWarning(j.message || 'No se pudo publicar.');
+                            return;
+                        }
+                        Swal.fire({title: j.message, type: 'success', timer: 1800, showConfirmButton: false});
+                        setTimeout(() => location.reload(), 1900);
+                    } catch (e) {
+                        btnPublicar.disabled = false;
+                        mensajeWarning('Error de conexión al publicar.');
+                    }
+                });
             }
 
             document.querySelectorAll('.btn-comentarios-post').forEach(btn =>

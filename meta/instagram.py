@@ -132,6 +132,58 @@ class InstagramService(ServicioCanalBase):
         res['publicaciones'] = data.get('data', []) if res['success'] else []
         return res
 
+    def listar_comentarios_publicacion(self, session_id, media_id):
+        """GET /{media_id}/comments — comentarios en vivo de una publicación,
+        normalizados a {id, texto, autor_id, autor_nombre, fecha, parent_id}."""
+        config = self._config(session_id)
+        if not config:
+            return {'success': False, 'error': self._ERROR_CONFIG}
+        res = self._graph_request('get', f'{media_id}/comments', config, timeout=20, params={
+            'fields': 'id,text,username,from,timestamp,parent_id,hidden',
+            'limit': 100,
+        })
+        data = res.pop('data')
+        comentarios = []
+        if res['success']:
+            for c in data.get('data', []):
+                autor = c.get('from') or {}
+                comentarios.append({
+                    'id':           c.get('id'),
+                    'texto':        c.get('text') or '',
+                    'autor_id':     str(autor.get('id') or ''),
+                    'autor_nombre': c.get('username') or autor.get('username') or '',
+                    'fecha':        c.get('timestamp') or '',
+                    'parent_id':    str(c.get('parent_id') or ''),
+                })
+        res['comentarios'] = comentarios
+        return res
+
+    def publicar_post(self, session_id, mensaje, foto_url=None, link=None):
+        """Publica en el feed de Instagram (flujo de 2 pasos: container →
+        media_publish). Instagram exige una imagen con URL pública; `link`
+        no está soportado (va dentro del caption si se necesita)."""
+        config = self._config(session_id)
+        if not config:
+            return {'success': False, 'error': self._ERROR_CONFIG}
+        if not foto_url:
+            return {'success': False, 'error': 'Instagram requiere una imagen (URL pública) para publicar.'}
+        res1 = self._graph_request('post', f'{config.ig_user_id}/media', config, timeout=30, json={
+            'image_url': foto_url,
+            'caption': mensaje or '',
+        })
+        data1 = res1.pop('data')
+        if not res1['success']:
+            return res1
+        creation_id = data1.get('id')
+        if not creation_id:
+            return {'success': False, 'error': 'Meta no devolvió el creation_id del container.'}
+        res2 = self._graph_request('post', f'{config.ig_user_id}/media_publish', config, timeout=30, json={
+            'creation_id': creation_id,
+        })
+        data2 = res2.pop('data')
+        res2['post_id'] = data2.get('id')
+        return res2
+
     def responder_comentario(self, session_id, comment_id, texto):
         """Respuesta pública a un comentario: POST /{comment_id}/replies."""
         config = self._config(session_id)
@@ -208,22 +260,86 @@ class MessengerService(InstagramService):
         res['perfil'] = data if res['success'] else None
         return res
 
+    def listar_comentarios_publicacion(self, session_id, post_id):  # type: ignore[override]
+        """GET /{post_id}/comments (filter=stream incluye respuestas anidadas),
+        normalizado a {id, texto, autor_id, autor_nombre, fecha, parent_id}."""
+        config = self._config(session_id)
+        if not config:
+            return {'success': False, 'error': self._ERROR_CONFIG}
+        res = self._graph_request('get', f'{post_id}/comments', config, timeout=20, params={
+            'fields': 'id,message,from{id,name},created_time,parent{id}',
+            'limit': 100,
+            'filter': 'stream',
+        })
+        data = res.pop('data')
+        comentarios = []
+        if res['success']:
+            for c in data.get('data', []):
+                autor = c.get('from') or {}
+                comentarios.append({
+                    'id':           c.get('id'),
+                    'texto':        c.get('message') or '',
+                    'autor_id':     str(autor.get('id') or ''),
+                    'autor_nombre': autor.get('name') or '',
+                    'fecha':        c.get('created_time') or '',
+                    'parent_id':    str(((c.get('parent') or {}).get('id')) or ''),
+                })
+        res['comentarios'] = comentarios
+        return res
+
+    def publicar_post(self, session_id, mensaje, foto_url=None, link=None):  # type: ignore[override]
+        """Publica en la página: con `foto_url` → POST /{page_id}/photos;
+        sin foto → POST /{page_id}/feed con message (+ link opcional)."""
+        config = self._config(session_id)
+        if not config:
+            return {'success': False, 'error': self._ERROR_CONFIG}
+        if foto_url:
+            res = self._graph_request('post', f'{config.page_id}/photos', config, timeout=30, json={
+                'url': foto_url,
+                'caption': mensaje or '',
+            })
+        else:
+            if not (mensaje or link):
+                return {'success': False, 'error': 'La publicación necesita un texto, un link o una imagen.'}
+            payload = {'message': mensaje or ''}
+            if link:
+                payload['link'] = link
+            res = self._graph_request('post', f'{config.page_id}/feed', config, timeout=30, json=payload)
+        data = res.pop('data')
+        res['post_id'] = data.get('post_id') or data.get('id')
+        return res
+
+    _CAMPOS_POSTS_BASE = ('id,message,full_picture,permalink_url,created_time,shares,'
+                          'comments.summary(true).limit(0),likes.summary(true).limit(0)')
+    _CAMPOS_POSTS_INSIGHTS = ',insights.metric(post_impressions,post_impressions_unique,post_clicks){name,values}'
+
     def listar_publicaciones(self, session_id, limite=25):
-        """GET /{page_id}/posts normalizado al shape de IG para reusar la grilla."""
+        """GET /{page_id}/posts normalizado al shape de IG para reusar la grilla.
+        Pide insights (impresiones/alcance/clics) en el mismo request; si la app
+        no tiene `read_insights`, reintenta sin insights para no romper la grilla."""
         config = self._config(session_id)
         if not config:
             return {'success': False, 'error': self._ERROR_CONFIG}
         res = self._graph_request('get', f'{config.page_id}/posts', config, timeout=20, params={
-            'fields': 'id,message,full_picture,permalink_url,created_time,'
-                      'comments.summary(true).limit(0),likes.summary(true).limit(0)',
+            'fields': self._CAMPOS_POSTS_BASE + self._CAMPOS_POSTS_INSIGHTS,
             'limit': limite,
         })
+        if not res['success']:
+            res = self._graph_request('get', f'{config.page_id}/posts', config, timeout=20, params={
+                'fields': self._CAMPOS_POSTS_BASE,
+                'limit': limite,
+            })
         data = res.pop('data')
         publicaciones = []
         if res['success']:
             for post in data.get('data', []):
                 comments = ((post.get('comments') or {}).get('summary') or {})
                 likes = ((post.get('likes') or {}).get('summary') or {})
+                metricas = {}
+                for m in ((post.get('insights') or {}).get('data') or []):
+                    valores = m.get('values') or []
+                    if valores:
+                        metricas[m.get('name')] = valores[0].get('value')
                 publicaciones.append({
                     'id':             post.get('id'),
                     'caption':        post.get('message') or '',
@@ -234,6 +350,10 @@ class MessengerService(InstagramService):
                     'timestamp':      post.get('created_time') or '',
                     'comments_count': comments.get('total_count', 0),
                     'like_count':     likes.get('total_count', 0),
+                    'shares_count':   (post.get('shares') or {}).get('count', 0),
+                    'impresiones':    metricas.get('post_impressions'),
+                    'alcance':        metricas.get('post_impressions_unique'),
+                    'clics':          metricas.get('post_clicks'),
                 })
         res['publicaciones'] = publicaciones
         return res
