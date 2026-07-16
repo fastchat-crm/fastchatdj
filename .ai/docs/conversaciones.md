@@ -785,6 +785,7 @@ JsonResponse({pendiente: true, mensaje_html})
 | `whatsapp/procesar_mensaje.py` | Handler del webhook entrante (broadcast WS) |
 | `whatsapp/meta_webhook_view.py` | Endpoint `/meta_webhook/` (Meta) |
 | `whatsapp/webhook_baileys_view.py` | Endpoint `/webhook_handler/` (Baileys) |
+| `whatsapp/meta_social_webhook_view.py` | Webhooks IG DM + Messenger. `_enriquecer_perfil_social` (2026-07-16): antes de `process_incoming_message` completa `pushName`/`userImage` del evento con el User Profile API de Meta (`meta/perfiles.py::obtener_perfil_usuario_messenger` — first_name/last_name/profile_pic; `obtener_perfil_usuario_instagram` — name/username/profile_pic + follower_count/flags follow). Solo pega a Graph si el `Contacto` aún no tiene nombre o foto; resultado cacheado 6h por sender (incluye fallo, para no reintentar por mensaje). Messenger/IG no exponen email ni teléfono. TikTok ya trae `nickname`/`avatar` en el propio payload (`tiktok/webhook_view.py::_a_evento_interno`) |
 | `whatsapp/urls.py` | Registro de rutas |
 | `whatsapp/templates/whatsapp/conversaciones/listado.html` | Template abiertas |
 | `whatsapp/templates/whatsapp/conversaciones/listado_expirado.html` | Template finalizadas |

@@ -5,7 +5,7 @@
 
 {% block head %}
     <link rel="stylesheet" href="{% static 'stylenew/panel_principal.css' %}?v1.0">
-    <link rel="stylesheet" href="/static/stylenew/sesiones.css?v2.1">
+    <link rel="stylesheet" href="/static/stylenew/sesiones.css?v2.3">
     <link rel="stylesheet" href="/static/css/seguridad/panel_canales.css?v1.1">
 {% endblock %}
 
@@ -220,6 +220,12 @@
                                                     <img src="{{ s.config_baileys.foto }}" alt="avatar">
                                                 {% elif s.es_meta and s.config_meta.foto %}
                                                     <img src="{{ s.config_meta.foto }}" alt="avatar">
+                                                {% elif s.es_messenger %}
+                                                    <span class="avatar-fallback avatar-messenger"><i class="fab fa-facebook-messenger"></i></span>
+                                                {% elif s.es_instagram %}
+                                                    <span class="avatar-fallback avatar-instagram"><i class="fab fa-instagram"></i></span>
+                                                {% elif s.es_tiktok %}
+                                                    <span class="avatar-fallback avatar-tiktok"><i class="fab fa-tiktok"></i></span>
                                                 {% else %}
                                                     <span class="avatar-fallback"><i class="fab fa-whatsapp"></i></span>
                                                 {% endif %}
@@ -231,6 +237,10 @@
                                                 <div class="card-num">
                                                     {% if s.es_meta and s.config_meta.display_phone_number %}
                                                         {{ s.config_meta.display_phone_number }}
+                                                    {% elif s.es_messenger %}
+                                                        {{ s.config_messenger.page_name|default:s.numero }}
+                                                    {% elif s.es_instagram or s.es_tiktok %}
+                                                        {% if s.numero %}@{{ s.numero }}{% else %}<span class="muted">Pendiente de cuenta</span>{% endif %}
                                                     {% elif s.numero %}
                                                         +{{ s.numero }}
                                                     {% else %}
@@ -247,6 +257,15 @@
                                                 {% elif s.es_baileys %}
                                                     <span class="canal-badge canal-baileys"><i
                                                             class="fab fa-whatsapp"></i> Baileys</span>
+                                                {% elif s.es_messenger %}
+                                                    <span class="canal-badge canal-messenger"><i
+                                                            class="fab fa-facebook-messenger"></i> Messenger</span>
+                                                {% elif s.es_instagram %}
+                                                    <span class="canal-badge canal-instagram"><i
+                                                            class="fab fa-instagram"></i> Instagram</span>
+                                                {% elif s.es_tiktok %}
+                                                    <span class="canal-badge canal-tiktok"><i
+                                                            class="fab fa-tiktok"></i> TikTok</span>
                                                 {% else %}
                                                     <span class="canal-badge">{{ s.proveedor }}</span>
                                                 {% endif %}

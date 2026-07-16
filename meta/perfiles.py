@@ -88,6 +88,82 @@ def validar_messenger_desde_graph(session, config_fb, timeout=10):
     }
 
 
+def obtener_perfil_usuario_messenger(config_fb, psid, timeout=8):
+    """User Profile API de Messenger para un PSID.
+
+    Messenger solo expone nombre y foto del usuario (`first_name`, `last_name`,
+    `profile_pic`) — NO hay username, email ni teléfono en esta API.
+    Devuelve dict {'nombre', 'username', 'foto', 'raw'} o None si falla.
+    """
+    if not (config_fb and config_fb.access_token and psid):
+        return None
+    data = None
+    for campos in ('first_name,last_name,profile_pic', 'name,profile_pic'):
+        try:
+            r = requests.get(
+                build_graph_url(f'/{psid}'),
+                params={'access_token': config_fb.access_token, 'fields': campos},
+                timeout=timeout,
+            )
+        except Exception:
+            return None
+        if r.status_code == 200:
+            data = r.json()
+            break
+    if not data:
+        return None
+    nombre = (data.get('name')
+              or ' '.join(x for x in (data.get('first_name'), data.get('last_name')) if x)).strip()
+    return {
+        'nombre':   nombre,
+        'username': '',
+        'foto':     data.get('profile_pic') or '',
+        'raw':      data,
+    }
+
+
+def obtener_perfil_usuario_instagram(config_ig, igsid, timeout=8):
+    """User Profile API de Instagram Messaging para un IGSID.
+
+    Expone `name`, `username`, `profile_pic` y (según permisos de la app)
+    `follower_count`, `is_user_follow_business`, `is_business_follow_user`.
+    NO hay email ni teléfono. Si el set completo falla (permisos), reintenta
+    con el set mínimo. Devuelve dict {'nombre', 'username', 'foto', 'raw'} o None.
+    """
+    if not (config_ig and config_ig.access_token and igsid):
+        return None
+    data = None
+    for campos in (
+        'name,username,profile_pic,follower_count,is_user_follow_business,is_business_follow_user',
+        'name,username,profile_pic',
+    ):
+        try:
+            r = requests.get(
+                build_graph_url(f'/{igsid}'),
+                params={'access_token': config_ig.access_token, 'fields': campos},
+                timeout=timeout,
+            )
+        except Exception:
+            return None
+        if r.status_code == 200:
+            data = r.json()
+            break
+    if not data:
+        return None
+    username = data.get('username') or ''
+    nombre = (data.get('name') or '').strip()
+    if nombre and username:
+        nombre = f'{nombre} (@{username})'
+    elif username:
+        nombre = f'@{username}'
+    return {
+        'nombre':   nombre,
+        'username': username,
+        'foto':     data.get('profile_pic') or '',
+        'raw':      data,
+    }
+
+
 def sincronizar_meta_desde_graph(session, config, timeout=10):
     """Consulta Graph API con `config.access_token + phone_number_id` y persiste
     `display_phone_number` / `quality_rating` / `messaging_limit_tier` /

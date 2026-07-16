@@ -33,9 +33,12 @@ from .funciones_comentarios import (
     guardar_comentario_facebook,
     guardar_comentario_instagram,
 )
+from django.core.cache import cache
+
 from .models import (
     ConfigInstagram,
     ConfigMessenger,
+    Contacto,
     EventoMetaRecibido,
     SesionWhatsApp,
 )
@@ -231,10 +234,12 @@ def _procesar_post_social(request, ConfigCls, canal):
         try:
             for m in entry.get('messaging') or []:
                 for evento_interno in _social_a_eventos_internos(m, canal, own_ids):
+                    _enriquecer_perfil_social(config, sesion, evento_interno, canal)
                     process_incoming_message(sesion, evento_interno, channel_layer)
             for m in entry.get('messages') or []:
                 evento_interno = _social_a_evento_interno_v2(m, canal, own_ids)
                 if evento_interno:
+                    _enriquecer_perfil_social(config, sesion, evento_interno, canal)
                     process_incoming_message(sesion, evento_interno, channel_layer)
             for change in entry.get('changes') or []:
                 if canal == 'instagram' and change.get('field') == 'comments':
@@ -262,6 +267,56 @@ def _procesar_post_social(request, ConfigCls, canal):
         evento_log.save(update_fields=['procesado'])
 
     return JsonResponse({'ok': True}, status=200)
+
+
+def _enriquecer_perfil_social(config, sesion, evento, canal):
+    """Completa pushName/userImage del evento con el User Profile API de Meta.
+
+    Los webhooks de Messenger/IG no traen nombre ni foto del usuario (solo el
+    PSID/IGSID), así que sin esto el contacto queda con el id numérico como
+    nombre. Solo pega a Graph cuando el contacto aún no tiene nombre o foto;
+    el resultado (incluido el fallo, dict vacío) se cachea 6h por sender para
+    no pegar a Graph en cada mensaje. `process_incoming_message` persiste
+    pushName→contacto_nombre y userImage→contacto_foto (base64).
+    """
+    try:
+        sender_id = evento.get('_external_id')
+        if not sender_id or evento.get('fromMe'):
+            return
+        contacto = Contacto.objects.filter(
+            sesion=sesion, from_number=evento.get('from')
+        ).only('id', 'contacto_nombre', 'contacto_foto').first()
+        tiene_nombre = bool(contacto and contacto.contacto_nombre)
+        tiene_foto = bool(contacto and contacto.contacto_foto)
+        if tiene_nombre and tiene_foto:
+            return
+        cache_key = f'perfil_social_{canal}_{sender_id}'
+        perfil = cache.get(cache_key)
+        if perfil is None:
+            from meta.perfiles import (
+                obtener_perfil_usuario_instagram,
+                obtener_perfil_usuario_messenger,
+            )
+            if canal == 'instagram':
+                perfil = obtener_perfil_usuario_instagram(config, sender_id)
+            else:
+                perfil = obtener_perfil_usuario_messenger(config, sender_id)
+            perfil = perfil or {}
+            cache.set(cache_key, perfil, 6 * 3600)
+            _traza(
+                etapa='webhook_recibido', sesion=sesion, numero=str(sender_id),
+                nivel='info' if perfil else 'warning',
+                detalle={'perfil_social': canal,
+                         'resultado': {k: v for k, v in perfil.items() if k != 'raw'} or 'sin_datos'},
+            )
+        if not perfil:
+            return
+        if perfil.get('nombre') and not evento.get('pushName') and not tiene_nombre:
+            evento['pushName'] = perfil['nombre']
+        if perfil.get('foto') and not evento.get('userImage') and not tiene_foto:
+            evento['userImage'] = perfil['foto']
+    except Exception:
+        logger.exception("Error enriqueciendo perfil %s de %s", canal, evento.get('_external_id'))
 
 
 def _social_a_eventos_internos(m: dict, canal: str, own_ids=None) -> list:

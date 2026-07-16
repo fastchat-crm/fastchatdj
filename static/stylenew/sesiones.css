@@ -265,6 +265,36 @@
     color: #b8860b;
 }
 
+.canal-messenger {
+    background: #dbe9ff;
+    color: #1877f2;
+}
+
+.canal-instagram {
+    background: #fde7f1;
+    color: #c13584;
+}
+
+.canal-tiktok {
+    background: #e8e8ea;
+    color: #161823;
+}
+
+.avatar-fallback.avatar-messenger {
+    background: #dbe9ff;
+    color: #1877f2;
+}
+
+.avatar-fallback.avatar-instagram {
+    background: linear-gradient(45deg, #f9ce34, #ee2a7b, #6228d7);
+    color: #fff;
+}
+
+.avatar-fallback.avatar-tiktok {
+    background: #161823;
+    color: #fff;
+}
+
 .card-estado {
     display: inline-flex;
     align-items: center;
