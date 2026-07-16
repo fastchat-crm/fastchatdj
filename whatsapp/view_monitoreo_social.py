@@ -27,19 +27,19 @@ BRANDING_MONITOREO = {
         'titulo': 'Monitoreo webhook Instagram',
         'nombre': 'Instagram',
         'icono': 'fab fa-instagram',
-        'webhook': '/whatsapp/instagram_webhook/',
+        'webhook': '/instagram/webhook/',
     },
     'messenger': {
         'titulo': 'Monitoreo webhook Facebook',
         'nombre': 'Facebook / Messenger',
         'icono': 'fab fa-facebook',
-        'webhook': '/whatsapp/messenger_webhook/',
+        'webhook': '/facebook/webhook/',
     },
     'tiktok': {
         'titulo': 'Monitoreo webhook TikTok',
         'nombre': 'TikTok',
         'icono': 'fab fa-tiktok',
-        'webhook': '/whatsapp/tiktok_webhook/',
+        'webhook': '/tiktok/webhook/',
     },
 }
 

@@ -43,7 +43,7 @@ def cuentasView(request):
     listado = qs.order_by('nombre')
     data['list_count'] = listado.count()
     data['url_vars'] = url_vars
-    data['webhook_url'] = request.build_absolute_uri('/whatsapp/messenger_webhook/')
+    data['webhook_url'] = request.build_absolute_uri('/facebook/webhook/')
     paginador(request, listado, 25, data, url_vars)
     return render(request, 'facebook/cuentas/listado.html', data)
 

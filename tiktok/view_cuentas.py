@@ -44,7 +44,7 @@ def cuentasView(request):
     listado = qs.order_by('nombre')
     data['list_count'] = listado.count()
     data['url_vars'] = url_vars
-    data['webhook_url'] = request.build_absolute_uri('/whatsapp/tiktok_webhook/')
+    data['webhook_url'] = request.build_absolute_uri('/tiktok/webhook/')
     paginador(request, listado, 25, data, url_vars)
     return render(request, 'tiktok/cuentas/listado.html', data)
 

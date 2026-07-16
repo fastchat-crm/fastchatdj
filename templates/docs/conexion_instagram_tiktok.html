@@ -75,7 +75,7 @@
                         </tr>
                         <tr>
                             <td><b>Webhook entrante</b></td>
-                            <td><code>/whatsapp/instagram_webhook/</code> — recibe DMs y comentarios firmados por Meta (HMAC-SHA256 con el App Secret).</td>
+                            <td><code>/instagram/webhook/</code> — recibe DMs y comentarios firmados por Meta (HMAC-SHA256 con el App Secret). Alias legacy deprecado: <code>/whatsapp/instagram_webhook/</code>.</td>
                         </tr>
                         <tr>
                             <td><b>Pipeline compartido</b></td>
@@ -145,7 +145,7 @@
                 <h2>Instagram — configurar el webhook</h2>
                 <ol>
                     <li>En la App de Meta: <b>Webhooks → Instagram → Suscribirse</b>.</li>
-                    <li>Callback URL: <code>https://tu-dominio/whatsapp/instagram_webhook/</code>.</li>
+                    <li>Callback URL: <code>https://tu-dominio/instagram/webhook/</code>.</li>
                     <li>Verify token: el mismo valor guardado en <code>webhook_verify_token</code> de la configuración de la cuenta. Meta hace un GET de verificación; si el token coincide, queda verificado.</li>
                     <li>Suscribir los campos: <code>messages</code>, <code>messaging_postbacks</code> y <b><code>comments</code></b> (este último es el que alimenta el inbox de comentarios).</li>
                     <li>Suscribir la App a la página:
@@ -206,7 +206,7 @@
                     <li>Entra a <a href="/facebook/sesiones/">Facebook → Sesiones</a>, pulsa <b>Nueva conexión</b>,
                         pega el token y usa <b>Detectar automáticamente</b>: llena solo el Page ID y el nombre de la página.</li>
                     <li>En la App de Meta (Webhooks → Page) apunta a
-                        <code>/whatsapp/messenger_webhook/</code> con el verify token de la tarjeta y suscribe los campos
+                        <code>/facebook/webhook/</code> con el verify token de la tarjeta y suscribe los campos
                         <code>messages</code> (Messenger) y <code>feed</code> (comentarios de publicaciones).</li>
                     <li>Asigna asesores, agente IA y horarios igual que a cualquier sesión. Los DMs entran a
                         <a href="/facebook/conversaciones/">Facebook → Conversaciones</a>, los comentarios a
@@ -231,7 +231,7 @@
                     <li>Registrar una App de desarrollador en <a href="https://business-api.tiktok.com/portal" target="_blank">business-api.tiktok.com/portal</a> y solicitar acceso a <b>Business Messaging API</b> (beta). Es el trámite lento: sin aprobación no hay DMs.</li>
                     <li>Aprobada la App, TikTok entrega <code>app_id</code> y <code>app_secret</code>.</li>
                     <li>La conexión de cada cuenta es por <b>OAuth</b>: el cliente pulsa «Conectar TikTok», autoriza en TikTok y la plataforma recibe un <code>access_token</code> + <code>refresh_token</code> de su cuenta Business (no hay tokens manuales como en Meta).</li>
-                    <li>El webhook se registra vía API contra <code>https://tu-dominio/whatsapp/tiktok_webhook/</code> para recibir DMs; los comentarios se sincronizan con la Comments API (<code>comment/list</code>, <code>comment/reply</code>).</li>
+                    <li>El webhook se registra vía API contra <code>https://tu-dominio/tiktok/webhook/</code> para recibir DMs; los comentarios se sincronizan con la Comments API (<code>comment/list</code>, <code>comment/reply</code>).</li>
                 </ol>
                 <h5>Qué cubrirá la integración</h5>
                 <ul>
@@ -240,7 +240,7 @@
                 </ul>
                 <div class="alert alert-info small">
                     La plataforma ya tiene todo pre-construido: el webhook
-                    <code>/whatsapp/tiktok_webhook/</code> está activo, el servicio de envío está listo y en
+                    <code>/tiktok/webhook/</code> está activo, el servicio de envío está listo y en
                     <a href="/tiktok/sesiones/">TikTok → Sesiones</a> puedes pre-registrar tus cuentas Business con
                     asesores e IA configurados. Al llegar la aprobación de TikTok solo se cargan los tokens OAuth
                     y el canal queda operativo.
@@ -307,10 +307,10 @@
                         <code>/tiktok/...</code>; asignarlos a un grupo del sidebar y a los roles que corresponda.</li>
                     <li><b>Webhook de Instagram</b>: en la App de Meta suscribir los campos
                         <code>messages</code> y <code>comments</code> apuntando a
-                        <code>/whatsapp/instagram_webhook/</code>.</li>
+                        <code>/instagram/webhook/</code>.</li>
                     <li><b>Webhook de Facebook</b>: en la App de Meta (producto Webhooks → Page) suscribir
                         <code>messages</code> y <code>feed</code> apuntando a
-                        <code>/whatsapp/messenger_webhook/</code>.</li>
+                        <code>/facebook/webhook/</code>.</li>
                     <li><b>TikTok</b>: aplicar a la Business Messaging API (beta) en
                         business-api.tiktok.com/portal — es el único bloqueante externo del canal.</li>
                 </ol>
