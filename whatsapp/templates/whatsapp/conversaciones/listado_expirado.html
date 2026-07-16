@@ -575,7 +575,7 @@ $(document).ready(function() {
                 if (_numWa.length === 9 && _numWa.charAt(0) === '9') {
                     _numWa = '593' + _numWa;
                 }
-                if (_numWa) {
+                if (_numWa && !'{{ canal_fijo }}') {
                     $('#btn-wa-web').attr('href', 'https://wa.me/' + _numWa)
                         .attr('data-conv-id', id).removeClass('d-none').show();
                 } else {

@@ -49,6 +49,17 @@ difieren en queryset, footer y acciones permitidas.
   `fa-facebook-messenger` + "Messenger Workspace"); antes caía al default
   "WhatsApp Workspace".
 
+**Botón "WhatsApp Web" solo en canal WhatsApp (2026-07-16):** en los 3 listados
+(`listado.html`, `listado_expirado.html`, `listado_pendiente_reconexion.html`)
+el `#btn-wa-web` se oculta cuando hay `canal_fijo` — antes el PSID/IGSID pasaba
+el filtro de dígitos y FB/IG/TikTok mostraban un link wa.me/ inválido.
+
+**Traza de envíos del panel (2026-07-16):** el action `send` de
+`view_conversaciones.py` mide la duración del `service.send_*` y registra
+`TrazaMensajeIA` (etapa `error_general`, detalle `accion=send_panel` con
+proveedor/duración/error/status) cuando falla o tarda >5s — revisar
+`/whatsapp/trazas/` para diagnosticar "no se envió"/"demoró" en Messenger/IG.
+
 **Acción `consultar_datos_red` (2026-07-16):** ítem "Consultar datos de la red"
 en el offcanvas de acciones (activas) y en el dropdown de finalizadas. GET
 `?action=consultar_datos_red&pk=<conv>` → handler compartido

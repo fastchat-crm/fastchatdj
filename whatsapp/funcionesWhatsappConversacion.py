@@ -330,7 +330,7 @@ def consultar_datos_red(request, canal_fijo=None):
     from .view_conversaciones import canal_conversacion_permitido
     try:
         conversacion = ConversacionWhatsApp.objects.select_related(
-            'contacto', 'sesion'
+            'contacto', 'contacto__sesion'
         ).get(pk=int(request.GET['pk']))
     except Exception as ex:
         return JsonResponse({'result': False, 'message': f'No se encontró la conversación: {ex}'})

@@ -88,7 +88,7 @@ def validar_messenger_desde_graph(session, config_fb, timeout=10):
     }
 
 
-def obtener_perfil_usuario_messenger(config_fb, psid, timeout=8):
+def obtener_perfil_usuario_messenger(config_fb, psid, timeout=4):
     """User Profile API de Messenger para un PSID.
 
     Messenger solo expone nombre y foto del usuario (`first_name`, `last_name`,
@@ -122,7 +122,7 @@ def obtener_perfil_usuario_messenger(config_fb, psid, timeout=8):
     }
 
 
-def obtener_perfil_usuario_instagram(config_ig, igsid, timeout=8):
+def obtener_perfil_usuario_instagram(config_ig, igsid, timeout=4):
     """User Profile API de Instagram Messaging para un IGSID.
 
     Expone `name`, `username`, `profile_pic` y (según permisos de la app)

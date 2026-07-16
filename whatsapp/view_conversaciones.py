@@ -689,6 +689,8 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                         else:
                             tipo_mensaje, media_type = 'documento', 'document'
 
+                    import time as _time
+                    _t0_envio = _time.monotonic()
                     if archivo:
                         file_bytes = archivo.read()
                         response = service.send_media_message(
@@ -700,6 +702,29 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                         response = service.send_text_message(
                             conversacion.sesion.session_id, conversacion.from_number, texto,
                             conversacion_id=conversacion.id,
+                        )
+                    _dur_envio_ms = int((_time.monotonic() - _t0_envio) * 1000)
+
+                    # Trazabilidad de envíos desde el panel: fallo o lentitud
+                    # (>5s) quedan en /whatsapp/trazas/ con proveedor, duración
+                    # y error crudo del servicio — sin esto "no se envió" o
+                    # "demoró" no es diagnosticable en producción.
+                    if not response.get('success', False) or _dur_envio_ms > 5000:
+                        from .trazas import registrar as _traza_envio
+                        _traza_envio(
+                            etapa='error_general',
+                            sesion=conversacion.sesion, conversacion=conversacion,
+                            numero=conversacion.contacto_numero,
+                            nivel='error' if not response.get('success', False) else 'warning',
+                            latencia_ms=_dur_envio_ms,
+                            detalle={
+                                'accion': 'send_panel',
+                                'proveedor': getattr(conversacion.sesion, 'proveedor', ''),
+                                'tipo': tipo_mensaje,
+                                'duracion_ms': _dur_envio_ms,
+                                'error': response.get('error') or '',
+                                'status': response.get('status') or '',
+                            },
                         )
 
                     if not response.get('success', False):
