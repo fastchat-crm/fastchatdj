@@ -352,8 +352,17 @@ def consultar_datos_red(request, canal_fijo=None):
             nota = 'Messenger solo expone nombre y foto del usuario — no hay username, email ni teléfono.'
             perfil = obtener_perfil_usuario_messenger(getattr(sesion, 'config_messenger', None), external_id)
             if not (perfil and perfil.get('ok')):
+                from meta.perfiles import diagnosticar_token
                 detalle = (perfil or {}).get('error') or 'sin detalle'
-                return JsonResponse({'result': False, 'message': f'Meta no devolvió el perfil. Detalle: {detalle}'})
+                cfg = getattr(sesion, 'config_messenger', None)
+                diag = diagnosticar_token(getattr(cfg, 'access_token', ''))
+                page_id = getattr(cfg, 'page_id', '')
+                return JsonResponse({
+                    'result': False,
+                    'message': (f'Meta no devolvió el perfil. Detalle: {detalle} | '
+                                f'Diagnóstico del token: {diag} | Page ID configurado: {page_id} | '
+                                f'PSID consultado: {external_id}'),
+                })
             raw = perfil.get('raw') or {}
             nombre_red = perfil.get('nombre') or ''
             foto = perfil.get('foto') or ''
@@ -369,8 +378,15 @@ def consultar_datos_red(request, canal_fijo=None):
             nota = 'Instagram expone nombre, username y foto; seguidores y flags de follow dependen de los permisos de la app. No hay email ni teléfono.'
             perfil = obtener_perfil_usuario_instagram(getattr(sesion, 'config_instagram', None), external_id)
             if not (perfil and perfil.get('ok')):
+                from meta.perfiles import diagnosticar_token
                 detalle = (perfil or {}).get('error') or 'sin detalle'
-                return JsonResponse({'result': False, 'message': f'Meta no devolvió el perfil. Detalle: {detalle}'})
+                cfg = getattr(sesion, 'config_instagram', None)
+                diag = diagnosticar_token(getattr(cfg, 'access_token', ''))
+                return JsonResponse({
+                    'result': False,
+                    'message': (f'Meta no devolvió el perfil. Detalle: {detalle} | '
+                                f'Diagnóstico del token: {diag} | IGSID consultado: {external_id}'),
+                })
             raw = perfil.get('raw') or {}
             nombre_red = perfil.get('nombre') or ''
             foto = perfil.get('foto') or ''

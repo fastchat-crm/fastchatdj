@@ -116,6 +116,30 @@ def _graph_get_usuario(access_token, objeto_id, listas_campos, timeout=4):
     return None, ultimo_error
 
 
+def diagnosticar_token(access_token, timeout=4):
+    """GET /me con el token: dice a qué página/cuenta pertenece y si sigue
+    vivo. Complemento del error 100 al pedir un PSID — distingue 'token de
+    otra página / token muerto' de 'falta de permisos de la app'."""
+    if not access_token:
+        return 'sin access_token configurado'
+    try:
+        r = requests.get(
+            build_graph_url('/me'),
+            params={'access_token': access_token, 'fields': 'id,name'},
+            timeout=timeout,
+        )
+    except Exception as e:
+        return f'no se pudo verificar el token: {e}'
+    if r.status_code == 200:
+        data = r.json()
+        return f"token válido, pertenece a: {data.get('name', '?')} (id {data.get('id', '?')})"
+    try:
+        err = (r.json().get('error') or {})
+        return f"token inválido — código {err.get('code')}: {err.get('message', '')}"[:300]
+    except Exception:
+        return f'token inválido — HTTP {r.status_code}'
+
+
 def obtener_perfil_usuario_messenger(config_fb, psid, timeout=4):
     """User Profile API de Messenger para un PSID.
 
