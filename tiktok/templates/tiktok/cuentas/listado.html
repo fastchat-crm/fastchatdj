@@ -76,9 +76,19 @@
                                         data-business="{{ s.config_tiktok.business_id }}">
                                     <i class="fa fa-pen"></i> Modificar
                                 </button>
+                                <div class="kebab-sep"></div>
+                                <div class="kebab-heading">Diagnóstico y auditoría</div>
                                 <button type="button" class="kebab-item btn-diag" data-id="{{ s.id }}">
                                     <i class="fa fa-stethoscope text-primary"></i> Comprobar conectividad
                                 </button>
+                                <a href="/tiktok/monitoreo/" class="kebab-item">
+                                    <i class="fa fa-heart-pulse text-danger"></i> Ver trazabilidad (errores)
+                                </a>
+                                <div class="kebab-sep"></div>
+                                <div class="kebab-heading">Marketing y analytics</div>
+                                <a href="/whatsapp/analytics/?sesion={{ s.id }}" class="kebab-item">
+                                    <i class="fa fa-chart-line"></i> Analytics de esta sesión
+                                </a>
                                 <div class="kebab-sep"></div>
                                 <div class="kebab-heading">Canal TikTok</div>
                                 <a href="/tiktok/conversaciones/" class="kebab-item">
@@ -259,6 +269,20 @@
             </div>
         </div>
     </div>
+
+    <div class="acc-oc-backdrop" id="acc-offcanvas-backdrop" aria-hidden="true"></div>
+    <aside class="acc-oc" id="acc-offcanvas" role="dialog" aria-label="Acciones de la sesión" aria-hidden="true">
+        <div class="acc-oc-header">
+            <div class="acc-oc-titlewrap">
+                <i class="fa fa-bolt"></i>
+                <h5 id="acc-offcanvas-title">Acciones</h5>
+            </div>
+            <button type="button" class="acc-oc-close" id="acc-offcanvas-close" aria-label="Cerrar">
+                <i class="fa fa-times"></i>
+            </button>
+        </div>
+        <div class="acc-oc-body" id="acc-offcanvas-body"></div>
+    </aside>
 {% endblock %}
 
 {% block jscript %}
@@ -297,18 +321,45 @@
                 if (e.key === 'Escape' && backdrop.classList.contains('open')) cerrarModal();
             });
 
+            function abrirAcciones(card) {
+                const oc = document.getElementById('acc-offcanvas');
+                const bd = document.getElementById('acc-offcanvas-backdrop');
+                const body = document.getElementById('acc-offcanvas-body');
+                const title = document.getElementById('acc-offcanvas-title');
+                const menu = card ? card.querySelector('[data-kebab-menu]') : null;
+                if (!oc || !body || !menu) return;
+                const nom = card.querySelector('.card-nombre');
+                if (title) title.textContent = nom ? nom.textContent.trim() : 'Acciones';
+                body.innerHTML = menu.innerHTML;
+                oc.classList.add('open');
+                oc.setAttribute('aria-hidden', 'false');
+                if (bd) { bd.classList.add('open'); bd.setAttribute('aria-hidden', 'false'); }
+            }
+
+            function cerrarAcciones() {
+                const oc = document.getElementById('acc-offcanvas');
+                const bd = document.getElementById('acc-offcanvas-backdrop');
+                if (oc) { oc.classList.remove('open'); oc.setAttribute('aria-hidden', 'true'); }
+                if (bd) { bd.classList.remove('open'); bd.setAttribute('aria-hidden', 'true'); }
+            }
+
             document.addEventListener('click', (e) => {
                 const toggle = e.target.closest('[data-kebab-toggle]');
-                document.querySelectorAll('[data-kebab-menu].open').forEach(m => {
-                    if (!toggle || m !== toggle.parentElement.querySelector('[data-kebab-menu]')) m.classList.remove('open');
-                });
                 if (toggle) {
-                    const menu = toggle.parentElement.querySelector('[data-kebab-menu]');
-                    menu.classList.toggle('open');
+                    const card = toggle.closest('.conex-card');
+                    if (card) abrirAcciones(card);
+                    e.stopPropagation();
+                    return;
+                }
+                if (e.target.closest('#acc-offcanvas-close') || e.target.closest('#acc-offcanvas-backdrop')) {
+                    cerrarAcciones();
                 }
             });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') cerrarAcciones();
+            });
 
-            document.querySelectorAll('.btn-edit').forEach(btn => btn.addEventListener('click', () => {
+            function abrirEditar(btn) {
                 form.reset();
                 form.action.value = 'change';
                 form.pk.value = btn.dataset.id;
@@ -316,7 +367,7 @@
                 form.username.value = btn.dataset.username;
                 form.business_id.value = btn.dataset.business;
                 abrirModal('Editar sesión TikTok');
-            }));
+            }
 
             form.addEventListener('submit', async (ev) => {
                 ev.preventDefault();
@@ -347,14 +398,20 @@
                 setTimeout(() => location.reload(), 900);
             }
 
+            function escHtml(s) {
+                return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+                }[c]));
+            }
+
             function diagStepsHtml(diag) {
-                let html = '<div class="diag-wrap"><p class="diag-resumen">' + (diag.resumen || '') + '</p><ul class="diag-steps">';
+                let html = '<div class="diag-wrap"><p class="diag-resumen">' + escHtml(diag.resumen) + '</p><ul class="diag-steps">';
                 (diag.pasos || []).forEach(p => {
                     const cls = p.ok ? 'diag-ok' : 'diag-fail';
                     const ico = p.ok ? 'fa-circle-check' : 'fa-circle-xmark';
-                    let cuerpo = '<div class="diag-label">' + p.label + '</div>';
-                    if (p.detalle) cuerpo += '<div class="diag-detalle">' + p.detalle + '</div>';
-                    if (p.solucion && !p.ok) cuerpo += '<div class="diag-sol"><i class="fa fa-lightbulb"></i> ' + p.solucion + '</div>';
+                    let cuerpo = '<div class="diag-label">' + escHtml(p.label) + '</div>';
+                    if (p.detalle) cuerpo += '<div class="diag-detalle">' + escHtml(p.detalle) + '</div>';
+                    if (p.solucion && !p.ok) cuerpo += '<div class="diag-sol"><i class="fa fa-lightbulb"></i> ' + escHtml(p.solucion) + '</div>';
                     html += '<li class="diag-step ' + cls + '"><span class="diag-ico"><i class="fa ' + ico + '"></i></span><div class="diag-body">' + cuerpo + '</div></li>';
                 });
                 html += '</ul></div>';
@@ -382,23 +439,31 @@
                 });
             }
 
-            document.querySelectorAll('.btn-diag').forEach(btn =>
-                btn.addEventListener('click', () => diagnosticar(btn.dataset.id)));
-            document.querySelectorAll('.btn-toggle').forEach(btn =>
-                btn.addEventListener('change', () => accion('toggle_activo', btn.dataset.id)));
-            document.querySelectorAll('.btn-del').forEach(btn =>
-                btn.addEventListener('click', () => {
-                    Swal.fire({
-                        title: `¿Eliminar la sesión "${btn.dataset.nombre}"?`,
-                        text: 'Sus conversaciones se conservan.',
-                        type: 'warning',
-                        showCancelButton: true,
-                        confirmButtonText: 'Sí, eliminar',
-                        cancelButtonText: 'Cancelar'
-                    }).then((res) => {
-                        if (res.value) accion('delete', btn.dataset.id);
-                    });
-                }));
+            function confirmarEliminar(btn) {
+                Swal.fire({
+                    title: `¿Eliminar la sesión "${btn.dataset.nombre}"?`,
+                    text: 'Sus conversaciones se conservan.',
+                    type: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sí, eliminar',
+                    cancelButtonText: 'Cancelar'
+                }).then((res) => {
+                    if (res.value) accion('delete', btn.dataset.id);
+                });
+            }
+
+            document.addEventListener('click', (e) => {
+                const edit = e.target.closest('.btn-edit');
+                if (edit) { cerrarAcciones(); abrirEditar(edit); return; }
+                const diag = e.target.closest('.btn-diag');
+                if (diag) { cerrarAcciones(); diagnosticar(diag.dataset.id); return; }
+                const del = e.target.closest('.btn-del');
+                if (del) { cerrarAcciones(); confirmarEliminar(del); return; }
+            });
+            document.addEventListener('change', (e) => {
+                const tg = e.target.closest('.btn-toggle');
+                if (tg) accion('toggle_activo', tg.dataset.id);
+            });
         })();
     </script>
 {% endblock %}

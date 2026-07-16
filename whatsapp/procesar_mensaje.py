@@ -1171,20 +1171,55 @@ def process_incoming_message(session, event_data, channel_layer):
             pass
 
 
+# Adjuntos de IG/Messenger vienen del CDN de Meta. Restringimos la descarga a
+# esos hosts (anti-SSRF: la URL llega en el payload del webhook) y ponemos tope
+# de tamaño (anti-DoS por memoria).
+_META_CDN_HOSTS = ('fbcdn.net', 'fbsbx.com', 'cdninstagram.com')
+_MAX_MEDIA_BYTES = 25 * 1024 * 1024
+
+
+def _host_media_permitido(url):
+    from urllib.parse import urlparse
+    host = (urlparse(url).hostname or '').lower()
+    return any(host == d or host.endswith('.' + d) for d in _META_CDN_HOSTS)
+
+
 def _descargar_media_url(url, filename):
     """Descarga los bytes de un adjunto entregado como URL (Instagram/Messenger
-    entregan la media por URL del CDN de Meta, no en base64)."""
+    entregan la media por URL del CDN de Meta, no en base64).
+
+    Blindado: solo https a hosts del CDN de Meta, sin seguir redirects (evita
+    SSRF a servicios internos/metadata) y con tope de tamaño por streaming."""
     try:
+        if not str(url).lower().startswith('https://'):
+            logger.warning("Media URL rechazada (no https): %s", str(url)[:120])
+            return None
+        if not _host_media_permitido(url):
+            logger.warning("Media URL rechazada (host fuera del CDN de Meta): %s", str(url)[:120])
+            return None
         import mimetypes
         import requests
-        r = requests.get(url, timeout=20)
-        r.raise_for_status()
+        with requests.get(url, timeout=20, stream=True, allow_redirects=False) as r:
+            r.raise_for_status()
+            clen = r.headers.get('content-length')
+            if clen and clen.isdigit() and int(clen) > _MAX_MEDIA_BYTES:
+                logger.warning("Media excede el tope (%s bytes): %s", clen, str(url)[:120])
+                return None
+            trozos = []
+            total = 0
+            for trozo in r.iter_content(8192):
+                total += len(trozo)
+                if total > _MAX_MEDIA_BYTES:
+                    logger.warning("Media supera el tope durante la descarga: %s", str(url)[:120])
+                    return None
+                trozos.append(trozo)
+            contenido = b''.join(trozos)
         if '.' not in filename:
             ctype = (r.headers.get('content-type') or '').split(';')[0].strip()
             ext = mimetypes.guess_extension(ctype) if ctype else None
             if ext:
                 filename = f'{filename}{ext}'
-        return ContentFile(r.content, filename)
+        return ContentFile(contenido, filename)
     except Exception as e:
         logger.exception("No se pudo descargar media desde URL %s: %s", str(url)[:120], e)
         return None

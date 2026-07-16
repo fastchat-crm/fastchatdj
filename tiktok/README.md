@@ -36,7 +36,7 @@ el canal.
 
 ## Comprobar conectividad
 
-Acción POST `diagnostico` en `view_cuentas` → `whatsapp.diagnostico_social.diagnosticar_conexion(sesion)` (módulo compartido). Como la API está en beta y no hay prueba de perfil en vivo, valida credenciales, vigencia del token (`token_expira_en`), identificador, el último `error_mensaje` registrado y el webhook (verificado + `client_secret`). El kebab de la card tiene "Comprobar conectividad" que lo muestra en un modal. Card y menú propios de la app.
+Acción POST `diagnostico` en `view_cuentas` → `whatsapp.diagnostico_social.diagnosticar_conexion(sesion)` (módulo compartido). Como la API está en beta y no hay prueba de perfil en vivo, valida credenciales, vigencia del token (`token_expira_en`), identificador, el último `error_mensaje` registrado y el webhook (verificado + `client_secret`). El menú de acciones es un **offcanvas lateral** (propio de la app) que clona el `[data-kebab-menu]` de la card, con acciones por delegación. Secciones al estilo del tablero WhatsApp: "Comprobar conectividad" (modal con pasos, escapados anti-XSS), "Ver trazabilidad (errores)" → `/tiktok/monitoreo/`, "Analytics de esta sesión" → `/whatsapp/analytics/?sesion=<id>`.
 
 ## Pendiente al aprobar la API
 

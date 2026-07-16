@@ -51,7 +51,7 @@ crear un proveedor `facebook` nuevo.
 
 ## Comprobar conectividad
 
-Acción POST `diagnostico` en `view_cuentas` → `whatsapp.diagnostico_social.diagnosticar_conexion(sesion)` (módulo compartido con IG/TikTok). Devuelve pasos con causa+solución (token, Page ID, respuesta de Graph mapeada a causa legible vía `_causa_graph`, webhook verificado) y sincroniza `SesionWhatsApp.estado`. El kebab de la card tiene "Comprobar conectividad" que lo muestra en un modal. Card y menú propios de la app.
+Acción POST `diagnostico` en `view_cuentas` → `whatsapp.diagnostico_social.diagnosticar_conexion(sesion)` (módulo compartido con IG/TikTok). Devuelve pasos con causa+solución (token, Page ID, respuesta de Graph mapeada a causa legible vía `_causa_graph`, webhook verificado) y sincroniza `SesionWhatsApp.estado`. El menú de acciones es un **offcanvas lateral** (propio de la app) que clona el `[data-kebab-menu]` de la card, con acciones por delegación. Secciones al estilo del tablero WhatsApp: "Comprobar conectividad" (modal con pasos, escapados anti-XSS), "Ver trazabilidad (errores)" → `/facebook/monitoreo/`, "Analytics de esta sesión" → `/whatsapp/analytics/?sesion=<id>`. Las opciones exclusivas de WhatsApp Cloud (plantillas, campañas) no aplican.
 
 ## Checklist del administrador (pendientes del developer)
 

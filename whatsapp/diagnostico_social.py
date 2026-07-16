@@ -100,11 +100,13 @@ def _diag_meta(sesion, canal):
                        'El webhook está verificado.' if verif else 'El webhook aún no fue verificado por Meta.',
                        '' if verif else f'Configurá la URL {webhook_url} en el panel de Meta y verificá el token.'))
 
-    # Estado de la sesión sincronizado con el resultado real de la API.
-    nuevo_estado = 'conectado' if api_ok else 'error'
-    if sesion.estado != nuevo_estado:
-        sesion.estado = nuevo_estado
-        sesion.save()
+    # Solo PROMOVEMOS a 'conectado' cuando la API respondió OK. No degradamos a
+    # 'error' desde acá: un fallo transitorio (rate limit, timeout de red) al
+    # momento del diagnóstico marcaría como rota una sesión sana. El estado de
+    # error lo fija el flujo real (envío/recepción) o la acción "Probar conexión".
+    if api_ok and sesion.estado != 'conectado':
+        sesion.estado = 'conectado'
+        sesion.save(update_fields=['estado'])
 
     ok = api_ok
     resumen = 'Conexión correcta' if ok else 'La sesión no puede conectar — revisá los pasos marcados.'
