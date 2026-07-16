@@ -53,11 +53,21 @@ def index(request):
     canales_resumen = []
     for key, label, provs, url_conv, url_ses in canales_def:
         qs_c = sesiones_qs.filter(proveedor__in=provs)
+        agg_c = qs_c.aggregate(
+            total=Count('id'),
+            conectadas=Count('id', filter=Q(estado='conectado')),
+            desconectadas=Count('id', filter=Q(estado='desconectado')),
+            errores=Count('id', filter=Q(estado='error')),
+            pausadas=Count('id', filter=Q(activo=False)),
+        )
         canales_resumen.append({
             'key': key,
             'label': label,
-            'total': qs_c.count(),
-            'conectadas': qs_c.filter(estado='conectado').count(),
+            'total': agg_c['total'],
+            'conectadas': agg_c['conectadas'],
+            'desconectadas': agg_c['desconectadas'],
+            'errores': agg_c['errores'],
+            'pausadas': agg_c['pausadas'],
             'url_conversaciones': url_conv,
             'url_sesiones': url_ses,
         })

@@ -5,7 +5,7 @@
 
 {% block head %}
     <link rel="stylesheet" href="{% static 'stylenew/panel_principal.css' %}?v1.0">
-    <link rel="stylesheet" href="/static/stylenew/sesiones.css?v2.0">
+    <link rel="stylesheet" href="/static/stylenew/sesiones.css?v2.1">
     <link rel="stylesheet" href="/static/css/seguridad/panel_canales.css?v1.1">
 {% endblock %}
 
@@ -72,31 +72,33 @@
             {# ───────── Alertas reales ───────── #}
             {% if stats_sesiones.desconectadas or stats_sesiones.errores or calidad_alertas or convs_no_asignadas or stats_sesiones.pausadas %}
                 <div class="pp-alerts">
-                    {% if stats_sesiones.pausadas %}
-                        <div class="pp-alert pp-alert-warn">
-                            <i class="fa fa-pause-circle"></i>
-                            <span>
-                <b>{{ stats_sesiones.pausadas }}</b> sesión{{ stats_sesiones.pausadas|pluralize:"es" }} pausada{{ stats_sesiones.pausadas|pluralize }} — no procesan mensajes ni consumen API.
-              </span>
-                            <a href="/whatsapp/sesiones/">Revisar →</a>
-                        </div>
-                    {% endif %}
-                    {% if stats_sesiones.desconectadas %}
-                        <div class="pp-alert pp-alert-danger">
-                            <i class="fa fa-plug-circle-xmark"></i>
-                            <span>
-                <b>{{ stats_sesiones.desconectadas }}</b> sesión{{ stats_sesiones.desconectadas|pluralize:"es" }} desconectada{{ stats_sesiones.desconectadas|pluralize }} — sin recibir mensajes.
-              </span>
-                            <a href="/whatsapp/sesiones/?estado=desconectado">Reconectar →</a>
-                        </div>
-                    {% endif %}
-                    {% if stats_sesiones.errores %}
-                        <div class="pp-alert pp-alert-danger">
-                            <i class="fa fa-triangle-exclamation"></i>
-                            <span><b>{{ stats_sesiones.errores }}</b> sesión{{ stats_sesiones.errores|pluralize:"es" }} con error.</span>
-                            <a href="/whatsapp/sesiones/">Revisar →</a>
-                        </div>
-                    {% endif %}
+                    {% for c in canales_resumen %}
+                        {% if c.pausadas %}
+                            <div class="pp-alert pp-alert-warn">
+                                <i class="fa fa-pause-circle"></i>
+                                <span>
+                    <b>{{ c.pausadas }}</b> sesión{{ c.pausadas|pluralize:"es" }} de {{ c.label }} pausada{{ c.pausadas|pluralize }} — no procesan mensajes ni consumen API.
+                  </span>
+                                <a href="{{ c.url_sesiones }}">Revisar →</a>
+                            </div>
+                        {% endif %}
+                        {% if c.desconectadas %}
+                            <div class="pp-alert pp-alert-danger">
+                                <i class="fa fa-plug-circle-xmark"></i>
+                                <span>
+                    <b>{{ c.desconectadas }}</b> sesión{{ c.desconectadas|pluralize:"es" }} de {{ c.label }} desconectada{{ c.desconectadas|pluralize }} — sin recibir mensajes.
+                  </span>
+                                <a href="{{ c.url_sesiones }}">Reconectar →</a>
+                            </div>
+                        {% endif %}
+                        {% if c.errores %}
+                            <div class="pp-alert pp-alert-danger">
+                                <i class="fa fa-triangle-exclamation"></i>
+                                <span><b>{{ c.errores }}</b> sesión{{ c.errores|pluralize:"es" }} de {{ c.label }} con error.</span>
+                                <a href="{{ c.url_sesiones }}">Revisar →</a>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
                     {% for a in calidad_alertas %}
                         <div class="pp-alert {% if a.nivel == 'RED' %}pp-alert-danger{% else %}pp-alert-warn{% endif %}">
                             <i class="fa fa-gauge-high"></i>

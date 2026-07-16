@@ -1250,7 +1250,10 @@ def sesionesView(request):
         return JsonResponse({'result': True, 'data': html})
 
     criterio = (request.GET.get('criterio') or '').strip()
-    filtros = Q(status=True, usuario=request.user)
+    # Este tablero es SOLO WhatsApp (baileys/meta). Instagram, Messenger y TikTok
+    # tienen su propia página (/instagram/sesiones/, /facebook/sesiones/,
+    # /tiktok/sesiones/) con su card y menú propios — no se mezclan acá.
+    filtros = Q(status=True, usuario=request.user, proveedor__in=['baileys', 'meta'])
     if criterio:
         filtros &= (Q(nombre__icontains=criterio) | Q(numero__icontains=criterio))
 
@@ -1290,7 +1293,10 @@ def sesionesView(request):
         pausadas=Count('id', filter=Q(activo=False), distinct=True),
     )
     stats['pausadas_huerfanas'] = (
-        SesionWhatsApp.objects.filter(status=True, usuario=request.user, activo=False)
+        SesionWhatsApp.objects.filter(
+            status=True, usuario=request.user, activo=False,
+            proveedor__in=['baileys', 'meta'],
+        )
         .annotate(_nc=Count('contacto'))
         .filter(_nc=0)
         .count()

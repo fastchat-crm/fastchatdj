@@ -1215,13 +1215,15 @@
 
 .card-footer {
     display: flex;
+    flex-wrap: wrap;
     gap: .5rem;
     padding-top: .75rem;
     border-top: 1px solid #f3f4f6;
 }
 
 .btn-quick {
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
