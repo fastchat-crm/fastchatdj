@@ -23,3 +23,9 @@
 #git rm --cached archivo.ext
 #git rm --cached -r carpeta
 venv
+# Backups de deploy (no versionar)
+.deploy_bak_*
+*.bak_*
+*.bak_cotizador*
+# Datos del cliente del cotizador (se importan desde Excel; no versionar binarios/datos)
+cotizador/data/

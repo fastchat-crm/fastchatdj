@@ -41,7 +41,7 @@
 <ul class="nav nav-tabs mb-3" id="agenteTabs" role="tablist">
     <li class="nav-item">
         <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#at-basico" type="button">
-            <i class="fas fa-user-astronaut me-1"></i> Persona
+            <i class="fas fa-cog me-1"></i> Configuración
         </button>
     </li>
     <li class="nav-item">
@@ -51,27 +51,9 @@
     </li>
     {% if filtro %}
     <li class="nav-item">
-        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#at-faqs" type="button">
-            <i class="fas fa-comments me-1"></i> FAQs
-            {% if faqs_contadores.pendiente %}<span class="badge bg-warning text-dark ms-1" style="font-size:.6rem" title="Pendientes">{{ faqs_contadores.pendiente }}</span>{% endif %}
-            {% if faqs_contadores.aprobada %}<span class="badge bg-success ms-1" style="font-size:.6rem" title="Aprobadas">{{ faqs_contadores.aprobada }}</span>{% endif %}
-        </button>
-    </li>
-    <li class="nav-item">
         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#at-herramientas" type="button">
-            <i class="fas fa-plug me-1"></i> Herramientas
+            <i class="fas fa-plug me-1"></i> Herramientas / APIs
             {% if herramientas %}<span class="badge bg-primary ms-1" style="font-size:.6rem">{{ herramientas|length }}</span>{% endif %}
-        </button>
-    </li>
-    <li class="nav-item">
-        <button class="nav-link {% if regla_fin and regla_fin.activo %}text-danger fw-semibold{% endif %}" data-bs-toggle="tab" data-bs-target="#at-cierre" type="button">
-            <i class="fas fa-flag-checkered me-1"></i> Cierre
-            {% if regla_fin and regla_fin.activo %}<span class="badge bg-danger ms-1" style="font-size:.6rem">ON</span>{% endif %}
-        </button>
-    </li>
-    <li class="nav-item">
-        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#at-auditor" type="button">
-            <i class="fas fa-wand-magic-sparkles me-1"></i> Asistente IA
         </button>
     </li>
     {% endif %}
@@ -119,14 +101,68 @@
                 <div class="invalid-feedback" id="errorMessageapikey"></div>
             </div>
             <div class="col-12 mt-2">
-                <div class="guide-callout" style="background:#fff9db;border-left-color:#f59e0b">
-                    <i class="fas fa-info-circle me-1"></i>
-                    <strong>Nota:</strong> el modelo LLM ahora se configura <strong>por cada API Key</strong> (no en el agente),
-                    porque cada provider (Gemini, OpenAI, Claude) tiene sus propios modelos.
-                    Edita una API Key para elegir qué modelo usar con esa key.
+                <p class="section-header mt-2"><i class="fas fa-microchip me-1 text-primary"></i>Modelo LLM</p>
+                <div class="d-flex gap-2 align-items-start">
+                    <select id="agenteModeloLLM" name="apikey_modelo" class="form-control"></select>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnRefrescarModeloAgente" title="Refrescar lista"><i class="fas fa-sync"></i></button>
                 </div>
+                {% if agente_apikey %}<input type="hidden" name="apikey_modelo_key_id" value="{{ agente_apikey.id }}">{% endif %}
+                <div class="form-text small" id="agenteModeloHint">Selecciona la API Key para ver sus modelos disponibles.</div>
             </div>
+            <script>
+            (function() {
+                'use strict';
+                function csrf() {
+                    var t = document.querySelector('[name=csrfmiddlewaretoken]');
+                    if (t && t.value) return t.value;
+                    var m = document.cookie.match(/csrftoken=([^;]+)/);
+                    return m ? m[1] : '';
+                }
+                var $sel = $('#agenteModeloLLM');
+                var $hint = $('#agenteModeloHint');
+                var $refrescar = $('#btnRefrescarModeloAgente');
+                if (!$sel.length) return;
+                {% if agente_apikey %}
+                var KEY_ID={{ agente_apikey.id }}, PROV={{ agente_apikey.proveedor }}, MODELO_ACTUAL="{{ agente_apikey.modelo|escapejs }}";
+                function poblar(modelos) {
+                    $sel.empty();
+                    $sel.append($('<option>').val('').text('(default del proveedor)'));
+                    var encontrado = false;
+                    (modelos || []).forEach(function(m) {
+                        var val = m.value !== undefined ? m.value : m;
+                        var lab = m.label !== undefined ? m.label : m;
+                        if (val === MODELO_ACTUAL) encontrado = true;
+                        $sel.append($('<option>').val(val).text(lab));
+                    });
+                    if (MODELO_ACTUAL && !encontrado) {
+                        $sel.append($('<option>').val(MODELO_ACTUAL).text(MODELO_ACTUAL));
+                    }
+                    $sel.val(MODELO_ACTUAL);
+                }
+                function cargar(force) {
+                    $hint.text('Cargando modelos...');
+                    $.post('{{ ruta_post }}', {
+                        action: 'listar_modelos', key_id: KEY_ID, proveedor: PROV,
+                        force_refresh: force ? 'true' : 'false', csrfmiddlewaretoken: csrf()
+                    }, function(r) {
+                        var x = Array.isArray(r) ? r[0] : r;
+                        if (x && x.error) { $hint.text(x.message || 'No se pudieron cargar los modelos.'); return; }
+                        poblar(x.modelos);
+                        $hint.text('Elige el modelo; se guarda al pulsar "Guardar agente".');
+                    }, 'json').fail(function() {
+                        $hint.text('Error al cargar los modelos.');
+                    });
+                }
+                cargar(false);
+                $refrescar.on('click', function() { cargar(true); });
+                {% else %}
+                $hint.text('Guarda el agente con su API Key primero para elegir el modelo.');
+                $refrescar.prop('disabled', true);
+                {% endif %}
+            })();
+            </script>
 
+            <div class="d-none">
             {# ── Persona del bot — preset visual + manual avanzado ──────── #}
             <div class="col-12 mt-3">
                 <p class="section-header mt-2">
@@ -216,56 +252,156 @@
                     </div>
                 </div>
             </div>
+            </div>
         </div>
     </div>
 
     {# ── TAB 2: CONOCIMIENTO ───────────────────────────────────────── #}
     <div class="tab-pane fade" id="at-conocimiento">
 
-        <div class="guide-callout">
-            <i class="fas fa-lightbulb me-1"></i>
-            El agente solo responde con la información que le das aquí. Tiene <strong>tres formas</strong>
-            de recibir conocimiento — puedes combinarlas:
-        </div>
-
-        <div class="row g-2 mb-3">
-            <div class="col-md-4">
-                <div class="card border-0 bg-light h-100 text-center p-3">
-                    <i class="fas fa-file-alt fa-2x text-primary mb-2"></i>
-                    <div class="small fw-semibold">Documentos / Archivos</div>
-                    <div class="text-muted" style="font-size:.75rem">PDF, Excel, CSV — se suben en la sección de Entrenamiento y se convierten en un índice de búsqueda (FAISS).</div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card border-0 bg-light h-100 text-center p-3">
-                    <i class="fas fa-link fa-2x text-success mb-2"></i>
-                    <div class="small fw-semibold">Enlace / API externa</div>
-                    <div class="text-muted" style="font-size:.75rem">El agente consulta una URL en tiempo real antes de responder. Ideal para catálogos o precios que cambian frecuentemente.</div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card border-0 bg-light h-100 text-center p-3">
-                    <i class="fas fa-align-left fa-2x text-warning mb-2"></i>
-                    <div class="small fw-semibold">Texto libre</div>
-                    <div class="text-muted" style="font-size:.75rem">Escribe directamente el contenido (FAQ, menú, políticas). Se inyecta completo en cada respuesta — ideal para textos cortos.</div>
+        {% if filtro %}
+        <div class="card border-success border-opacity-25 mb-3">
+            <div class="card-body py-2">
+                <div class="row align-items-center g-2">
+                    <div class="col-md-7">
+                        <span class="fw-semibold"><i class="fas fa-database me-1 text-success"></i>Índice RAG (Weaviate)</span>
+                        <div class="text-muted small">Los documentos, enlaces y textos de abajo se embeben al RAG de este agente. <strong><span id="ragCount">{{ rag_index_count|default:"—" }}</span></strong> fragmentos indexados.</div>
+                        {% if rag_fuentes %}
+                        <div class="mt-2" id="ragFuentesList">
+                            {% for f in rag_fuentes %}<span class="badge bg-light text-dark border me-1 mb-1"><i class="fas fa-file-alt me-1 text-muted"></i>{{ f.categoria|default:f.source }} <span class="text-muted">({{ f.count }})</span></span>{% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="mt-2 text-muted small" id="ragFuentesList">Aún no hay documentos indexados. Agrega fuentes y pulsa "Reindexar al RAG".</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-5 text-md-end">
+                        <button type="button" class="btn btn-success btn-sm" id="btnReindexRag" data-agente="{{ filtro.id }}">
+                            <i class="fas fa-sync me-1"></i> Reindexar al RAG
+                        </button>
+                        <div class="small mt-1" id="ragReindexStatus"></div>
+                    </div>
                 </div>
             </div>
         </div>
+        <script>
+        (function() {
+            'use strict';
+            var btn = document.getElementById('btnReindexRag');
+            if (!btn) return;
+            function csrf() {
+                var t = document.querySelector('[name=csrfmiddlewaretoken]');
+                if (t && t.value) return t.value;
+                var m = document.cookie.match(/csrftoken=([^;]+)/);
+                return m ? m[1] : '';
+            }
+            btn.addEventListener('click', function() {
+                var st = document.getElementById('ragReindexStatus');
+                var id = btn.getAttribute('data-agente');
+                btn.disabled = true;
+                if (st) st.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Indexando al RAG...';
+                $.ajax({
+                    url: '{{ ruta_post }}',
+                    method: 'POST',
+                    data: { action: 'rag_reindex', id: id, csrfmiddlewaretoken: csrf() }
+                }).done(function(r) {
+                    btn.disabled = false;
+                    if (r && !r.error) {
+                        if (st) st.innerHTML = '<i class="fas fa-check-circle text-success me-1"></i>' + (r.message || 'Listo');
+                    } else {
+                        if (st) st.innerHTML = '<i class="fas fa-exclamation-triangle text-warning me-1"></i>' + ((r && r.message) || 'Error');
+                    }
+                    if (r && r.total_tenant !== undefined && r.total_tenant !== null) {
+                        var c = document.getElementById('ragCount'); if (c) c.textContent = r.total_tenant;
+                    }
+                    if (r && r.fuentes) {
+                        var lst = document.getElementById('ragFuentesList');
+                        if (lst) {
+                            if (r.fuentes.length) {
+                                lst.className = 'mt-2';
+                                lst.innerHTML = r.fuentes.map(function(f) {
+                                    return '<span class="badge bg-light text-dark border me-1 mb-1"><i class="fas fa-file-alt me-1 text-muted"></i>' + (f.categoria || f.source) + ' <span class="text-muted">(' + f.count + ')</span></span>';
+                                }).join('');
+                            } else {
+                                lst.className = 'mt-2 text-muted small';
+                                lst.textContent = 'Aún no hay documentos indexados. Agrega fuentes y pulsa "Reindexar al RAG".';
+                            }
+                        }
+                    }
+                }).fail(function() {
+                    btn.disabled = false;
+                    if (st) st.innerHTML = '<i class="fas fa-exclamation-triangle text-warning me-1"></i>Error de red';
+                });
+            });
+        })();
+        </script>
+        {% endif %}
 
-        <div class="d-flex align-items-center justify-content-between mb-2">
-            <p class="section-header mb-0">Fuentes de conocimiento</p>
-            <button type="button" class="btn btn-primary btn-sm" id="btnAgregarDetalle">
-                <i class="fa fa-plus me-1"></i> Agregar fuente
-            </button>
+        <div class="d-flex align-items-center justify-content-between mb-1">
+            <p class="section-header mb-0">Documentos del agente</p>
+            <div>
+                <input type="file" id="inputSubirDoc" accept=".pdf,.csv,.xlsx,.xls,.json,.txt,.docx" hidden>
+                <button type="button" class="btn btn-primary btn-sm" id="btnSubirDoc"><i class="fa fa-upload me-1"></i> Subir documento</button>
+            </div>
         </div>
+        <div class="form-text small mb-1">Sube PDF, Excel, CSV, DOCX, JSON o TXT. Se embebe automáticamente al RAG de este agente (su propio nodo en Weaviate).</div>
+        <div class="small mb-2" id="subirDocStatus"></div>
 
-        <div class="guide-callout mb-2" style="font-size:.75rem">
-            <strong>Enlace:</strong> URL de una API o página que retorna texto/JSON/HTML.
-            <strong>Archivo:</strong> sube un PDF, CSV o Excel.
-            <strong>Texto:</strong> escribe el contenido directamente (menú, FAQ breve, políticas, etc.).
-        </div>
+        {% if filtro %}
+        <script>
+        (function() {
+            'use strict';
+            var btn = document.getElementById('btnSubirDoc');
+            var input = document.getElementById('inputSubirDoc');
+            if (!btn || !input) return;
+            function csrf() {
+                var t = document.querySelector('[name=csrfmiddlewaretoken]');
+                if (t && t.value) return t.value;
+                var m = document.cookie.match(/csrftoken=([^;]+)/);
+                return m ? m[1] : '';
+            }
+            function pintarFuentes(fuentes) {
+                var lst = document.getElementById('ragFuentesList');
+                if (!lst || !fuentes) return;
+                if (fuentes.length) {
+                    lst.className = 'mt-2';
+                    lst.innerHTML = fuentes.map(function(f) {
+                        return '<span class="badge bg-light text-dark border me-1 mb-1"><i class="fas fa-file-alt me-1 text-muted"></i>' + (f.categoria || f.source) + ' <span class="text-muted">(' + f.count + ')</span></span>';
+                    }).join('');
+                }
+            }
+            btn.addEventListener('click', function() { input.click(); });
+            input.addEventListener('change', function() {
+                if (!input.files || !input.files.length) return;
+                var st = document.getElementById('subirDocStatus');
+                var fd = new FormData();
+                fd.append('action', 'subir_documento');
+                fd.append('id', '{{ filtro.id }}');
+                fd.append('archivo', input.files[0]);
+                fd.append('csrfmiddlewaretoken', csrf());
+                btn.disabled = true;
+                if (st) st.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Subiendo e indexando al RAG...';
+                $.ajax({ url: '{{ ruta_post }}', method: 'POST', data: fd, processData: false, contentType: false })
+                .done(function(r) {
+                    btn.disabled = false; input.value = '';
+                    if (r && !r.error) {
+                        if (st) st.innerHTML = '<i class="fas fa-check-circle text-success me-1"></i>' + (r.message || 'Listo');
+                        if (r.total_tenant !== undefined && r.total_tenant !== null) {
+                            var c = document.getElementById('ragCount'); if (c) c.textContent = r.total_tenant;
+                        }
+                        pintarFuentes(r.fuentes);
+                    } else {
+                        if (st) st.innerHTML = '<i class="fas fa-exclamation-triangle text-warning me-1"></i>' + ((r && r.message) || 'Error');
+                    }
+                }).fail(function() {
+                    btn.disabled = false; input.value = '';
+                    if (st) st.innerHTML = '<i class="fas fa-exclamation-triangle text-warning me-1"></i>Error de red';
+                });
+            });
+        })();
+        </script>
+        {% endif %}
 
-        <div id="contenedorDetalles"></div>
+        <div id="contenedorDetalles" class="d-none"></div>
 
         <div class="mt-2">
             <div class="d-flex align-items-center gap-2">
@@ -283,53 +419,91 @@
 
     {# ── TAB 3: PROMPT ─────────────────────────────────────────────── #}
     <div class="tab-pane fade" id="at-prompt">
+        <link rel="stylesheet" href="/static/css/crm/agente_prompt.css?v1.2">
 
-        <div class="guide-callout" style="background:#fef3c7;border-left-color:#f59e0b">
-            <i class="fas fa-star me-1 text-warning"></i>
-            <strong>Aqui vive todo el poder.</strong> Este template es lo que efectivamente se envia al LLM.
-            Todos los campos de los demas tabs (Persona, Conocimiento, Capacidades) se <strong>inyectan aqui</strong>
-            como variables reemplazables. Si querés override total del comportamiento, reescribi este bloque — reemplaza a todo lo demas.
-        </div>
-
-        <div class="row g-2 mb-3">
-            <div class="col-md-6">
-                <div class="card border-0 bg-light p-2 h-100">
-                    <p class="section-header mb-2"><i class="fas fa-code me-1"></i>Variables disponibles</p>
-                    <table class="table table-sm table-borderless mb-0" style="font-size:.78rem">
-                        <tr><td colspan="2" class="text-muted small fst-italic">— Runtime (mensaje actual) —</td></tr>
-                        <tr><td class="text-primary fw-semibold"><code>{question}</code></td><td>Mensaje del usuario</td></tr>
-                        <tr><td class="text-primary fw-semibold"><code>{context}</code></td><td>Fragmentos RAG del vectorstore + FAQs aprobadas</td></tr>
-                        <tr><td class="text-primary fw-semibold"><code>{contexto_extra}</code></td><td>Historial reciente de la conversacion</td></tr>
-                        <tr><td colspan="2" class="text-muted small fst-italic pt-2">— Persona (tab Persona) —</td></tr>
-                        <tr><td class="text-primary fw-semibold"><code>{nombre_bot}</code></td><td>Nombre con el que se presenta</td></tr>
-                        <tr><td class="text-primary fw-semibold"><code>{personalidad}</code></td><td>Rasgos / caracter del bot</td></tr>
-                        <tr><td class="text-primary fw-semibold"><code>{tono}</code></td><td>Registro (cercano, formal, etc)</td></tr>
-                        <tr><td class="text-primary fw-semibold"><code>{estilo_escritura}</code></td><td>Reglas de forma (largo, emojis, muletillas)</td></tr>
-                        <tr><td colspan="2" class="text-muted small fst-italic pt-2">— Negocio (perfil del cliente) —</td></tr>
-                        <tr><td class="text-primary fw-semibold"><code>{nombre_empresa}</code></td><td>Empresa del cliente</td></tr>
-                        <tr><td class="text-primary fw-semibold"><code>{productos}</code></td><td>Listado de productos configurados</td></tr>
-                        <tr><td class="text-primary fw-semibold"><code>{servicios}</code></td><td>Listado de servicios configurados</td></tr>
-                    </table>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="card border-0 bg-light p-2 h-100">
-                    <p class="section-header mb-2">Consejos para el prompt</p>
-                    <ul class="small text-muted mb-0 ps-3">
-                        <li>Indica el tono: formal, amigable, conciso.</li>
-                        <li>Deja claro qué hacer si no tiene la información: <em>"responde exactamente: No tengo esa información."</em></li>
-                        <li>Especifica el formato: si quieres listas, párrafos cortos, emojis, etc.</li>
-                        <li>No borres <code>{question}</code> ni <code>{context}</code> — son obligatorios.</li>
-                        <li>Si activas detección de cierre en una sesión, el sistema añade la instrucción necesaria automáticamente.</li>
-                    </ul>
-                </div>
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-1 mb-2">
+            <label class="form-label small fw-semibold mb-0">{{ form.prompt_template.label }} <span class="text-muted fw-normal">— es lo que se envía al LLM</span></label>
+            <div class="d-flex gap-1">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#promptRefBlock" aria-expanded="false">
+                    <i class="fas fa-circle-info me-1"></i> Variables y consejos
+                </button>
+                <button type="button" class="btn btn-outline-primary btn-sm" id="btnCargarPromptRecomendado">
+                    <i class="fas fa-magic me-1"></i> Cargar plantilla recomendada
+                </button>
             </div>
         </div>
 
-        <label class="form-label small fw-semibold mb-1">{{ form.prompt_template.label }}</label>
+        <div class="collapse mb-2" id="promptRefBlock">
+            <div class="guide-callout mb-2" style="background:#fef3c7;border-left-color:#f59e0b">
+                <i class="fas fa-star me-1 text-warning"></i>
+                <strong>Aquí vive todo el poder.</strong> Este template es lo que efectivamente se envía al LLM.
+                Los campos de los otros tabs se <strong>inyectan aquí</strong> como variables reemplazables.
+            </div>
+            <div class="row g-2">
+                <div class="col-md-6">
+                    <div class="card border-0 bg-light p-2 h-100">
+                        <p class="section-header mb-2"><i class="fas fa-code me-1"></i>Variables disponibles</p>
+                        <table class="table table-sm table-borderless mb-0" style="font-size:.78rem">
+                            <tr><td colspan="2" class="text-muted small fst-italic">— Runtime (mensaje actual) —</td></tr>
+                            <tr><td class="text-primary fw-semibold"><code>{question}</code></td><td>Mensaje del usuario</td></tr>
+                            <tr><td class="text-primary fw-semibold"><code>{context}</code></td><td>Fragmentos RAG del vectorstore + FAQs aprobadas</td></tr>
+                            <tr><td class="text-primary fw-semibold"><code>{contexto_extra}</code></td><td>Historial reciente de la conversacion</td></tr>
+                            <tr><td colspan="2" class="text-muted small fst-italic pt-2">— Persona —</td></tr>
+                            <tr><td class="text-primary fw-semibold"><code>{nombre_bot}</code></td><td>Nombre con el que se presenta</td></tr>
+                            <tr><td class="text-primary fw-semibold"><code>{personalidad}</code></td><td>Rasgos / caracter del bot</td></tr>
+                            <tr><td class="text-primary fw-semibold"><code>{tono}</code></td><td>Registro (cercano, formal, etc)</td></tr>
+                            <tr><td class="text-primary fw-semibold"><code>{estilo_escritura}</code></td><td>Reglas de forma (largo, emojis, muletillas)</td></tr>
+                            <tr><td colspan="2" class="text-muted small fst-italic pt-2">— Negocio (perfil del cliente) —</td></tr>
+                            <tr><td class="text-primary fw-semibold"><code>{nombre_empresa}</code></td><td>Empresa del cliente</td></tr>
+                            <tr><td class="text-primary fw-semibold"><code>{productos}</code></td><td>Listado de productos configurados</td></tr>
+                            <tr><td class="text-primary fw-semibold"><code>{servicios}</code></td><td>Listado de servicios configurados</td></tr>
+                        </table>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card border-0 bg-light p-2 h-100">
+                        <p class="section-header mb-2">Consejos para el prompt</p>
+                        <ul class="small text-muted mb-0 ps-3">
+                            <li>Indica el tono: formal, amigable, conciso.</li>
+                            <li>Deja claro qué hacer si no tiene la información: <em>"responde exactamente: No tengo esa información."</em></li>
+                            <li>Especifica el formato: si quieres listas, párrafos cortos, emojis, etc.</li>
+                            <li>No borres <code>{question}</code> ni <code>{context}</code> — son obligatorios.</li>
+                            <li>Si activas detección de cierre en una sesión, el sistema añade la instrucción necesaria automáticamente.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         {{ form.prompt_template }}
         <div class="invalid-feedback" id="errorMessageprompt_template"></div>
+        <textarea id="promptRecomendadoSrc" hidden>{{ prompt_recomendado }}</textarea>
     </div>
+
+    <script>
+    (function() {
+        const btn = document.getElementById('btnCargarPromptRecomendado');
+        const src = document.getElementById('promptRecomendadoSrc');
+        const target = document.getElementById('id_prompt_template');
+        if (!btn || !src || !target) return;
+        btn.addEventListener('click', function() {
+            if (target.value.trim().length > 0) {
+                Swal.fire({
+                    title: 'Replace current prompt?',
+                    text: 'This will overwrite the current content of the Prompt field.',
+                    type: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Replace',
+                    cancelButtonText: 'Cancel',
+                }).then(function(result) {
+                    if (result.value) target.value = src.value;
+                });
+            } else {
+                target.value = src.value;
+            }
+        });
+    })();
+    </script>
 
     {# ── TAB 4: CIERRE (PLANTILLA) ─────────────────────────────────── #}
     <div class="tab-pane fade" id="at-cierre">
@@ -1138,7 +1312,7 @@
     }
 
     window.DATOS_ORIGINALES = {
-        detalles: {% if filtro and filtro.pk %}{{ detalles_existentes|safe }}{% else %}[]{% endif %},
+        detalles: [],
         tieneFiltro: {% if filtro and filtro.pk %}true{% else %}false{% endif %}
     };
 
@@ -1388,7 +1562,11 @@
     })();
 
     function inicializarEventos() {
-        $('#btnAgregarDetalle').off('click').on('click', function() { agregarDetalle(); });
+        $('#btnAgregarDetalle').off('click').on('click', function() {
+            agregarDetalle();
+            var ult = $('#contenedorDetalles > div').last()[0];
+            if (ult && ult.scrollIntoView) ult.scrollIntoView({behavior: 'smooth', block: 'center'});
+        });
         $(document).off('change', '.detalle-enlace,.detalle-archivo,.detalle-tipo-dato-enlace,.detalle-token,.detalle-tiempo-cache');
         $(document).on('change', '.detalle-enlace,.detalle-archivo,.detalle-tipo-dato-enlace,.detalle-token,.detalle-tiempo-cache', actualizarDetallesJSON);
     }

@@ -374,6 +374,8 @@ class AgenteConsultor:
             'question', 'context', 'descripcion_agente', 'contexto_extra',
             # Persona (humanización) — opcionales en templates antiguos
             'nombre_bot', 'personalidad', 'tono', 'estilo_escritura',
+            # Negocio (perfil del cliente): empresa, productos y servicios
+            'nombre_empresa', 'productos', 'servicios',
             # Variables del contacto y del momento
             'contacto_nombre', 'hora_local', 'primera_vez_hoy',
             # Señal de ánimo detectada en el mensaje actual
@@ -402,6 +404,96 @@ class AgenteConsultor:
         self._faq_ids_usadas: list = []  # rellenado por _construir_contexto
         self._cargar_listas_desde_memoria()
 
+        # ── RAG Weaviate multi-tenant (capa transversal anti-alucinación) ──
+        # Si la empresa del agente tiene un tenant con documentos indexados y hay
+        # una API key de embeddings (Gemini), el agente recupera desde Weaviate en
+        # vez de inyectar el contexto_estatico completo — esto reduce tokens y delirio.
+        self.empresa_id = getattr(self.agente, 'perfil_id', None) if self.agente else None
+        # El tenant Weaviate es POR AGENTE (agente_<id>). empresa_id se conserva
+        # para resolver la key Gemini (por perfil) y los planes del cotizador.
+        self.agente_tenant_id = getattr(self.agente, 'id', None) if self.agente else None
+        self.embed_key = self._resolver_embed_key()
+        self.usar_weaviate = self._detectar_weaviate()
+        if self.usar_weaviate:
+            logger.info("Agente %s usa RAG Weaviate (tenant agente_%s)",
+                        getattr(self.agente, 'id', '?'), self.agente_tenant_id)
+
+    def _resolver_embed_key(self) -> str:
+        """Busca una API key Gemini activa del perfil para generar embeddings del RAG.
+        Gemini se usa solo para embeddings; el LLM de respuesta puede ser cualquiera."""
+        if not self.empresa_id:
+            return ''
+        try:
+            from crm.models import ApiKeyIA
+            ak = (ApiKeyIA.objects
+                  .filter(perfil_id=self.empresa_id, proveedor=2, estado=True, status=True)
+                  .order_by('-id').first())
+            return ak.descripcion if ak else ''
+        except Exception as exc:
+            logger.debug("No se pudo resolver embed_key Gemini: %s", exc)
+            return ''
+
+    def _detectar_weaviate(self) -> bool:
+        if not (self.agente_tenant_id and self.embed_key):
+            return False
+        try:
+            from agents_ai import weaviate_rag
+            return weaviate_rag.contar(self.agente_tenant_id) > 0
+        except Exception as exc:
+            logger.debug("Weaviate no disponible, fallback a FAISS/estático: %s", exc)
+            return False
+
+    # Umbral de distancia coseno: por encima, el fragmento no es realmente
+    # relevante a la pregunta (evita que el modelo extrapole/invente).
+    _DIST_MAX_RELEVANTE = 0.75
+
+    def _contexto_weaviate(self, query: str, query_raw: str = None) -> str:
+        """Recupera del tenant del agente y arma el contexto RAG (solo lo relevante).
+
+        Busca con la query enriquecida Y con la pregunta cruda (query_raw) cuando
+        difieren, y combina por distancia. Así una pregunta autosuficiente (p.ej.
+        "qué centros médicos hay") no se pierde si el enriquecido desvía el foco.
+        Filtra por distancia: si nada es suficientemente cercano, devuelve '' → el
+        agente responde 'No tengo esa información' (grounding estricto).
+        """
+        queries = [query]
+        if query_raw and query_raw.strip() and query_raw != query:
+            queries.append(query_raw)
+        try:
+            from agents_ai import weaviate_rag
+            resultados = []
+            vistos = set()
+            for q in queries:
+                for r in weaviate_rag.buscar(self.agente_tenant_id, self.embed_key, q, k=self.cfg_faiss_k):
+                    key = (r.get('content') or '').strip()[:80]
+                    if not key or key in vistos:
+                        continue
+                    vistos.add(key)
+                    resultados.append(r)
+            resultados.sort(key=lambda r: r.get('distancia') if r.get('distancia') is not None else 9)
+        except Exception as exc:
+            logger.error("Error recuperando de Weaviate: %s", exc)
+            return ''
+        partes, total = [], 0
+        for r in resultados:
+            dist = r.get('distancia')
+            if dist is not None and dist > self._DIST_MAX_RELEVANTE:
+                continue
+            chunk = (r.get('content') or '').strip()
+            if not chunk:
+                continue
+            restante = self.cfg_max_context_chars - total
+            if restante <= 0:
+                break
+            # Un fragmento más grande que el presupuesto se TRUNCA (no se descarta):
+            # los docs de coberturas/centros indexados por ciudad pueden superar el
+            # límite y antes se perdían por completo (contexto vacío → SIN_DATOS).
+            if len(chunk) > restante:
+                chunk = chunk[:restante]
+            partes.append(chunk)
+            total += len(chunk)
+        return "\n\n".join(partes)
+
     # ------------------------------------------------------------------
     # Setup
     # ------------------------------------------------------------------
@@ -410,7 +502,17 @@ class AgenteConsultor:
         return self._provider_obj.default_model()
 
     def _get_embeddings(self):
-        return self._provider_obj.get_embeddings(self.apikey)
+        # Algunos providers (Ollama) no proveen embeddings. En ese caso el agente
+        # no usa FAISS local: el RAG va por Weaviate, que genera sus embeddings con
+        # Gemini aparte (ver _resolver_embed_key / weaviate_rag).
+        try:
+            return self._provider_obj.get_embeddings(self.apikey)
+        except NotImplementedError:
+            logger.info(
+                "Provider '%s' sin embeddings; FAISS local deshabilitado para este agente "
+                "(usa Weaviate si tiene tenant con datos).", self.provider,
+            )
+            return None
 
     def _get_llm(self):
         # Temperature configurable por agente. Default 0.75 = humano natural.
@@ -706,8 +808,15 @@ class AgenteConsultor:
         Retorna (contexto, sin_datos). sin_datos=True si no hay vectorstore ni
         contexto_estatico y el agente debe responder 'No tengo esa información.'
         """
-        _sin_datos = False
         _es_ack = _es_ack_simple(pregunta) and not self._es_primer_mensaje()
+
+        # ── Rama RAG Weaviate (transversal anti-delirio): recupera solo lo
+        # relevante del tenant de la empresa, sin inyectar el contexto_estatico
+        # completo. No aplica a ACKs simples (no necesitan buscar).
+        if self.usar_weaviate and not _es_ack:
+            return self._construir_contexto_weaviate(pregunta, contexto_previo)
+
+        _sin_datos = False
         _presupuesto = self.cfg_max_context_chars
         _es_amplia = False
         _query_faiss = pregunta
@@ -792,6 +901,33 @@ class AgenteConsultor:
 
         return contexto, _sin_datos
 
+    def _construir_contexto_weaviate(self, pregunta: str, contexto_previo: str) -> tuple[str, bool]:
+        """Contexto desde el tenant Weaviate de la empresa (RAG transversal anti-delirio).
+
+        Recupera solo los fragmentos relevantes + FAQ + APIs en vivo. Si no hay nada
+        relevante, instruye responder 'No tengo esa información' (grounding estricto).
+        """
+        _query = self._query_retrieval(pregunta, contexto_previo)
+        contexto = self._contexto_weaviate(_query, pregunta)
+        _sin_datos = False
+        if not contexto:
+            _sin_datos = True
+            contexto = (
+                "SIN_DATOS: No hay información indexada relevante para esta consulta. "
+                "Responde ÚNICAMENTE: \"No tengo esa información.\" "
+                "Prohibido usar conocimiento externo o inventar datos."
+            )
+        bloque_faq, faq_ids = self._construir_bloque_faq()
+        if bloque_faq:
+            contexto = f"{bloque_faq}\n\n{contexto}"
+            self._faq_ids_usadas = faq_ids
+            _sin_datos = False
+        bloque_apis = self._construir_bloque_apis()
+        if bloque_apis:
+            contexto = f"{contexto}\n\n{bloque_apis}"
+            _sin_datos = False
+        return contexto, _sin_datos
+
     def _construir_bloque_apis(self) -> str:
         """Trae el texto de las fuentes API (tipo=1) sin recurrir a embeddings.
         Usa el cache configurado por fuente (`usar_cache`, `tiempo_cache_horas`).
@@ -803,6 +939,25 @@ class AgenteConsultor:
         except Exception as exc:
             logger.debug("No se pudo obtener contexto de APIs: %s", exc)
             return ''
+
+    def _vars_negocio(self) -> dict:
+        """Datos del negocio (perfil) para el prompt: nombre_empresa, productos,
+        servicios. Se computa solo si el template los referencia."""
+        nombre, productos, servicios = '', '', ''
+        try:
+            if self.perfil:
+                nombre = getattr(self.perfil, 'nombre_empresa', '') or ''
+                _p = [str(getattr(x, 'nombre', None) or x).strip() for x in self.perfil.get_productos()]
+                _s = [str(getattr(x, 'nombre', None) or x).strip() for x in self.perfil.get_servicios()]
+                productos = '\n'.join(f"- {n}" for n in _p if n)
+                servicios = '\n'.join(f"- {n}" for n in _s if n)
+        except Exception as exc:
+            logger.debug("_vars_negocio: %s", exc)
+        return {
+            'nombre_empresa': nombre or '(empresa no definida)',
+            'productos': productos or '(sin productos configurados)',
+            'servicios': servicios or '(sin servicios configurados)',
+        }
 
     def _formatear_prompt(
         self, pregunta: str, contexto: str, descripcion_agente: str, contexto_previo: str
@@ -854,6 +1009,9 @@ class AgenteConsultor:
             except Exception:
                 pass
             _vars_todas['es_primer_mensaje'] = es_primero
+        # Negocio (empresa, productos, servicios) — solo si el template los usa.
+        if _input_vars & {'nombre_empresa', 'productos', 'servicios'}:
+            _vars_todas.update(self._vars_negocio())
         _kwargs = {k: v for k, v in _vars_todas.items() if k in _input_vars}
         try:
             return self._prompt_tpl.format(**_kwargs)
@@ -1029,6 +1187,53 @@ class AgenteConsultor:
                 return "Error al consultar el catálogo."
 
         tools_estaticas = [agregar_al_pedido, consultar_producto]
+
+        # ── Tool de cotización médica (motor tarifario local) ──
+        # Solo se activa si la empresa del agente tiene planes en el cotizador.
+        try:
+            from cotizador.models import Plan as _PlanCot
+            if agente_self.empresa_id and _PlanCot.objects.filter(
+                empresa_id=agente_self.empresa_id, status=True
+            ).exists():
+
+                @tool
+                def cotizar_plan(nombre_plan: str, edad: int, genero: str) -> str:
+                    """Calcula la prima mensual EXACTA de un plan medico para una persona, en
+                    AMBAS variantes dentales (Basico y Plus). Usala al recomendar un plan para
+                    dar el precio real (en vez de inventarlo). Ya conoces edad y genero del cliente.
+
+                    Args:
+                        nombre_plan: nombre del plan (ej. 'Magno 30.000', 'Predilecto 20.000', 'Unico 10.000').
+                        edad: edad de la persona en anios.
+                        genero: 'M' (masculino) o 'F' (femenino).
+                    """
+                    from cotizador import motor_tarifario as _M
+                    qs = _PlanCot.objects.filter(empresa_id=agente_self.empresa_id, status=True)
+                    n = (nombre_plan or '').lower()
+                    plan = None
+                    for kw, code in (('magno', 'MAGNO'), ('predilecto', 'PREDILECTO'),
+                                     ('unico', 'UNICO'), ('único', 'UNICO'),
+                                     ('proteccion', 'PROTECCION'), ('protección', 'PROTECCION')):
+                        if kw in n:
+                            plan = qs.filter(codigo__icontains=code).first()
+                            break
+                    if plan is None:
+                        plan = qs.filter(nombre_comercial__icontains=nombre_plan.strip()).first()
+                    if plan is None:
+                        return f"No encontre el plan '{nombre_plan}'. Planes: " + ", ".join(
+                            qs.values_list('nombre_comercial', flat=True))
+                    try:
+                        gen = (genero or 'M').upper()[:1]
+                        rb = _M.cotizar(plan, [{'edad': int(edad), 'genero': gen}], 'basico')
+                        rp = _M.cotizar(plan, [{'edad': int(edad), 'genero': gen}], 'plus')
+                        return (f"{plan.nombre_comercial} (edad {edad}, {gen}): "
+                                f"Dental Basico ${rb.prima_total}/mes, Dental Plus ${rp.prima_total}/mes.")
+                    except _M.TarifaNoEncontrada as exc:
+                        return f"No pude calcular la tarifa: {exc}"
+
+                tools_estaticas.append(cotizar_plan)
+        except Exception as exc:
+            logger.debug("Tool cotizar_plan no disponible: %s", exc)
 
         # Herramientas dinámicas configuradas por el cliente en HerramientaAgente
         tools_dinamicas = []

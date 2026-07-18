@@ -1,7 +1,10 @@
 """Provider para Google Gemini (Generative AI)."""
+import requests
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 
 from .base import BaseProvider
+
+GEMINI_MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
 class GeminiProvider(BaseProvider):
@@ -39,3 +42,27 @@ class GeminiProvider(BaseProvider):
             usage.get('prompt_token_count', 0) or 0,
             usage.get('candidates_token_count', 0) or 0,
         )
+
+    def list_models(self, api_key: str) -> list[tuple[str, str]]:
+        modelos = []
+        page_token = ""
+        # Paginar hasta agotar; tope de 20 páginas como salvaguarda.
+        for _ in range(20):
+            params = {"key": api_key, "pageSize": 1000}
+            if page_token:
+                params["pageToken"] = page_token
+            response = requests.get(GEMINI_MODELS_URL, params=params, timeout=6)
+            response.raise_for_status()
+            data = response.json()
+            for m in data.get("models", []):
+                if "generateContent" not in m.get("supportedGenerationMethods", []):
+                    continue
+                model_id = m.get("name", "").removeprefix("models/")
+                if not model_id:
+                    continue
+                modelos.append((model_id, f"[Gemini] {model_id}"))
+            page_token = data.get("nextPageToken", "")
+            if not page_token:
+                break
+        modelos.sort(key=lambda t: t[0])
+        return modelos

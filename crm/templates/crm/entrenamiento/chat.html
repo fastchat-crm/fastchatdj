@@ -532,6 +532,10 @@
         }
         .no-data-banner.visible { display: flex; }
         .no-data-banner a { color: #664d03; font-weight: 700; }
+        .msg-bubble .chat-md-list { margin: 4px 0; padding-left: 20px; }
+        .msg-bubble .chat-md-list li { margin-bottom: 2px; }
+        .msg-bubble > div { margin-bottom: 2px; }
+        .msg-bubble code { background: rgba(0,0,0,.06); padding: 1px 5px; border-radius: 4px; font-size: .9em; }
 
         /* ── Banner fin de conversación ─────────────────────────────────── */
         .fin-banner {
@@ -1005,7 +1009,54 @@
                 send();
             });
 
+            /* ── Markdown ligero → HTML ─────────────────────────────────── */
+            function md(s) {
+                s = escHtml(s);
+                s = s.replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
+                s = s.replace(/__([^_\n]+?)__/g, '<strong>$1</strong>');
+                s = s.replace(/(^|[^*])\*([^*\n]+?)\*([^*]|$)/g, '$1<em>$2</em>$3');
+                s = s.replace(/`([^`\n]+?)`/g, '<code>$1</code>');
+                var lines = s.split('\n');
+                var out = [];
+                var inList = false;
+                for (var i = 0; i < lines.length; i++) {
+                    var l = lines[i];
+                    var m = l.match(/^\s*[-•]\s+(.+)/);
+                    if (m) {
+                        if (!inList) { out.push('<ul class="md-ul">'); inList = true; }
+                        out.push('<li>' + m[1] + '</li>');
+                    } else {
+                        if (inList) { out.push('</ul>'); inList = false; }
+                        out.push(l);
+                    }
+                }
+                if (inList) out.push('</ul>');
+                return out.join('\n').replace(/\n/g, '<br>');
+            }
+
             /* ── Burbuja ────────────────────────────────────────────────── */
+            function mdToHtml(texto) {
+                var s = escHtml(texto || '');
+                s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+                s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+                var lines = s.split('\n');
+                var html = '';
+                var inList = false;
+                lines.forEach(function (ln) {
+                    var m = ln.match(/^\s*[-•]\s+(.*)$/);
+                    if (m) {
+                        if (!inList) { html += '<ul class="chat-md-list">'; inList = true; }
+                        html += '<li>' + m[1] + '</li>';
+                    } else {
+                        if (inList) { html += '</ul>'; inList = false; }
+                        if (ln.trim() === '') { html += '<br>'; }
+                        else { html += '<div>' + ln + '</div>'; }
+                    }
+                });
+                if (inList) html += '</ul>';
+                return html;
+            }
+
             function appendBubble(tipo, texto, traza) {
                 const empty = document.getElementById('empty-state');
                 if (empty) empty.remove();
@@ -1024,7 +1075,7 @@
                 row.innerHTML =
                     '<div class="msg-avatar ' + avatCls + '"><i class="fas ' + iconCls + '"></i></div>' +
                     '<div class="msg-content">' +
-                    '<div class="msg-bubble ' + bubCls + '">' + escHtml(texto) + '</div>' +
+                    '<div class="msg-bubble ' + bubCls + '">' + ((isHuman || isError) ? escHtml(texto) : mdToHtml(texto)) + '</div>' +
                     '<span class="msg-time">' + label + ' · ' + now + '</span>' +
                     (traza ? renderTraza(traza) : '') +
                     '</div>';

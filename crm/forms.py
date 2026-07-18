@@ -376,7 +376,10 @@ _NOMBRE_PROVEEDOR = {2: 'Gemini', 3: 'OpenAI', 4: 'Claude'}
 class ApiKeyIAForm(ModelFormBase):
     class Meta:
         model = ApiKeyIA
-        fields = ('alias', 'proveedor', 'modelo', 'descripcion', 'usuario', 'contrasena', 'estado')
+        # El MODELO ya NO se configura aquí: la API Key solo guarda la credencial.
+        # El modelo LLM se elige desde la Configuración del agente (dropdown con
+        # lista viva del proveedor) y se persiste en ApiKeyIA.modelo desde ahí.
+        fields = ('alias', 'proveedor', 'descripcion', 'usuario', 'contrasena', 'estado')
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
@@ -394,22 +397,8 @@ class ApiKeyIAForm(ModelFormBase):
             if k in ('proveedor',):
                 self.fields[k].widget.attrs['class'] = "form-control jselect"
                 self.fields[k].widget.attrs['col'] = '6'
-            if k == 'modelo':
-                self.fields[k].widget.attrs['class'] = 'form-control'
-                self.fields[k].widget.attrs['col'] = '6'
             if ver:
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
-
-    def clean(self):
-        cleaned = super().clean()
-        proveedor = cleaned.get('proveedor')
-        modelo = (cleaned.get('modelo') or '').strip()
-        if proveedor and modelo:
-            prefijo = _PREFIJO_MODELO_POR_PROVEEDOR.get(proveedor)
-            if prefijo and not modelo.startswith(prefijo):
-                nombre = _NOMBRE_PROVEEDOR.get(proveedor, 'el proveedor seleccionado')
-                self.add_error('modelo', f'The selected model is not compatible with {nombre}. Choose a model starting with "{prefijo}" or leave it empty to use the default.')
-        return cleaned
 
 
 class CredencialApiChatbotForm(ModelFormBase):

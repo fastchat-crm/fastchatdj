@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cotizador Médico — Vida Buena</title>
+    <style>
+        :root{--azul:#0b2a4a;--azul2:#1b6ec2;--cyan:#27c2d8;--bg:#f4f7fb;--ok:#16a34a;}
+        *{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Roboto,Arial,sans-serif;}
+        body{background:var(--bg);color:#13293d;}
+        header{background:linear-gradient(135deg,var(--azul),var(--azul2));color:#fff;padding:34px 20px;}
+        .wrap{max-width:1180px;margin:0 auto;padding:0 16px;}
+        header h1{font-size:30px;font-weight:800;} header h1 span{color:var(--cyan);}
+        header p{opacity:.9;margin-top:8px;max-width:640px;}
+        .panel{background:#fff;border-radius:14px;box-shadow:0 6px 24px rgba(13,42,74,.08);padding:22px;margin:-28px auto 26px;max-width:1180px;}
+        .form-row{display:flex;flex-wrap:wrap;gap:14px;align-items:end;}
+        .fg{display:flex;flex-direction:column;gap:6px;}
+        .fg label{font-size:13px;font-weight:600;color:#496;}
+        .fg input,.fg select{padding:11px 13px;border:1px solid #d6e0ec;border-radius:9px;font-size:15px;min-width:170px;}
+        .btn{background:var(--azul2);color:#fff;border:none;padding:12px 22px;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;}
+        .btn:hover{background:var(--azul);}
+        .btn.cyan{background:var(--cyan);} .muted{color:#789;font-size:13px;}
+        .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:18px;margin-top:8px;}
+        .card{background:#fff;border:1px solid #e6edf5;border-radius:14px;overflow:hidden;box-shadow:0 4px 16px rgba(13,42,74,.06);display:flex;flex-direction:column;}
+        .card h3{background:linear-gradient(135deg,var(--azul),var(--azul2));color:#fff;padding:15px 16px;font-size:18px;}
+        .card .body{padding:16px;flex:1;}
+        .tag{display:inline-block;background:#eef4fb;color:var(--azul2);border-radius:20px;padding:3px 10px;font-size:12px;margin:2px 4px 2px 0;}
+        .primas{display:flex;gap:8px;margin:12px 0;}
+        .prima{flex:1;background:#f0f8ff;border-radius:10px;padding:10px;text-align:center;}
+        .prima small{display:block;color:#678;font-size:11px;}
+        .prima b{font-size:20px;color:var(--azul);}
+        .cob{font-size:13px;color:#2c4257;margin:5px 0;padding-left:18px;position:relative;}
+        .cob:before{content:'✓';color:var(--ok);position:absolute;left:0;font-weight:700;}
+        .card button{margin:0 16px 16px;background:var(--azul2);color:#fff;border:none;padding:11px;border-radius:9px;font-weight:700;cursor:pointer;}
+        #estado{padding:14px 0;color:#678;}
+        .loader{display:inline-block;width:16px;height:16px;border:3px solid #cce;border-top-color:var(--azul2);border-radius:50%;animation:sp .8s linear infinite;vertical-align:middle;}
+        @keyframes sp{to{transform:rotate(360deg);}}
+    </style>
+</head>
+<body>
+<header>
+    <div class="wrap">
+        <h1>Cotizador <span>Médico</span> Vida Buena</h1>
+        <p>Ingresá tu cédula (o edad y género) y compará los planes con su prima mensual exacta. Cobertura por Territorio Nacional.</p>
+    </div>
+</header>
+
+<div class="panel">
+    <div class="form-row">
+        <div class="fg">
+            <label>Cédula (10 dígitos)</label>
+            <input id="cedula" maxlength="13" placeholder="0928541556">
+        </div>
+        <button class="btn cyan" onclick="buscarCedula()" type="button">Consultar cédula</button>
+        <div class="fg">
+            <label>Edad</label>
+            <input id="edad" type="number" min="0" max="100" placeholder="28">
+        </div>
+        <div class="fg">
+            <label>Género</label>
+            <select id="genero"><option value="M">Masculino</option><option value="F">Femenino</option></select>
+        </div>
+        <button class="btn" onclick="cotizar()" type="button">Cotizar planes</button>
+    </div>
+    <div id="estado"></div>
+    <div class="muted" id="titular"></div>
+</div>
+
+<div class="wrap">
+    <div class="grid" id="resultados"></div>
+</div>
+
+<script>
+    const EMPRESA_ID = "{{ empresa_id }}";
+    const estado = document.getElementById('estado');
+
+    function buscarCedula(){
+        const c = document.getElementById('cedula').value.trim();
+        if(!c){ estado.textContent='Ingresá una cédula.'; return; }
+        estado.innerHTML='<span class="loader"></span> Consultando cédula...';
+        fetch('/cotizador/api/cliente/'+encodeURIComponent(c)+'/')
+            .then(r=>r.json())
+            .then(d=>{
+                const dd = (d && d.data) ? d.data : (d || {});
+                const edad = dd.edad;
+                const gen = (dd.sexo||dd.gender||'').toString().toUpperCase().startsWith('F')?'F':'M';
+                if(edad){ document.getElementById('edad').value=edad; document.getElementById('genero').value=gen;
+                    document.getElementById('titular').textContent='Titular: '+((dd.nombres||'')+' '+(dd.apellidos||'')).trim()+' · '+edad+' años · '+(gen==='F'?'Femenino':'Masculino');
+                    estado.textContent=''; cotizar();
+                } else { estado.textContent='No se encontró la cédula. Ingresá edad y género manualmente.'; }
+            }).catch(()=>{ estado.textContent='No se pudo consultar la cédula. Usá edad y género manual.'; });
+    }
+
+    function cotizar(){
+        const edad = document.getElementById('edad').value;
+        const genero = document.getElementById('genero').value;
+        if(!edad){ estado.textContent='Ingresá la edad.'; return; }
+        estado.innerHTML='<span class="loader"></span> Calculando planes...';
+        fetch('/cotizador/api/cotizar/?empresa_id='+EMPRESA_ID+'&edad='+edad+'&genero='+genero)
+            .then(r=>r.json())
+            .then(d=>{
+                estado.textContent='';
+                const cont = document.getElementById('resultados');
+                cont.innerHTML='';
+                (d.planes||[]).forEach(p=>{
+                    const cobs = (p.coberturas||[]).slice(0,6).map(c=>'<div class="cob">'+c.concepto+(c.valor?': '+c.valor:'')+'</div>').join('');
+                    cont.innerHTML += `
+                    <div class="card">
+                        <h3>${p.plan}</h3>
+                        <div class="body">
+                            <span class="tag">Suma $${p.suma_asegurada}</span>
+                            <span class="tag">${p.modalidad||''}</span>
+                            <span class="tag">Deducible $${p.deducible}</span>
+                            <div class="primas">
+                                <div class="prima"><small>Dental Básico</small><b>$${p.prima_basico||'—'}</b></div>
+                                <div class="prima"><small>Dental Plus</small><b>$${p.prima_plus||'—'}</b></div>
+                            </div>
+                            ${cobs}
+                        </div>
+                        <button type="button">Elegir este plan</button>
+                    </div>`;
+                });
+                if(!(d.planes||[]).length) cont.innerHTML='<p class="muted">No hay planes disponibles.</p>';
+            }).catch(()=>{ estado.textContent='Error al cotizar.'; });
+    }
+</script>
+</body>
+</html>

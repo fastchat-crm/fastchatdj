@@ -184,7 +184,108 @@ def entrenamiento_ia_view(request):
 
         if request.method == 'POST':
             res_json = []
+            _reindex_pendiente = None
             action = request.POST['action']
+            if action == 'listar_modelos':
+                # Catálogo de modelos EN VIVO desde la API del proveedor (para el
+                # combo del form de API Key). Read-only + E/S de red → se resuelve
+                # FUERA de la transacción a propósito. Cae a la lista estática si
+                # no hay key o el proveedor no responde.
+                from agents_ai.providers import listar_modelos_disponibles
+                try:
+                    _prov = int(request.POST.get('proveedor') or 0)
+                except (TypeError, ValueError):
+                    _prov = 0
+                _key = (request.POST.get('api_key') or '').strip()
+                # Si viene key_id (desde la config del agente) resolvemos la key en
+                # el server para no exponerla en la página.
+                _kid = request.POST.get('key_id')
+                if not _key and _kid:
+                    try:
+                        _ak = ApiKeyIA.objects.get(pk=int(_kid), perfil=perfil)
+                        _key = _ak.descripcion or ''
+                        if not _prov:
+                            _prov = _ak.proveedor
+                    except (ApiKeyIA.DoesNotExist, ValueError, TypeError):
+                        pass
+                _refresh = request.POST.get('force_refresh') == 'true'
+                try:
+                    _modelos = listar_modelos_disponibles(_prov, _key, force_refresh=_refresh)
+                except Exception:
+                    return JsonResponse({'error': True, 'message': 'Could not load models.', 'modelos': []})
+                return JsonResponse({
+                    'error': False,
+                    'modelos': [{'value': v, 'label': l} for v, l in _modelos],
+                })
+            if action == 'rag_reindex':
+                # Reindexar las fuentes del panel al RAG Weaviate. E/S de red →
+                # fuera de la transacción. Devuelve el conteo para refrescar la UI.
+                from agents_ai import indexador_conocimiento as _idx
+                try:
+                    _ag = AgentesIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
+                except (AgentesIA.DoesNotExist, KeyError, ValueError):
+                    return JsonResponse({'error': True, 'message': 'Agente no encontrado.'})
+                _r = _idx.reindexar_agente(_ag)
+                if _r.get('ok') and _r.get('indexados'):
+                    _m = f"RAG actualizado: {_r.get('indexados')} fragmentos indexados."
+                elif _r.get('necesita_gemini'):
+                    _m = "Agrega una API Key Gemini al perfil para activar los embeddings del RAG."
+                elif _r.get('ok'):
+                    _m = "Sin fragmentos nuevos (verifica que Weaviate esté activo y que las fuentes tengan texto)."
+                else:
+                    _m = f"No se pudo indexar: {_r.get('error', 'error desconocido')}."
+                try:
+                    from agents_ai import weaviate_rag as _wv2
+                    _fuentes = _wv2.resumen_fuentes(_ag.id)
+                except Exception:
+                    _fuentes = []
+                return JsonResponse({
+                    'error': not _r.get('ok', False),
+                    'message': _m,
+                    'indexados': _r.get('indexados', 0),
+                    'total_tenant': _r.get('total_tenant'),
+                    'fuentes': _fuentes,
+                })
+            if action == 'guardar_modelo_key':
+                # Guardar el modelo LLM elegido en la API Key del agente (desde la
+                # pestaña de configuración). Update directo, sin transacción grande.
+                try:
+                    _kid = int(request.POST.get('key_id') or 0)
+                except (ValueError, TypeError):
+                    return JsonResponse({'error': True, 'message': 'API Key inválida.'})
+                _modelo = (request.POST.get('modelo') or '').strip()
+                _n = ApiKeyIA.objects.filter(pk=_kid, perfil=perfil).update(modelo=_modelo)
+                if not _n:
+                    return JsonResponse({'error': True, 'message': 'API Key no encontrada.'})
+                return JsonResponse({'error': False, 'message': 'Modelo guardado: ' + (_modelo or '(default del proveedor)') + '.', 'modelo': _modelo})
+            if action == 'subir_documento':
+                # Subir un documento y embeberlo al RAG del agente (su nodo Weaviate).
+                # Multipart; se guarda como DetalleAgentesAI(tipo=2) y se reindexa.
+                from agents_ai import indexador_conocimiento as _idx
+                try:
+                    _ag = AgentesIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
+                except (AgentesIA.DoesNotExist, KeyError, ValueError):
+                    return JsonResponse({'error': True, 'message': 'Agente no encontrado.'})
+                _f = request.FILES.get('archivo')
+                if not _f:
+                    return JsonResponse({'error': True, 'message': 'No se recibió ningún archivo.'})
+                _ext = os.path.splitext(_f.name)[1].lower().lstrip('.')
+                if _ext not in ('pdf', 'csv', 'xlsx', 'xls', 'json', 'txt', 'docx'):
+                    return JsonResponse({'error': True, 'message': 'Tipo .' + _ext + ' no permitido. Usa PDF, Excel, CSV, DOCX, JSON o TXT.'})
+                if _f.size > 20 * 1024 * 1024:
+                    return JsonResponse({'error': True, 'message': 'El archivo supera 20 MB.'})
+                _det = DetalleAgentesAI(agente=_ag, tipo=2, status=True)
+                _det.archivo = _f
+                _det.save()
+                _r = _idx.reindexar_agente(_ag)
+                try:
+                    from agents_ai import weaviate_rag as _wv4
+                    _fuentes = _wv4.resumen_fuentes(_ag.id)
+                except Exception:
+                    _fuentes = []
+                if _r.get('necesita_gemini'):
+                    return JsonResponse({'error': True, 'message': 'Documento subido, pero falta una API Key Gemini en el perfil para indexarlo al RAG.', 'fuentes': _fuentes})
+                return JsonResponse({'error': False, 'message': 'Documento "' + _f.name + '" subido e indexado.', 'total_tenant': _r.get('total_tenant'), 'fuentes': _fuentes})
             try:
                 with transaction.atomic():
                     if action == 'addagente':
@@ -192,6 +293,11 @@ def entrenamiento_ia_view(request):
                         if form.is_valid():
                             form.instance.perfil = perfil
                             agente = form.save()
+
+                            # Provisionar el tenant Weaviate del agente nuevo para
+                            # que nazca con la infraestructura RAG lista. No es fatal.
+                            from agents_ai import indexador_conocimiento as _idx
+                            _idx.provisionar_tenant(agente.id)
 
                             # Procesar los detalles si existen. Tolerar valor
                             # vacío o JSON inválido — un agente sin detalles
@@ -223,6 +329,18 @@ def entrenamiento_ia_view(request):
                         form = AgentesIAForm(request.POST, request.FILES, instance=filtro, request=request)
                         if form.is_valid() and filtro:
                             agente = form.save()
+
+                            # Guardar el modelo LLM elegido en la Configuración del
+                            # agente sobre su API Key (el modelo se administra aquí,
+                            # no en el editor de API Keys). Solo si viene no-vacío,
+                            # para no borrarlo si el form se envía antes de cargar.
+                            _km = request.POST.get('apikey_modelo_key_id')
+                            _mm = (request.POST.get('apikey_modelo') or '').strip()
+                            if _km and _mm:
+                                try:
+                                    ApiKeyIA.objects.filter(pk=int(_km), perfil=perfil).update(modelo=_mm)
+                                except (ValueError, TypeError):
+                                    pass
 
                             # Eliminar detalles existentes y crear los nuevos.
                             # Tolerar valor vacío o JSON inválido del front.
@@ -367,6 +485,9 @@ def entrenamiento_ia_view(request):
                                 'personalidad':       getattr(filtro, 'personalidad', '') or '(sin personalidad)',
                                 'tono':               getattr(filtro, 'tono', '') or 'amigable',
                                 'estilo_escritura':   getattr(filtro, 'estilo_escritura', '') or '(estilo natural, mensajes cortos)',
+                                'nombre_empresa':     getattr(getattr(filtro, 'perfil', None), 'nombre_empresa', '') or 'Mi Empresa',
+                                'productos':          '- Producto de ejemplo A\n- Producto de ejemplo B',
+                                'servicios':          '- Servicio de ejemplo A\n- Servicio de ejemplo B',
                                 'contacto_nombre':    'Juan Perez',
                                 'hora_local':         'martes 15:30',
                                 'primera_vez_hoy':    'false',
@@ -445,11 +566,17 @@ def entrenamiento_ia_view(request):
                                     except Exception as ex:
                                         pass
                                 filtro.save()
-                                res_json = {"error": False, "message": f"✅ Procesado: {len(texto_completo):,} chars. Documento grande → FAISS + contexto estático.", "reload": True}
+                                _msg_faiss = f"✅ Procesado: {len(texto_completo):,} chars. Documento grande → FAISS + contexto estático."
                             else:
                                 filtro.vectorstore_path = None
                                 filtro.save()
-                                res_json = {"error": False, "message": f"✅ Procesado: {len(texto_completo):,} chars. Contexto estático listo (sin FAISS).", "reload": True}
+                                _msg_faiss = f"✅ Procesado: {len(texto_completo):,} chars. Contexto estático listo (sin FAISS)."
+
+                            # El puente al RAG Weaviate (embeddings Gemini + red) se
+                            # ejecuta FUERA de la transacción, tras el commit, para no
+                            # mantener la transacción abierta durante la E/S de red.
+                            _reindex_pendiente = filtro
+                            res_json = {"error": False, "message": _msg_faiss, "reload": True}
                     elif action == 'agente_regla_fin_guardar':
                         agente = AgentesIA.objects.get(id=request.POST['pk'], perfil=perfil)
                         regla, _ = ReglaFinConversacion.objects.get_or_create(agente=agente)
@@ -1191,6 +1318,21 @@ def entrenamiento_ia_view(request):
             except Exception as ex:
                 line = sys.exc_info()[-1].tb_lineno
                 res_json.append({'error': True, "message": f"Intente Nuevamente: {ex}"})
+            if _reindex_pendiente is not None:
+                # Reindexado RAG post-commit (fuera de la transacción). No rompe:
+                # reindexar_agente nunca lanza y degrada si Weaviate/Gemini no están.
+                from agents_ai import indexador_conocimiento as _idx
+                _res_w = _idx.reindexar_agente(_reindex_pendiente)
+                if _res_w.get('ok') and _res_w.get('indexados'):
+                    _msg_w = f" · RAG Weaviate: {_res_w.get('indexados')} fragmentos indexados (total tenant: {_res_w.get('total_tenant', 0)})."
+                elif _res_w.get('necesita_gemini'):
+                    _msg_w = " · ⚠️ RAG no activado: agrega una API Key Gemini al perfil para generar embeddings."
+                elif _res_w.get('ok'):
+                    _msg_w = f" · ⚠️ RAG sin indexar (0 fragmentos): {_res_w.get('aviso') or 'verifica que Weaviate esté activo y que las fuentes tengan texto'}."
+                else:
+                    _msg_w = f" · ⚠️ RAG no indexado: {_res_w.get('error', 'sin detalle')}."
+                if isinstance(res_json, dict):
+                    res_json['message'] = (res_json.get('message', '') or '') + _msg_w
             return JsonResponse(res_json, safe=False)
         else:
             if 'action' in request.GET:
@@ -1209,6 +1351,12 @@ def entrenamiento_ia_view(request):
                         form.fields['apikey'].queryset = ApiKeyIA.objects.filter(perfil=perfil, status=True)
                         data['personalidad_presets'] = PERSONALIDAD_PRESETS
                         data['action'] = 'changeagente' if filtro else 'addagente'
+                        # Plantilla de prompt recomendada disponible en la pestaña
+                        # Prompt; para agentes nuevos se precarga como valor inicial.
+                        from agents_ai.prompts_recomendados import PROMPT_RECOMENDADO
+                        data['prompt_recomendado'] = PROMPT_RECOMENDADO
+                        if not filtro:
+                            form.fields['prompt_template'].initial = PROMPT_RECOMENDADO
                         if filtro:
                             data['detalles_existentes'] = filtro.obtener_detalles_agente()
                             data['regla_fin'] = getattr(filtro, 'regla_fin', None)
@@ -1232,6 +1380,16 @@ def entrenamiento_ia_view(request):
                             data['contadores'] = data['faqs_contadores']
                             data['estado_filtro'] = ''
                             data['agente'] = filtro
+                            try:
+                                from agents_ai import weaviate_rag as _wv
+                                data['rag_index_count'] = _wv.contar(filtro.id)
+                                data['rag_fuentes'] = _wv.resumen_fuentes(filtro.id)
+                            except Exception:
+                                data['rag_index_count'] = None
+                                data['rag_fuentes'] = []
+                            _ak = filtro.apikey.filter(estado=True, status=True).first()
+                            if _ak:
+                                data['agente_apikey'] = {'id': _ak.id, 'proveedor': _ak.proveedor, 'modelo': _ak.modelo or ''}
                         data['titulo_pagina'] = f'Editar agente IA — {filtro}' if filtro else 'Nuevo agente IA'
                         data['ruta_post'] = request.path
                         return render(request, 'crm/entrenamiento/agente/form_pagina.html', data)
