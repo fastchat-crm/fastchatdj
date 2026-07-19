@@ -429,6 +429,43 @@ Si el nodo debe correr el cotizador médico:
    - Nota: probar con el `Host` correcto (`<IP_O_DOMINIO>`); un `Host` que no matchee el `server_name` cae al server `default` de nginx (404).
 3. La **herramienta `cotizar_plan`** se activa automáticamente en el chat si la empresa del agente tiene planes cargados.
 
+### D.2. Widget de chat embebible + captura de leads (opcional)
+
+El chatbot embebible **no requiere pasos de instalación adicionales** (sin dependencias
+nuevas, sin migraciones): al desplegar el código ya quedan disponibles las rutas
+`/chat-widget/embed.js`, `/chat-widget/api/mensaje/` y `/chat/<embed_key>/`. Detalle
+completo en `WIDGET_CHAT.md`.
+
+**Para poner el chat en una página (p. ej. el cotizador o el sitio de un cliente):**
+
+1. Generar el *embed key* del agente (desde el venv de la app):
+   ```bash
+   source /home/venv/bin/activate && cd /home/fastchatdj
+   python manage.py generar_embed_widget --agente-id <ID_AGENTE> \
+       --origins https://dominio-del-cliente.com \
+       --base https://<IP_O_DOMINIO>
+   ```
+   Imprime el **embed key**, el **snippet `<script>`** y la **URL de página autónoma**.
+2. Pegar el snippet antes de `</body>` en la página del cliente, **o** compartir la
+   URL `https://<IP_O_DOMINIO>/chat/<embed_key>/` (página de chat lista para usar).
+3. En el **cotizador** el widget ya viene integrado: se activa solo si el agente de la
+   empresa tiene una herramienta cuyo slug empiece con `cotizar`.
+
+**Captura de leads al panel (interoperabilidad CRM):** cuando un visitante deja su
+correo en el chat, el lead aterriza **automáticamente** en **Contactos** y en el
+**Pipeline de ventas** (etapa "Nuevo Lead") del dueño de la empresa. No hay que
+configurar nada: la "sesión web" del CRM se **auto-crea** la primera vez
+(`proveedor='meta'`, `estado='conectado'`, sin conexión WhatsApp real). Requisitos:
+
+- La empresa (`PerfilNegocioIA`) debe tener **usuario dueño** asignado (para que los
+  leads aparezcan en SU panel).
+- Debe existir un **Pipeline de ventas** con al menos una etapa (el sistema usa el
+  pipeline marcado `es_default`, o el primero disponible, y su primera etapa).
+
+> **Nota de caché:** `/chat-widget/embed.js` se sirve con `Cache-Control: max-age=300`.
+> Tras cambiar el JS del widget, los navegadores pueden servir la versión anterior
+> hasta 5 min (o forzar con hard-refresh / versionando `embed.js?v=N`).
+
 ---
 
 ## E. Checklist de verificación post-instalación
@@ -451,6 +488,9 @@ Marcar cada punto tras instalar:
 - [ ] En Configuración del agente: el dropdown de **Modelo** trae la **lista viva** del proveedor.
 - [ ] Probar el chat: pregunta sobre el documento subido → responde con el dato; pregunta fuera del conocimiento → "No tengo esa información".
 - [ ] (Cotizador) `http://<IP_O_DOMINIO>/cotizador/` responde y las primas coinciden con la fuente oficial.
+- [ ] (Widget) `curl -s -o /dev/null -w "%{http_code}" -H "Host: <IP_O_DOMINIO>" http://127.0.0.1/chat-widget/embed.js` → **200**.
+- [ ] (Widget) `generar_embed_widget --agente-id <ID>` imprime el embed key y el snippet.
+- [ ] (Lead) Dejar un correo en el chat del cotizador → aparece la tarjeta en **Pipeline de ventas → "Nuevo Lead"** del dueño de la empresa.
 
 ---
 
