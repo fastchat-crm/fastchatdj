@@ -100,9 +100,11 @@
             .then(r=>r.json())
             .then(d=>{
                 estado.textContent='';
+                window._cotizacion = { planes: (d.planes||[]), edad: edad, genero: (genero==='F'?'Femenino':'Masculino'),
+                                       titular: (document.getElementById('titular').textContent||'').replace('Titular: ','') };
                 const cont = document.getElementById('resultados');
                 cont.innerHTML='';
-                (d.planes||[]).forEach(p=>{
+                (d.planes||[]).forEach((p,i)=>{
                     const cobs = (p.coberturas||[]).slice(0,6).map(c=>'<div class="cob">'+c.concepto+(c.valor?': '+c.valor:'')+'</div>').join('');
                     cont.innerHTML += `
                     <div class="card">
@@ -117,12 +119,51 @@
                             </div>
                             ${cobs}
                         </div>
-                        <button type="button">Elegir este plan</button>
+                        <button type="button" class="btn-elegir" data-idx="${i}">Elegir este plan</button>
                     </div>`;
                 });
                 if(!(d.planes||[]).length) cont.innerHTML='<p class="muted">No hay planes disponibles.</p>';
             }).catch(()=>{ estado.textContent='Error al cotizar.'; });
     }
+
+    function elegirPlan(idx){
+        const c = window._cotizacion; if(!c || !c.planes[idx]) return;
+        if(!window.VidaChat){ return; }
+        const elegido = c.planes[idx];
+        const lista = c.planes.map(p=>'- '+p.plan+': $'+ (p.prima_basico||'—') +'/mes (Dental Básico), $'+ (p.prima_plus||'—')
+                        +'/mes (Dental Plus), suma asegurada $'+p.suma_asegurada+', '+(p.modalidad||'')).join('\n');
+        const prefacio =
+            '[CONTEXTO DE LA COTIZACIÓN EN PANTALLA — ya tienes los precios exactos, NO vuelvas a pedir la cédula solo para cotizar]\n'
+          + 'Perfil del cliente: '+(c.titular?c.titular+', ':'')+c.edad+' años, '+c.genero+'.\n'
+          + 'Planes cotizados ahora mismo:\n'+lista+'\n'
+          + 'El cliente acaba de ELEGIR el plan: '+elegido.plan+' ($'+(elegido.prima_basico||'—')+'/mes).\n'
+          + 'Instrucción: preséntale de forma cálida los beneficios y coberturas clave de '+elegido.plan+', '
+          + 'compáralo brevemente con un plan de perfil OPUESTO de la lista (uno más económico o uno más completo) '
+          + 'explicando la diferencia principal, y termina preguntándole si tiene alguna duda. Usa el conocimiento del RAG para los detalles de cobertura.';
+        const visible = 'Me interesa el plan '+elegido.plan+'. ¿Qué beneficios tiene y con cuál me conviene compararlo?';
+        const cedulaVal = (document.getElementById('cedula').value||'').trim();
+        const nombreVal = (c.titular||'').split('·')[0].trim();
+        const valorEstimado = Math.round((parseFloat(elegido.prima_basico)||0) * 12);
+        window.VidaChat.setLeadContext({
+            nombre: nombreVal, cedula: cedulaVal, edad: c.edad, genero: c.genero,
+            plan_interes: elegido.plan, valor_estimado: valorEstimado
+        });
+        window.VidaChat.abrir();
+        window.VidaChat.setPrefacio(prefacio);
+        window.VidaChat.enviar(visible);
+    }
+
+    document.getElementById('resultados').addEventListener('click', function(e){
+        const b = e.target.closest('.btn-elegir');
+        if(b){ elegirPlan(parseInt(b.getAttribute('data-idx'),10)); }
+    });
 </script>
+{% if chat_embed_key %}
+<script src="/chat-widget/embed.js"
+        data-embed-key="{{ chat_embed_key }}"
+        data-titulo="Asesor Vida Buena"
+        data-color="#1b6ec2"
+        data-bienvenida="¡Hola! Soy tu asesor de Vida Buena. Puedo ayudarte a elegir el plan ideal, resolver dudas de coberturas o cotizar. ¿Con qué empezamos?"></script>
+{% endif %}
 </body>
 </html>

@@ -21,13 +21,54 @@ from . import motor_tarifario as M
 
 
 def _empresa_default_id():
-    """Primera empresa que tenga planes cargados (Vida Buena en staging)."""
-    return Plan.objects.filter(status=True).values_list('empresa_id', flat=True).first()
+    """Empresa por defecto del cotizador: la primera (por id) que tenga planes
+    cargados y ademas un agente IA activo, para que cotizador + chatbot queden
+    ambos operativos. Si ninguna tiene agente, cae a la primera con planes."""
+    from crm.models import AgentesIA
+    empresas = list(
+        Plan.objects.filter(status=True).order_by('empresa_id')
+        .values_list('empresa_id', flat=True).distinct()
+    )
+    if not empresas:
+        return None
+    con_agente = set(
+        AgentesIA.objects.filter(status=True, perfil_id__in=empresas)
+        .values_list('perfil_id', flat=True)
+    )
+    for eid in empresas:
+        if eid in con_agente:
+            return eid
+    return empresas[0]
+
+
+def _agente_cotizador(empresa_id, agente_id=None):
+    """Resuelve el agente del chatbot del cotizador.
+
+    - `agente_id` explicito (via ?agente_id=): permite que cada cliente monte su
+      propio cotizador apuntando a su agente (escalabilidad multi-cliente).
+    - Por defecto: el agente de la empresa que tenga una herramienta 'cotizar*'
+      (el que sabe cotizar). Si no hay, el primer agente activo de la empresa.
+    """
+    from crm.models import AgentesIA
+    qs = AgentesIA.objects.filter(status=True)
+    if agente_id:
+        return qs.filter(pk=agente_id).first()
+    if not empresa_id:
+        return None
+    agente = (qs.filter(perfil_id=empresa_id, herramientas__nombre__istartswith='cotizar',
+                        herramientas__status=True)
+              .distinct().order_by('id').first())
+    return agente or qs.filter(perfil_id=empresa_id).order_by('id').first()
 
 
 def cotizador_view(request):
+    from crm.chat_widget import generar_embed_key
     empresa_id = request.GET.get('empresa_id') or _empresa_default_id()
-    return render(request, 'cotizador/cotizador.html', {'empresa_id': empresa_id})
+    agente = _agente_cotizador(empresa_id, request.GET.get('agente_id'))
+    return render(request, 'cotizador/cotizador.html', {
+        'empresa_id': empresa_id,
+        'chat_embed_key': generar_embed_key(agente.id) if agente else '',
+    })
 
 
 @csrf_exempt

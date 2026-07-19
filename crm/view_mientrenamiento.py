@@ -23,30 +23,18 @@ _DEFAULT_MODEL_BY_PROVIDER = {
     2: 'gemini-2.5-flash',
     3: 'gpt-4o-mini',
     4: 'claude-haiku-4-5-20251001',
+    5: 'gpt-oss:20b',
 }
 
 
 def _probar_apikey_simple(filtro):
     modelo_test = (filtro.modelo or '').strip() or _DEFAULT_MODEL_BY_PROVIDER.get(filtro.proveedor, 'gpt-4o-mini')
     try:
-        if filtro.proveedor == 2:
-            from langchain_google_genai import ChatGoogleGenerativeAI
-            llm = ChatGoogleGenerativeAI(
-                model=modelo_test, google_api_key=filtro.descripcion,
-                max_output_tokens=10, temperature=0,
-            )
-        elif filtro.proveedor == 4:
-            from langchain_anthropic import ChatAnthropic
-            llm = ChatAnthropic(
-                model=modelo_test, anthropic_api_key=filtro.descripcion,
-                max_tokens=10, temperature=0,
-            )
-        else:
-            from langchain_community.chat_models import ChatOpenAI
-            llm = ChatOpenAI(
-                model_name=modelo_test, openai_api_key=filtro.descripcion,
-                max_tokens=10, temperature=0,
-            )
+        from agents_ai.providers import get_provider
+        llm = get_provider(filtro.proveedor).get_llm(
+            apikey=filtro.descripcion, model_name=modelo_test,
+            max_output_tokens=20, temperature=0,
+        )
         _t0 = time.time()
         llm.invoke('Responde solo: ok')
         lat = int((time.time() - _t0) * 1000)
@@ -547,11 +535,11 @@ def entrenamiento_ia_view(request):
                             if len(texto_completo) > _UMBRAL:
                                 # Construir FAISS para la parte que no cabe
                                 apikey_obj = filtro.apikey.filter(estado=True).first()
-                                if apikey_obj:
+                                if apikey_obj and apikey_obj.proveedor in (2, 3):
                                     try:
                                         vs_manager = VectorStoreManager(
                                             storage_dir=base_dir,
-                                            provider='gemini' if apikey_obj.proveedor == 2 else 'openai',
+                                            provider=apikey_obj.proveedor,  # int — el provider registry lo resuelve
                                             apikey=apikey_obj.descripcion
                                         )
                                         documentos = []
@@ -743,6 +731,7 @@ def entrenamiento_ia_view(request):
                             2: 'gemini-2.5-flash',
                             3: 'gpt-4o-mini',
                             4: 'claude-haiku-4-5-20251001',
+                            5: 'gpt-oss:20b',
                         }
                         # Usa el modelo real configurado en la ApiKey — así el test refleja
                         # la quota/plan del modelo que realmente se usa en producción.
@@ -750,24 +739,11 @@ def entrenamiento_ia_view(request):
                         billing_info = _billing_info_por_proveedor(filtro.proveedor)
                         prompt_prueba = 'Responde solo con la palabra: ok'
                         try:
-                            if filtro.proveedor == 2:  # Gemini
-                                from langchain_google_genai import ChatGoogleGenerativeAI
-                                llm = ChatGoogleGenerativeAI(
-                                    model=modelo_test, google_api_key=filtro.descripcion,
-                                    max_output_tokens=20, temperature=0,
-                                )
-                            elif filtro.proveedor == 4:  # Claude / Anthropic
-                                from langchain_anthropic import ChatAnthropic
-                                llm = ChatAnthropic(
-                                    model=modelo_test, anthropic_api_key=filtro.descripcion,
-                                    max_tokens=20, temperature=0,
-                                )
-                            else:  # OpenAI
-                                from langchain_community.chat_models import ChatOpenAI
-                                llm = ChatOpenAI(
-                                    model_name=modelo_test, openai_api_key=filtro.descripcion,
-                                    max_tokens=20, temperature=0,
-                                )
+                            from agents_ai.providers import get_provider
+                            llm = get_provider(filtro.proveedor).get_llm(
+                                apikey=filtro.descripcion, model_name=modelo_test,
+                                max_output_tokens=20, temperature=0,
+                            )
                             _t0 = time.time()
                             _resp = llm.invoke(prompt_prueba)
                             _lat_ms = int((time.time() - _t0) * 1000)

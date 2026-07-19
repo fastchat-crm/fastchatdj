@@ -97,10 +97,8 @@ def _actualizar_perfil_contacto(conv, ag, log_fn=None) -> bool:
     apikey = ag.apikey.filter(estado=True).first()
     if not apikey:
         return False
-    # AgenteResumidor sólo soporta provider 2 (gemini) y 3 (openai) hoy.
-    # Si es Claude (4) u otro — saltamos sin romper.
-    if apikey.proveedor not in (2, 3):
-        return False
+    # AgenteResumidor resuelve el LLM vía el registro de providers (2/3/4/5).
+    # Los embeddings caen a Gemini cuando el provider no los expone (Claude/Ollama).
     try:
         from agents_ai.agente_resumidor import AgenteResumidor
         resumidor = AgenteResumidor(

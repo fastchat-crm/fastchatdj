@@ -158,3 +158,25 @@
 | 🟡 Baja | Sanitizar `innerHTML` del cotizador | 2.8 |
 
 > Las medidas ya implementadas (sección 1) cubren el **aislamiento del RAG**, la **protección de Weaviate**, el **manejo de secretos por entorno**, la **validación de archivos** y el **borrado lógico**. Los pendientes de la sección 2 son mayormente de **hardening de infraestructura** (SSH, HTTPS, permisos, usuario del servicio) y deben resolverse antes de exponer el sistema a producción.
+
+---
+
+## 4. Seguridad del widget de chat embebible
+
+El chatbot embebible (ver `WIDGET_CHAT.md`) se diseñó para exponerse en páginas
+públicas de terceros sin filtrar credenciales:
+
+| Control | Implementación |
+|---|---|
+| **Sin credenciales en el navegador** | El widget solo maneja un **embed key** público. El `webservice_token` y la API key del proveedor LLM **nunca** salen del servidor. |
+| **Embed key a prueba de manipulación** | Token firmado con `django.core.signing` (HMAC vía `SECRET_KEY`). Alterarlo para apuntar a otro agente invalida la firma → **403**. Verificado. |
+| **Restricción por dominio (opcional)** | Se hornean dominios permitidos dentro del embed key; el proxy valida `Origin`/`Referer`. Recomendado en producción para cada cliente. |
+| **Rate limiting** | `@rate_limit(limit=40, seconds=60)` por IP en el proxy de mensajes. |
+| **CORS controlado** | El proxy responde `Access-Control-Allow-Origin` y maneja `OPTIONS`; el JS se sirve con CORS `*` (solo lectura, sin secretos). |
+| **XSS en el render** | El widget escapa el texto (`textContent`) antes de aplicar el markdown mínimo (negritas/listas/enlaces), evitando inyección de HTML desde las respuestas. |
+| **Captura de lead sin exponer datos** | El lead se registra server-side (proxy) en el CRM; el navegador nunca recibe datos de otros contactos. La "sesión web" del CRM usa `proveedor='meta'`/`estado='conectado'` para no ser tocada por crons de reconexión, y expiración lejana para no disparar envíos de WhatsApp. |
+
+**Recomendaciones de hardening del widget para producción:**
+- Generar el embed key de cada cliente **con `--origins`** (restringido a su dominio).
+- Servir todo bajo **HTTPS** (el widget hereda el esquema del servidor).
+- Vigilar el consumo por agente con las **alertas de consumo** ya existentes.

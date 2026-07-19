@@ -250,7 +250,51 @@ Antes por SSH/management commands; ahora todo por UI (sin migraciones: los defau
 | `crm/view_mientrenamiento.py` | Acciones del panel: `subir_documento`, `rag_reindex`, `procesaragente`, `listar_modelos`, `addagente` |
 | `cotizador/models.py` | Modelo parametrizable del cotizador |
 | `cotizador/motor_tarifario.py` | Cálculo de primas |
-| `cotizador/views.py`, `cotizador/urls.py` | Cotizador web + API cédula |
+| `cotizador/views.py`, `cotizador/urls.py` | Cotizador web + API cédula + resolución del agente del chat |
+| `crm/chat_widget.py` | Widget de chat embebible (embed key firmado, proxy, JS, página autónoma) |
 | `requirements.txt` | Dependencias (ver versiones fijadas en `GUIA_INSTALACION_NODO.md`) |
 
-Para replicar el sistema en otro nodo, ver **`GUIA_INSTALACION_NODO.md`**. Para el detalle de seguridad y riesgos, ver **`SEGURIDAD.md`**.
+Para replicar el sistema en otro nodo, ver **`GUIA_INSTALACION_NODO.md`**. Para el detalle de seguridad y riesgos, ver **`SEGURIDAD.md`**. Para el chatbot embebible, ver **`WIDGET_CHAT.md`**.
+
+---
+
+## 7. Auditoría de homogeneización (sistema completamente funcional)
+
+Se auditó todo el sistema para eliminar los puntos donde el código aún asumía
+solo Gemini/OpenAI o el RAG antiguo (FAISS), en lugar del **registro de
+providers** (`agents_ai/providers/`, ids 2 gemini · 3 openai · 4 claude · 5 ollama)
+y del **RAG Weaviate por-agente** (tenant `agente_<id>`). Resultado: cualquier
+agente, en cualquier proveedor, hereda RAG + embeddings + auto-aprendizaje sin
+código especial.
+
+| # | Módulo | Corrección |
+|---|--------|-----------|
+| 1 | `crm/view_mientrenamiento.py` | Probar API key vía registry (+Ollama); guard de embeddings FAISS a proveedores con embeddings |
+| 2 | `agents_ai/auditor_agente.py` | Rama Claude/Ollama vía `get_provider().get_llm()` (antes lanzaba error) |
+| 3 | `crm/api_ia.py`, `crm/view_chat_agente.py` | Análisis de imagen: retorno elegante para Ollama; `provider_map` +Ollama |
+| 4 | `agents_ai/agente_resumidor.py` | Reescrito por registry (2/3/4/5); embeddings con fallback a Gemini |
+| 5 | `crm/api_ia.py` | **Memoria de sesión** en la API pública (multi-turno vía `session_id`) |
+| 6 | `agents_ai/indexador_conocimiento.py` | Indexa `contexto_estatico` como fuente RAG cuando el agente no tiene fuentes de panel |
+| 7 | `cotizador/management/commands/indexar_*.py` | Indexan al tenant `agente_<id>` (antes al viejo); arg `--agente-id`; idempotente por-source |
+| 8 | `crm/view_agente_wizard.py`, `agents_ai/ai_actions/agentes_crm.py` | Al **crear** un agente se provisiona su tenant y se indexa su conocimiento inicial |
+| 9 | `whatsapp/view_conversaciones.py` | Las correcciones/feedback del operador se indexan al RAG (Weaviate) |
+| + | `cron_jobs/aprender_conversaciones.py` | Se quitó el gate que excluía Ollama/Claude del auto-aprendizaje |
+
+**Verificación end-to-end** (agente 22 Vida Buena, Ollama `gemma4:31b`,
+`/api/ia/consultar/`): `django check` sin issues; pregunta RAG devolvió centros
+médicos reales; segunda llamada con la misma `session_id` mantuvo el hilo. Backup
+de los archivos previos en el servidor: `.bak_auditoria/<timestamp>/`.
+
+---
+
+## 8. Widget de chat embebible
+
+Se construyó un **chatbot flotante embebible y escalable** para integrar cualquier
+agente en cualquier página (primer caso: el cotizador Vida Buena). No expone
+credenciales en el navegador: usa un **embed key firmado** (público, a prueba de
+manipulación) y un **proxy server-side** que reutiliza la misma cadena RAG +
+memoria + providers. Escala por cliente sin código nuevo (cada uno su agente, su
+API y —si quiere— su propia página `/chat/<key>/`), con onboarding vía
+`python manage.py generar_embed_widget --agente-id <id>`.
+
+Detalle completo, arquitectura, seguridad e integración en **`WIDGET_CHAT.md`**.

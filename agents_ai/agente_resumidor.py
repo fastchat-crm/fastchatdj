@@ -1,48 +1,77 @@
 import json
+import logging
 import re
-from langchain_community.chat_models import ChatOpenAI
-from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from .memoria_django import DjangoChatMessageHistory
+from .providers import get_provider
+
+logger = logging.getLogger(__name__)
+
+_MAX_OUTPUT_TOKENS = 2048  # resumen/sentimiento no necesitan salidas largas
 
 
 class AgenteResumidor:
     def __init__(self, provider, apikey, model_name=None, conversacion=None,
                  apikey_obj=None, agente_obj=None):
-        self.provider = provider == 2 and 'gemini' or provider == 3 and 'openai'
+        # Provider: acepta string ('gemini', 'openai', ...) o int (2/3/4/5) — ver providers/__init__.py
+        self._provider_obj = get_provider(provider)
+        self.provider = self._provider_obj.name  # mantiene API pública previa para compat
         self.apikey = apikey
+        self.apikey_obj = apikey_obj
+        self.agente_obj = agente_obj
         modelo_cfg = (getattr(apikey_obj, 'modelo', '') or '').strip() if apikey_obj else ''
         self.model_name = model_name or modelo_cfg or self.default_model()
         self.embeddings = self._get_embeddings()
         self.llm = self._get_llm()
         self.conversacion = conversacion
-        self.apikey_obj = apikey_obj
-        self.agente_obj = agente_obj
         self._historia = (
             DjangoChatMessageHistory(session_id=str(conversacion.id))
             if conversacion else None
         )
 
-    def default_model(self):
-        return "gpt-4o-mini" if self.provider == "openai" else "gemini-2.5-flash"
+    def default_model(self) -> str:
+        return self._provider_obj.default_model()
+
+    def _resolver_gemini_key(self) -> str:
+        """API key Gemini (proveedor 2) activa del perfil, para embeddings cuando
+        el provider del agente (Claude/Ollama) no ofrece embeddings propios.
+        Replica _resolver_gemini_key de agents_ai/indexador_conocimiento.py."""
+        perfil_id = getattr(self.agente_obj, 'perfil_id', None) if self.agente_obj else None
+        if not perfil_id:
+            return ''
+        try:
+            from crm.models import ApiKeyIA
+            ak = (ApiKeyIA.objects
+                  .filter(perfil_id=perfil_id, proveedor=2, estado=True, status=True)
+                  .order_by('-id').first())
+            return ak.descripcion if ak else ''
+        except Exception as exc:
+            logger.debug("No se pudo resolver Gemini embed key: %s", exc)
+            return ''
 
     def _get_embeddings(self):
-        if self.provider == "gemini":
-            return GoogleGenerativeAIEmbeddings(
-                model="models/text-embedding-004", google_api_key=self.apikey
-            )
-        elif self.provider == "openai":
-            return OpenAIEmbeddings(openai_api_key=self.apikey)
-        raise ValueError("Proveedor de embedding no soportado")
+        # Claude/Ollama no proveen embeddings propios (ver providers/claude.py,
+        # providers/ollama.py). En ese caso se intenta resolver una API key Gemini
+        # activa del perfil del agente; si no hay, degrada devolviendo None sin
+        # lanzar (self.embeddings no se usa hoy en resumir()/analizar_sentimiento()).
+        try:
+            return self._provider_obj.get_embeddings(self.apikey)
+        except NotImplementedError:
+            gemini_key = self._resolver_gemini_key()
+            if not gemini_key:
+                return None
+            try:
+                return get_provider('gemini').get_embeddings(gemini_key)
+            except Exception:
+                return None
 
     def _get_llm(self):
-        if self.provider == "gemini":
-            return ChatGoogleGenerativeAI(model=self.model_name, google_api_key=self.apikey)
-        elif self.provider == "openai":
-            from langchain_community.chat_models import ChatOpenAI
-            return ChatOpenAI(model_name=self.model_name, openai_api_key=self.apikey)
-        raise ValueError("Proveedor de LLM no soportado")
+        return self._provider_obj.get_llm(
+            apikey=self.apikey,
+            model_name=self.model_name,
+            max_output_tokens=_MAX_OUTPUT_TOKENS,
+            temperature=0.3,
+        )
 
     def _get_texto_chat(self) -> str:
         if not self._historia:

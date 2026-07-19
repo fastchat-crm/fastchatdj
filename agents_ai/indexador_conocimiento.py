@@ -232,6 +232,26 @@ def reindexar_agente(agente) -> dict:
         except Exception as exc:
             logger.debug("No se pudo limpiar fuente huérfana %s: %s", detalle.id, exc)
 
+    # contexto_estatico del negocio: si el conocimiento del agente vive SOLO en
+    # este campo (sin fuentes de panel), se indexa como fuente RAG para no perderlo
+    # cuando Weaviate se activa (agentes creados por wizard/departamento). Si ya
+    # hay fuentes de panel se omite, para no duplicar (ej. Vida Buena).
+    weaviate_rag.borrar_por_source(agente_id, 'contexto_estatico')
+    _est = (getattr(agente, 'contexto_estatico', '') or '').strip()
+    _tiene_panel = agente.detalleagentesai_set.filter(status=True).exists()
+    if _est and not _tiene_panel:
+        try:
+            _docs_est = [
+                {"content": t, "source": "contexto_estatico", "tipo": "texto", "categoria": "negocio"}
+                for t in _trocear(_est)
+            ]
+            if _docs_est:
+                _n_est = weaviate_rag.indexar_documentos(agente_id, gemini_api_key, _docs_est)
+                indexados += _n_est
+                fuentes.append({"source": "contexto_estatico", "tipo": "texto", "chunks": _n_est})
+        except Exception as exc:
+            errores.append({"source": "contexto_estatico", "error": str(exc)})
+
     resultado = {
         "ok": True,
         "indexados": indexados,
@@ -242,4 +262,32 @@ def reindexar_agente(agente) -> dict:
     if errores:
         resultado["errores"] = errores
         resultado["aviso"] = f"{len(errores)} fuente(s) fallaron; el resto sí se indexó."
+    return resultado
+
+
+def provisionar_e_indexar_inicial(agente) -> dict:
+    """Flujo post-creación de un agente: provisiona su tenant Weaviate e indexa
+    el conocimiento con el que nace.
+
+    Se apoya en reindexar_agente, que indexa TANTO las fuentes del panel
+    (DetalleAgentesAI) COMO el `contexto_estatico` del negocio cuando el agente
+    nace solo con ese campo (caso wizard/departamento). provisionar_tenant se
+    llama aparte porque reindexar_agente cortocircuita si falta la key Gemini.
+
+    Nunca lanza; degrada suave si faltan Gemini/Weaviate.
+    """
+    resultado = {"tenant_ok": False}
+    try:
+        agente_id = getattr(agente, 'id', None)
+        if not agente_id:
+            return resultado
+        resultado["tenant_ok"] = provisionar_tenant(agente_id)
+
+        tiene_contexto = bool((getattr(agente, 'contexto_estatico', '') or '').strip())
+        tiene_panel = agente.detalleagentesai_set.filter(status=True).exists()
+        if tiene_contexto or tiene_panel:
+            resultado["reindex"] = reindexar_agente(agente)
+    except Exception as exc:
+        logger.warning("provisionar_e_indexar_inicial(agente=%s) falló: %s",
+                       getattr(agente, 'id', '?'), exc)
     return resultado

@@ -387,7 +387,7 @@ def _handle_media(request, agente, session_id):
     if not apikey_obj:
         return JsonResponse({'error': True, 'message': 'Este agente no tiene una API Key activa.'})
 
-    _provider_map = {2: 'gemini', 3: 'openai', 4: 'claude'}
+    _provider_map = {2: 'gemini', 3: 'openai', 4: 'claude', 5: 'ollama'}
     provider = _provider_map.get(apikey_obj.proveedor, 'openai')
     ext = os.path.splitext(archivo.name)[1].lower()
 
@@ -425,6 +425,14 @@ def _leer_base64(path: str) -> str:
 
 def _analizar_imagen(tmp_path, filename, texto_adicional, apikey_obj, provider, agente):
     """Llama al LLM con la imagen (multimodal) y devuelve la respuesta."""
+    if provider == 'ollama':
+        # Ollama Cloud no soporta multimodal; evitar misroutear la key a OpenAI.
+        return JsonResponse({
+            'error': False,
+            'respuesta': 'Este agente (Ollama) no procesa imágenes por ahora.',
+            'tipo': 'imagen',
+        })
+
     mime_type = mimetypes.guess_type(filename)[0] or 'image/jpeg'
     b64 = _leer_base64(tmp_path)
 

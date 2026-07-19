@@ -16,7 +16,7 @@ import zipfile
 
 from django.core.management.base import BaseCommand, CommandError
 
-from crm.models import PerfilNegocioIA, ApiKeyIA
+from crm.models import PerfilNegocioIA, ApiKeyIA, AgentesIA
 from cotizador.models import Cobertura, Plan
 from agents_ai import weaviate_rag as W
 
@@ -78,6 +78,9 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--perfil-id', type=int, required=True)
+        parser.add_argument('--agente-id', type=int,
+                            help='Indexa solo a este agente. Si se omite, indexa a TODOS los '
+                                 'agentes activos del perfil (el RAG es por agente: tenant agente_<id>).')
         parser.add_argument('--cuestionario', help='Ruta al CUESTIONARIO.docx (opcional)')
         parser.add_argument('--gemini-key-id', type=int,
                             help='ID de ApiKeyIA Gemini para embeddings (si no, toma la primera del perfil)')
@@ -87,6 +90,20 @@ class Command(BaseCommand):
             empresa = PerfilNegocioIA.objects.get(id=opts['perfil_id'])
         except PerfilNegocioIA.DoesNotExist:
             raise CommandError(f"No existe perfil {opts['perfil_id']}")
+
+        # El RAG es POR AGENTE (tenant agente_<agente.id>). Se indexa el
+        # conocimiento de la empresa al tenant de cada agente activo, o al
+        # agente indicado con --agente-id.
+        if opts.get('agente_id'):
+            agentes = list(AgentesIA.objects.filter(id=opts['agente_id'], perfil=empresa, status=True))
+            if not agentes:
+                raise CommandError(
+                    f"No existe agente activo {opts['agente_id']} en el perfil {empresa.id}.")
+        else:
+            agentes = list(empresa.get_agentes())
+            if not agentes:
+                raise CommandError(
+                    f"El perfil {empresa.id} no tiene agentes activos para indexar.")
 
         # Key Gemini para embeddings
         if opts.get('gemini_key_id'):
@@ -108,8 +125,16 @@ class Command(BaseCommand):
         if not docs:
             raise CommandError('No hay documentos para indexar.')
 
-        n = W.indexar_documentos(empresa.id, gem.descripcion, docs, reemplazar=True)
-        total = W.contar(empresa.id)
-        self.stdout.write(self.style.SUCCESS(
-            f'Indexados {n} documentos en tenant empresa_{empresa.id}. Total en tenant: {total}.'
-        ))
+        # Idempotente NO destructivo: se borran solo las fuentes que se van a
+        # reindexar (cuestionario / cobertura_bd), conservando el resto del
+        # conocimiento del tenant (p.ej. panel del agente o centros médicos).
+        sources = {d['source'] for d in docs}
+        for agente in agentes:
+            for src in sources:
+                W.borrar_por_source(agente.id, src)
+            n = W.indexar_documentos(agente.id, gem.descripcion, docs, reemplazar=False)
+            total = W.contar(agente.id)
+            self.stdout.write(self.style.SUCCESS(
+                f'Indexados {n} documentos en tenant agente_{agente.id} ({agente.nombre}). '
+                f'Total en tenant: {total}.'
+            ))

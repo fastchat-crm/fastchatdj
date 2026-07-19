@@ -592,20 +592,39 @@ def conversacionesView(request):
                             # 2. Agregar al FAISS si está configurado (compatibilidad)
                             if agente.vectorstore_path and agente.apikey.filter(estado=True).exists():
                                 apikey_obj = agente.apikey.filter(estado=True).first()
-                                provider = {2: 'gemini', 3: 'openai'}.get(apikey_obj.proveedor, 'gemini')
-                                try:
-                                    from agents_ai.vectorstore_manager import VectorStoreManager
-                                    import os
-                                    from django.conf import settings
-                                    storage = os.path.join(settings.MEDIA_ROOT, 'vectorstores')
-                                    vsm = VectorStoreManager(storage, provider, apikey_obj.descripcion)
-                                    vsm.add_correction(agente.vectorstore_path, pregunta, correccion)
-                                    feedback.procesado_vectorstore = True
-                                    feedback.save(update_fields=['procesado_vectorstore'])
-                                    from agents_ai.agente_consultor import AgenteConsultor
-                                    AgenteConsultor._faiss_cache.clear()
-                                except Exception as ex:
-                                    log(f"Error al agregar corrección al vectorstore: {ex}", request, "error")
+                                # Solo Gemini soporta embeddings en esta app (Claude/Ollama
+                                # no ofrecen API de embeddings); pasar el int crudo evita el
+                                # fallback silencioso a 'gemini' con una key de otro proveedor.
+                                if apikey_obj.proveedor == 2:
+                                    try:
+                                        from agents_ai.vectorstore_manager import VectorStoreManager
+                                        import os
+                                        from django.conf import settings
+                                        storage = os.path.join(settings.MEDIA_ROOT, 'vectorstores')
+                                        vsm = VectorStoreManager(storage, apikey_obj.proveedor, apikey_obj.descripcion)
+                                        vsm.add_correction(agente.vectorstore_path, pregunta, correccion)
+                                        feedback.procesado_vectorstore = True
+                                        feedback.save(update_fields=['procesado_vectorstore'])
+                                        from agents_ai.agente_consultor import AgenteConsultor
+                                        AgenteConsultor._faiss_cache.clear()
+                                    except Exception as ex:
+                                        log(f"Error al agregar corrección al vectorstore: {ex}", request, "error")
+
+                            # 3. Indexar la corrección en Weaviate (RAG oficial del agente)
+                            try:
+                                from agents_ai.indexador_conocimiento import _resolver_gemini_key
+                                from agents_ai import weaviate_rag
+                                gemini_key = _resolver_gemini_key(agente.perfil_id)
+                                if gemini_key:
+                                    doc_correccion = {
+                                        'content': f"Pregunta: {pregunta}\nRespuesta correcta: {correccion}",
+                                        'source': 'correccion',
+                                        'tipo': 'faq',
+                                        'categoria': '',
+                                    }
+                                    weaviate_rag.indexar_documentos(agente.id, gemini_key, [doc_correccion])
+                            except Exception as ex:
+                                log(f"Error al indexar corrección en Weaviate: {ex}", request, "error")
 
                     return JsonResponse({
                         'error': False,
