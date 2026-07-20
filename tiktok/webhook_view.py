@@ -11,6 +11,12 @@ al probar contra el sandbox real de TikTok. La verificación GET responde el
 
 URL canónica: /tiktok/webhook/
 Alias legacy (compat): /whatsapp/tiktok_webhook/
+
+Transacciones: igual que los webhooks Meta sociales, la vista se excluye del
+`ATOMIC_REQUESTS` global con `transaction.non_atomic_requests`; cada evento se
+procesa en su propio `transaction.atomic()` y la auditoría usa los helpers
+compartidos `crear_evento_log`/`guardar_evento_log` para que un error de BD no
+envenene la transacción ni impida responder 200 a TikTok.
 """
 from __future__ import annotations
 
@@ -19,19 +25,22 @@ import hmac
 import json
 import logging
 
+from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
 from channels.layers import get_channel_layer
 
-from whatsapp.models import ConfigTikTok, EventoMetaRecibido, SesionWhatsApp
+from whatsapp.meta_social_webhook_view import crear_evento_log, guardar_evento_log
+from whatsapp.models import ConfigTikTok, SesionWhatsApp
 from whatsapp.procesar_mensaje import process_incoming_message
 
 logger = logging.getLogger(__name__)
 
 
 @csrf_exempt
+@transaction.non_atomic_requests
 def tiktok_webhook(request):
     if request.method == 'GET':
         return _handshake(request)
@@ -71,17 +80,20 @@ def _resolver_config(payload):
             valor = evento.get(clave)
             if valor:
                 posibles.append(str(valor))
-    for valor in posibles:
-        cfg = ConfigTikTok.objects.filter(
-            business_id=valor, sesion__status=True
-        ).select_related('sesion').first()
-        if cfg:
-            return cfg
-        cfg = ConfigTikTok.objects.filter(
-            open_id=valor, sesion__status=True
-        ).select_related('sesion').first()
-        if cfg:
-            return cfg
+    try:
+        for valor in posibles:
+            cfg = ConfigTikTok.objects.filter(
+                business_id=valor, sesion__status=True
+            ).select_related('sesion').first()
+            if cfg:
+                return cfg
+            cfg = ConfigTikTok.objects.filter(
+                open_id=valor, sesion__status=True
+            ).select_related('sesion').first()
+            if cfg:
+                return cfg
+    except Exception:
+        logger.exception("Error resolviendo ConfigTikTok")
     return None
 
 
@@ -129,30 +141,21 @@ def _procesar_post(request):
     if (verificable and not firma_ok) or (not verificable and fail_closed):
         motivo = 'firma_hmac_invalida' if verificable else 'sin_client_secret_fail_closed'
         logger.warning("tiktok webhook: evento rechazado (%s)", motivo)
-        EventoMetaRecibido.objects.create(
-            config_meta=None,
-            tipo_evento=tipo_evento,
-            payload_json=payload,
-            firma_valida=False,
-            procesado=False,
-            error_procesamiento=motivo,
-        )
+        crear_evento_log(tipo_evento, payload, False, error_procesamiento=motivo)
         return JsonResponse({'error': 'invalid_signature'}, status=401)
 
-    evento_log = EventoMetaRecibido.objects.create(
-        config_meta=None,
-        tipo_evento=tipo_evento,
-        payload_json=payload,
-        firma_valida=firma_ok,
-        procesado=False,
-    )
+    evento_log = crear_evento_log(tipo_evento, payload, firma_ok)
     if not verificable:
-        evento_log.error_procesamiento = 'firma_no_verificada (ConfigTikTok sin client_secret)'
-        evento_log.save(update_fields=['error_procesamiento'])
+        guardar_evento_log(
+            evento_log,
+            error_procesamiento='firma_no_verificada (ConfigTikTok sin client_secret)',
+        )
 
     if not config:
-        evento_log.error_procesamiento = 'Sin ConfigTikTok que coincida con business_id/open_id del payload (unknown_target).'
-        evento_log.save(update_fields=['error_procesamiento'])
+        guardar_evento_log(
+            evento_log,
+            error_procesamiento='Sin ConfigTikTok que coincida con business_id/open_id del payload (unknown_target).',
+        )
         return JsonResponse({'ok': True, 'warning': 'unknown_target'}, status=200)
 
     sesion: SesionWhatsApp = config.sesion
@@ -169,21 +172,22 @@ def _procesar_post(request):
     errores = []
     eventos = payload.get('events') or [payload]
     for evento in eventos:
-        # try por-evento: un evento malformado no debe abortar el resto del lote.
+        # try + atomic por-evento: un evento malformado no aborta el resto del
+        # lote y un error de BD revierte sus escrituras parciales sin dejar la
+        # transacción de PostgreSQL abortada.
         try:
-            interno = _a_evento_interno(evento, own_ids)
-            if interno:
-                process_incoming_message(sesion, interno, channel_layer)
+            with transaction.atomic():
+                interno = _a_evento_interno(evento, own_ids)
+                if interno:
+                    process_incoming_message(sesion, interno, channel_layer)
         except Exception as e:
             logger.exception("Error procesando evento tiktok: %s", e)
             errores.append(str(e)[:500])
 
     if errores:
-        evento_log.error_procesamiento = ' | '.join(errores)[:2000]
-        evento_log.save(update_fields=['error_procesamiento'])
+        guardar_evento_log(evento_log, error_procesamiento=' | '.join(errores)[:2000])
     else:
-        evento_log.procesado = True
-        evento_log.save(update_fields=['procesado'])
+        guardar_evento_log(evento_log, procesado=True)
 
     return JsonResponse({'ok': True}, status=200)
 

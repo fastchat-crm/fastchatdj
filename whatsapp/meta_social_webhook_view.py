@@ -15,12 +15,21 @@ Implementación compartida. Cada red la expone bajo su propia app/URL:
 Alias legacy (compat, dashboards ya configurados):
   /whatsapp/instagram_webhook/
   /whatsapp/messenger_webhook/
+
+Transacciones: el proyecto usa `ATOMIC_REQUESTS=True`, pero estas vistas se
+excluyen con `transaction.non_atomic_requests` — un query fallido y silenciado
+dentro del request dejaba la transacción de PostgreSQL abortada ("current
+transaction is aborted") y el acceso posterior a la sesión devolvía 500 a Meta,
+que dejaba de entregar mensajes. Cada entry se procesa en su propio
+`transaction.atomic()` (rollback aislado) y la auditoría `EventoMetaRecibido`
+en transacción aparte vía `crear_evento_log`/`guardar_evento_log`.
 """
 from __future__ import annotations
 
 import json
 import logging
 
+from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
@@ -93,6 +102,7 @@ def _render_info(request, proveedor: str, emoji: str, ConfigCls,
 # ---------------------------------------------------------------------------
 
 @csrf_exempt
+@transaction.non_atomic_requests
 def instagram_webhook(request):
     if request.method == 'GET':
         return _handshake_generico(request, ConfigInstagram, 'instagram', '📷')
@@ -109,6 +119,7 @@ def instagram_webhook(request):
 # ---------------------------------------------------------------------------
 
 @csrf_exempt
+@transaction.non_atomic_requests
 def messenger_webhook(request):
     if request.method == 'GET':
         return _handshake_generico(request, ConfigMessenger, 'messenger', '💬')
@@ -179,6 +190,46 @@ def _resolver_config_por_entry(entry_id, ConfigCls, canal):
     return None
 
 
+def crear_evento_log(tipo_evento, payload, firma_valida, **extra):
+    """Crea el registro de auditoría `EventoMetaRecibido` en transacción propia.
+
+    Si la escritura falla (tabla sin migrar, payload con caracteres inválidos
+    para jsonb, etc.) se loguea y devuelve None: la auditoría nunca debe tumbar
+    la respuesta al proveedor ni dejar la conexión con la transacción abortada.
+    Compartido con el receiver TikTok (`tiktok/webhook_view.py`).
+    """
+    try:
+        with transaction.atomic():
+            return EventoMetaRecibido.objects.create(
+                config_meta=None,
+                tipo_evento=tipo_evento,
+                payload_json=payload,
+                firma_valida=firma_valida,
+                procesado=False,
+                **extra,
+            )
+    except Exception:
+        logger.exception("No se pudo crear EventoMetaRecibido (%s)", tipo_evento)
+        return None
+
+
+def guardar_evento_log(evento_log, **campos):
+    """Actualiza campos del registro de auditoría sin romper el request.
+
+    Acepta None (cuando `crear_evento_log` falló) y aísla la escritura en su
+    propia transacción por el mismo motivo que en la creación.
+    """
+    if evento_log is None:
+        return
+    try:
+        with transaction.atomic():
+            for campo, valor in campos.items():
+                setattr(evento_log, campo, valor)
+            evento_log.save(update_fields=list(campos))
+    except Exception:
+        logger.exception("No se pudo actualizar EventoMetaRecibido %s", evento_log.pk)
+
+
 def _procesar_post_social(request, ConfigCls, canal):
     raw_body = request.body
     try:
@@ -192,19 +243,17 @@ def _procesar_post_social(request, ConfigCls, canal):
 
     # `object` es controlado por el emisor: truncar a la longitud del campo
     # evita un DataError 500 con valores largos.
-    evento_log = EventoMetaRecibido.objects.create(
-        config_meta=None,
-        tipo_evento=f'{canal}:{payload.get("object", "unknown")}'[:50],
-        payload_json=payload,
-        firma_valida=firma_valida,
-        procesado=False,
+    evento_log = crear_evento_log(
+        f'{canal}:{payload.get("object", "unknown")}'[:50], payload, firma_valida,
     )
 
     # `_validar_hmac` devuelve True en modo permisivo sin secret; `not firma_valida`
     # cubre firma inválida con secret y secret ausente en modo estricto.
     if not firma_valida:
-        evento_log.error_procesamiento = 'Firma HMAC inválida (X-Hub-Signature-256 no coincide con app_secret).'
-        evento_log.save(update_fields=['error_procesamiento'])
+        guardar_evento_log(
+            evento_log,
+            error_procesamiento='Firma HMAC inválida (X-Hub-Signature-256 no coincide con app_secret).',
+        )
         return JsonResponse({'ok': False, 'error': 'invalid_signature'}, status=401)
 
     channel_layer = get_channel_layer()
@@ -212,8 +261,9 @@ def _procesar_post_social(request, ConfigCls, canal):
     errores = []
 
     # Cada entry se resuelve a su propia config/sesión: un batch multi-página de
-    # Meta puede mezclar tenants. El try por-entry aísla el fallo de un entry
-    # para no abortar el lote completo.
+    # Meta puede mezclar tenants. El try + atomic por-entry aísla el fallo de un
+    # entry (revierte sus escrituras parciales y deja la conexión limpia) para
+    # no abortar el lote completo ni envenenar la transacción de PostgreSQL.
     for entry in payload.get('entry') or []:
         config = _resolver_config_por_entry(entry.get('id'), ConfigCls, canal)
         if not config:
@@ -231,20 +281,21 @@ def _procesar_post_social(request, ConfigCls, canal):
                 own_ids.add(str(val))
 
         try:
-            for m in entry.get('messaging') or []:
-                for evento_interno in _social_a_eventos_internos(m, canal, own_ids):
-                    _enriquecer_perfil_social(config, sesion, evento_interno, canal)
-                    process_incoming_message(sesion, evento_interno, channel_layer)
-            for m in entry.get('messages') or []:
-                evento_interno = _social_a_evento_interno_v2(m, canal, own_ids)
-                if evento_interno:
-                    _enriquecer_perfil_social(config, sesion, evento_interno, canal)
-                    process_incoming_message(sesion, evento_interno, channel_layer)
-            for change in entry.get('changes') or []:
-                if canal == 'instagram' and change.get('field') == 'comments':
-                    guardar_comentario_instagram(sesion, config, change.get('value') or {})
-                elif canal == 'messenger' and change.get('field') == 'feed':
-                    guardar_comentario_facebook(sesion, config, change.get('value') or {})
+            with transaction.atomic():
+                for m in entry.get('messaging') or []:
+                    for evento_interno in _social_a_eventos_internos(m, canal, own_ids):
+                        _enriquecer_perfil_social(config, sesion, evento_interno, canal)
+                        process_incoming_message(sesion, evento_interno, channel_layer)
+                for m in entry.get('messages') or []:
+                    evento_interno = _social_a_evento_interno_v2(m, canal, own_ids)
+                    if evento_interno:
+                        _enriquecer_perfil_social(config, sesion, evento_interno, canal)
+                        process_incoming_message(sesion, evento_interno, channel_layer)
+                for change in entry.get('changes') or []:
+                    if canal == 'instagram' and change.get('field') == 'comments':
+                        guardar_comentario_instagram(sesion, config, change.get('value') or {})
+                    elif canal == 'messenger' and change.get('field') == 'feed':
+                        guardar_comentario_facebook(sesion, config, change.get('value') or {})
         except Exception as e:
             logger.exception("Error procesando %s webhook (entry %s): %s", canal, entry.get('id'), e)
             errores.append(str(e)[:500])
@@ -254,16 +305,16 @@ def _procesar_post_social(request, ConfigCls, canal):
             )
 
     if not hubo_config:
-        evento_log.error_procesamiento = f'Sin configuración {canal} que coincida con el destinatario del payload (unknown_target).'
-        evento_log.save(update_fields=['error_procesamiento'])
+        guardar_evento_log(
+            evento_log,
+            error_procesamiento=f'Sin configuración {canal} que coincida con el destinatario del payload (unknown_target).',
+        )
         return JsonResponse({'ok': True, 'warning': 'unknown_target'}, status=200)
 
     if errores:
-        evento_log.error_procesamiento = ' | '.join(errores)[:2000]
-        evento_log.save(update_fields=['error_procesamiento'])
+        guardar_evento_log(evento_log, error_procesamiento=' | '.join(errores)[:2000])
     else:
-        evento_log.procesado = True
-        evento_log.save(update_fields=['procesado'])
+        guardar_evento_log(evento_log, procesado=True)
 
     return JsonResponse({'ok': True}, status=200)
 
