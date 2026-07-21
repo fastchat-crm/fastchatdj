@@ -328,6 +328,10 @@
                 <div id="menus-rapidos-bar" class="menus-rapidos-bar d-none">
                     <div class="mr-bar-inner">
                         <div class="mr-bar-chips" id="mr-bar-chips"></div>
+                        <button type="button" class="mr-bar-add" id="mr-bar-ver"
+                                title="Ver, editar o eliminar los menús de esta sesión">
+                            <i class="fa fa-list-check"></i> <span class="d-none d-md-inline">Ver menús</span>
+                        </button>
                         <button type="button" class="mr-bar-add" id="mr-bar-add"
                                 title="Crear o editar menús de esta sesión">
                             <i class="fa fa-plus"></i> <span class="d-none d-md-inline">Nuevo menú</span>
@@ -1411,6 +1415,7 @@
 
         // ================ Modal CRUD de menús ================
         $('#mr-bar-add').on('click', function () { _abrirModalMenus(); });
+        $('#mr-bar-ver').on('click', function () { _abrirModalMenus(); });
 
         function _abrirModalMenus(editId) {
             var sesionId = $('#sesion-selector').val();
@@ -1493,14 +1498,34 @@
 
         $(document).on('click', '.mr-del-btn', function () {
             var id = $(this).data('id');
-            if (!confirm('¿Eliminar este menú?')) return;
-            _mrPostSesionAction('menu_rapido_eliminar', {
-                sesion_id: $('#sesion-selector').val(), id: id,
-            }).then(function (r) {
-                if (r.error) return;
-                cargarMenusRapidos();
-                setTimeout(_renderListaModalMenus, 250);
-            });
+            var menu = (_menusCache || []).find(function (m) { return String(m.id) === String(id); });
+            var nombre = menu ? menu.nombre : '';
+            var eliminar = function () {
+                _mrPostSesionAction('menu_rapido_eliminar', {
+                    sesion_id: $('#sesion-selector').val(), id: id,
+                }).then(function (r) {
+                    if (r.error) {
+                        if (typeof toastr !== 'undefined') toastr.error(r.message || 'No se pudo eliminar.');
+                        return;
+                    }
+                    if (typeof toastr !== 'undefined') toastr.success('Menú eliminado.');
+                    cargarMenusRapidos();
+                    setTimeout(_renderListaModalMenus, 250);
+                });
+            };
+            if (window.Swal) {
+                Swal.fire({
+                    title: '¿Eliminar el menú "' + nombre + '"?',
+                    text: 'Esta acción no se puede deshacer.',
+                    type: 'warning', showCancelButton: true,
+                    confirmButtonText: 'Eliminar', cancelButtonText: 'Cancelar',
+                    confirmButtonColor: '#dc2626',
+                }).then(function (res) {
+                    if (res.value) eliminar();
+                });
+            } else if (confirm('¿Eliminar el menú "' + nombre + '"?')) {
+                eliminar();
+            }
         });
 
         $('#mr-form-cancelar').on('click', _resetFormMenu);
