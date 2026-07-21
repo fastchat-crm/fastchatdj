@@ -241,6 +241,9 @@
                                 <a href="javascript:void(0)" class="dropdown-item form_modal" id="cambiar-nombre-contacto" title="Cambiar nombre de contacto">
                                     <i class="fa fa-user-edit me-2"></i> Cambiar nombre de contacto
                                 </a>
+                                <a href="javascript:void(0)" class="dropdown-item" id="guardar-contacto" title="Registrar o reparar este contacto en el módulo de Contactos">
+                                    <i class="fa fa-address-book me-2 text-success"></i> Guardar en contactos
+                                </a>
                                 <a href="javascript:void(0)" class="dropdown-item form_modal" id="cambiar-clasificacion" title="Cambiar clasificacion">
                                     <i class="fa fa-sync me-2"></i> Cambiar clasificación
                                 </a>
@@ -2424,6 +2427,7 @@
         }
 
         const $btnsAction = ['#cambiar-nombre-contacto',
+                            '#guardar-contacto',
                             '#cambiar-clasificacion',
                             '#asignar-conversacion',
                             '#terminar-sin-despedida',
@@ -2674,6 +2678,32 @@
             const title = $(this).attr('title');
             const action = $(this).attr('id');
             formModal(id, title, action);
+        });
+
+        $('#guardar-contacto').on('click', function(e) {
+            e.preventDefault();
+            const id = $(this).attr('data-id') || conversacionActiva;
+            if (!id) {
+                mensajeWarning('Selecciona una conversación primero.');
+                return;
+            }
+            pantallaespera();
+            $.post('{{ ruta }}', {
+                action: 'guardar-contacto',
+                id: id,
+                csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val()
+            }, function(data) {
+                $.unblockUI();
+                if (!data || data.error) {
+                    mensajeWarning((data && data.message) || 'No se pudo guardar el contacto.');
+                    return;
+                }
+                Swal.fire({ title: 'Listo', text: data.message, type: 'success' });
+            }, 'json').fail(function(xhr) {
+                $.unblockUI();
+                console.error('[guardar-contacto] ajax fail', xhr.status, xhr.responseText);
+                mensajeWarning('Error de conexión.');
+            });
         });
 
         $(document).on('click', '#fc-toggle-registro', function() {

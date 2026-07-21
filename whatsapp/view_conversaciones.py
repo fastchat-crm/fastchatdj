@@ -1079,6 +1079,42 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                     estado = 'bloqueado' if filtro.bloquear_cierre else 'desbloqueado'
                     log(f"Cierre automático {estado} para conversación {filtro.id}", request, "change", obj=filtro.id)
                     return JsonResponse({'error': False, 'bloquear_cierre': filtro.bloquear_cierre})
+                elif action == 'guardar-contacto':
+                    # Red de seguridad multi-canal: si el contacto de la
+                    # conversación quedó soft-deleted o con datos mínimos
+                    # incompletos (por eso no sale en Contactos), lo repara.
+                    # Idempotente: si ya está bien, solo lo confirma.
+                    filtro = ConversacionWhatsApp.objects.select_related(
+                        'contacto', 'contacto__sesion'
+                    ).get(pk=int(request.POST['id']))
+                    if not puede_ver_conversacion(request.user, filtro):
+                        return JsonResponse({'error': True, 'message': 'No autorizado.'})
+                    contacto_obj = filtro.contacto
+                    cambios = []
+                    if not contacto_obj.status:
+                        contacto_obj.status = True
+                        cambios.append('reactivado')
+                    if not contacto_obj.contacto_numero and contacto_obj.from_number:
+                        contacto_obj.contacto_numero = contacto_obj.from_number
+                        cambios.append('número completado')
+                    if not (contacto_obj.contacto_nombre or '').strip():
+                        contacto_obj.contacto_nombre = (
+                            contacto_obj.contacto_numero or contacto_obj.from_number or 'Contacto'
+                        )
+                        cambios.append('nombre completado')
+                    if cambios:
+                        contacto_obj.save(request)
+                        log(f"Contacto {contacto_obj.id} guardado desde conversación "
+                            f"{filtro.id} ({', '.join(cambios)})",
+                            request, "change", obj=contacto_obj.id)
+                        return JsonResponse({
+                            'error': False,
+                            'message': f'Contacto guardado en Contactos ({", ".join(cambios)}).',
+                        })
+                    return JsonResponse({
+                        'error': False,
+                        'message': 'El contacto ya estaba registrado en Contactos.',
+                    })
                 elif action == 'reiniciar-flujo':
                     # Solo aplica a sesiones con chatbot tradicional. Limpia el
                     # estado del flujo, vuelve al nodo_inicio del depto y dispara
