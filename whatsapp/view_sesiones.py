@@ -859,6 +859,24 @@ def _accion_cambiar_rol_usuario(request):
         return JsonResponse({'error': True, 'message': str(ex)})
 
 
+def _accion_toggle_asignacion_masiva(request):
+    """Marca/desmarca el permiso por sesión para repartir de golpe las
+    conversaciones sin asesor (botón "Asignación automática" del inbox)."""
+    try:
+        filtro = PerfilSesionWhatsApp.objects.get(
+            pk=int(request.POST['id']), status=True, sesion__usuario=request.user,
+        )
+        filtro.puede_asignar_masivo_asesores = request.POST.get('valor') == '1'
+        filtro.save(request)
+        estado = 'habilitado' if filtro.puede_asignar_masivo_asesores else 'deshabilitado'
+        log(f"Permiso de asignación masiva {estado} en sesión {filtro.sesion_id}", request, "change", obj=filtro.id)
+        return JsonResponse({'error': False, 'valor': filtro.puede_asignar_masivo_asesores})
+    except PerfilSesionWhatsApp.DoesNotExist:
+        return JsonResponse({'error': True, 'message': 'Relación no encontrada.'})
+    except Exception as ex:
+        return JsonResponse({'error': True, 'message': str(ex)})
+
+
 def _accion_eliminar_usuario(request):
     try:
         filtro = PerfilSesionWhatsApp.objects.get(pk=int(request.POST['id']))
@@ -936,6 +954,7 @@ _ACCIONES = {
     'respuesta_rapida_eliminar':   _accion_respuesta_rapida_eliminar,
     'guardar_usuarios':            _accion_guardar_usuarios,
     'cambiar_rol_usuario':         _accion_cambiar_rol_usuario,
+    'toggle_asignacion_masiva':    _accion_toggle_asignacion_masiva,
     'eliminar_usuario':            _accion_eliminar_usuario,
 }
 

@@ -48,6 +48,8 @@ MOTIVOS_LABEL = {
     'manual': 'Asignación manual',
     'round_robin': 'Round-robin automático',
     'fin_flujo': 'Flujo completado — seguimiento de inscripción',
+    'masivo': 'Asignación automática masiva',
+    'inicio': 'Asignada al iniciar la conversación',
 }
 
 
@@ -466,18 +468,38 @@ def _avisar_cliente_asignacion(conversacion, agente):
     return False
 
 
-def auto_asignar_agente(conversacion, motivo='handoff', asignador=None, avisar_cliente=True):
+def auto_asignar_agente(conversacion, motivo='handoff', asignador=None, avisar_cliente=True,
+                        pausar_ia=True, avisar_si_ya_asignado=False):
     """Asigna un agente humano a la conversación si no tiene uno.
 
     Args:
         avisar_cliente: si True (default), el cliente recibe "te atenderá X"
             (o el `mensaje_handoff` de la sesión), persistido en el historial.
+        pausar_ia: si True (default), la asignación apaga `ai_activo`. El bot
+            solo debe pausarse cuando el cliente pide un asesor en el flujo, así
+            que las asignaciones administrativas (reparto masivo) pasan False y
+            dejan al chatbot siguiendo la conversación.
+        avisar_si_ya_asignado: para el handoff sobre una conversación que YA
+            tiene asesor (sesiones con `asignar_asesor_al_iniciar`): no se
+            reasigna a nadie, pero se pausa la IA, se avisa al asesor que ya la
+            tiene y se manda el handoff al cliente, igual que un handoff normal.
 
     Returns:
         Usuario asignado (o ya existente) o None si no se pudo elegir.
     """
     if getattr(conversacion, 'asignado_a_id', None):
-        return conversacion.asignado_a
+        actual = conversacion.asignado_a
+        if avisar_si_ya_asignado and actual:
+            try:
+                if pausar_ia and conversacion.ai_activo:
+                    conversacion.ai_activo = False
+                    conversacion.save(update_fields=['ai_activo'])
+            except Exception:
+                logger.exception('No se pudo pausar la IA conv=%s', conversacion.id)
+            notificar_agente_asignado(conversacion, actual, motivo=motivo, asignador=asignador)
+            if avisar_cliente:
+                _avisar_cliente_asignacion(conversacion, actual)
+        return actual
 
     candidatos = candidatos_ordenados(conversacion)
     if not candidatos:
@@ -504,15 +526,17 @@ def auto_asignar_agente(conversacion, motivo='handoff', asignador=None, avisar_c
             conv_lock.fecha_asignacion = timezone.now()
             if not conv_lock.primer_agente_id:
                 conv_lock.primer_agente = candidato
-            conv_lock.ai_activo = False
-            conv_lock.save(update_fields=[
-                'asignado_a', 'fecha_asignacion', 'primer_agente', 'ai_activo',
-            ])
+            campos = ['asignado_a', 'fecha_asignacion', 'primer_agente']
+            if pausar_ia:
+                conv_lock.ai_activo = False
+                campos.append('ai_activo')
+            conv_lock.save(update_fields=campos)
         # Reflejar en la instancia recibida por el caller
         conversacion.asignado_a = candidato
         conversacion.fecha_asignacion = conv_lock.fecha_asignacion
         conversacion.primer_agente = conv_lock.primer_agente
-        conversacion.ai_activo = False
+        if pausar_ia:
+            conversacion.ai_activo = False
     except Exception:
         logger.exception('No se pudo guardar la asignación auto conv=%s agente=%s',
                          conversacion.id, getattr(candidato, 'id', None))

@@ -911,3 +911,107 @@ def enviar_plantilla_reconexion(request):
             {'mensaje': mensaje}, request=request,
         ),
     })
+
+
+LIMITE_ASIGNACION_MASIVA = 200
+
+
+def filtro_conversaciones_sin_asesor(usuario, sesiones, sesion_seleccionada=None):
+    """Q() de las conversaciones abiertas y visibles que no tienen asesor.
+
+    Es el mismo alcance que usa el listado (sesiones visibles + rol dentro de
+    la sesión + estado abierto), para que la acción masiva afecte exactamente
+    lo que el operador está viendo con el chip "Sin asesor".
+    """
+    from django.db.models import Q
+    from .permisos_sesion import filtro_conversaciones_por_rol
+
+    filtros = Q(
+        contacto__status=True, status=True,
+        contacto__sesion__in=sesiones,
+        contacto__sesion__status=True,
+        estado_conversacion=0,
+        asignado_a__isnull=True,
+    )
+    if sesion_seleccionada:
+        filtros = filtros & Q(contacto__sesion=sesion_seleccionada)
+        filtros = filtros & filtro_conversaciones_por_rol(usuario, sesion_seleccionada)
+    return filtros
+
+
+def asignacion_automatica_masiva_post(request, sesiones, sesion_seleccionada=None):
+    """POST: reparte asesor a todas las conversaciones abiertas sin asignar.
+
+    Recorre las conversaciones más antiguas primero y delega cada una en
+    `crm.helpers_asignacion.auto_asignar_agente`, que elige por carga y turno
+    (`candidatos_ordenados`), registra `HistorialAsignacion` y avisa al asesor
+    por notificación/webpush, email y WhatsApp. Al recalcular candidatos en cada
+    iteración el reparto queda equilibrado en orden de asignados.
+
+    Es un reparto administrativo: la conversación NO se termina, el bot NO se
+    pausa y el cliente NO recibe el mensaje de handoff. El bot solo se pausa
+    cuando el propio cliente elige "hablar con un asesor" en el flujo.
+    """
+    from crm.helpers_asignacion import auto_asignar_agente
+    from .permisos_sesion import puede_asignar_masivo
+
+    if not puede_asignar_masivo(request.user, sesion_seleccionada):
+        return JsonResponse({
+            'error': True,
+            'message': 'No tienes permiso para repartir conversaciones en esta sesión.',
+        })
+
+    pendientes = ConversacionWhatsApp.objects.sin_expirar.filter(
+        filtro_conversaciones_sin_asesor(request.user, sesiones, sesion_seleccionada)
+    ).distinct().order_by('id')
+
+    total_pendientes = pendientes.count()
+    asignadas = 0
+    sin_candidato = 0
+    fallidas = 0
+
+    for conversacion in pendientes[:LIMITE_ASIGNACION_MASIVA]:
+        try:
+            candidato = auto_asignar_agente(
+                conversacion,
+                motivo='masivo',
+                asignador=request.user,
+                # Reparto administrativo: NO termina la conversación, NO pausa
+                # el bot y NO le avisa al cliente. El bot solo se pausa cuando
+                # el cliente pide un asesor en el flujo.
+                avisar_cliente=False,
+                pausar_ia=False,
+            )
+        except Exception:
+            import logging as _logging
+            _logging.getLogger(__name__).exception(
+                'Fallo la asignación masiva conv#%s', conversacion.id)
+            fallidas += 1
+            continue
+        if candidato:
+            asignadas += 1
+        else:
+            sin_candidato += 1
+
+    log(f"Asignación automática masiva: {asignadas} conversaciones repartidas", request, "change")
+
+    restantes = max(total_pendientes - LIMITE_ASIGNACION_MASIVA, 0)
+    if asignadas:
+        message = f'Se repartieron {asignadas} conversaciones entre los asesores disponibles.'
+    else:
+        message = 'No se pudo repartir ninguna conversación.'
+    if sin_candidato:
+        message += f' {sin_candidato} quedaron sin asesor porque no había candidatos disponibles.'
+    if fallidas:
+        message += f' {fallidas} fallaron y quedan pendientes.'
+    if restantes:
+        message += f' Quedan {restantes} sin repartir, vuelve a ejecutar la acción para continuar.'
+
+    return JsonResponse({
+        'error': False,
+        'message': message,
+        'asignadas': asignadas,
+        'sin_candidato': sin_candidato,
+        'fallidas': fallidas,
+        'restantes': restantes,
+    })

@@ -108,6 +108,24 @@ class MetaAdsService:
             'adset_name': adset.get('name'),
         }
 
+    def listar_campanas(self, limite: int = 200) -> dict:
+        """Lista las campañas publicitarias de la cuenta (para conocerlas).
+
+        Solo metadatos (sin gasto): nombre, objetivo, estado y fechas. El gasto
+        sale de `insights(level='campaign')`, que es otra llamada.
+        """
+        if not self.ad_account_id:
+            return {'error': True, 'message': 'Falta el ID de la cuenta publicitaria (act_XXXX).'}
+        if not self.token:
+            return {'error': True, 'message': 'No hay token disponible para anuncios.'}
+        data = self._get(f'{self.ad_account_id}/campaigns', {
+            'fields': 'id,name,objective,status,effective_status,start_time,stop_time,daily_budget,lifetime_budget',
+            'limit': limite,
+        })
+        if data.get('error'):
+            return data
+        return {'error': False, 'rows': data.get('data', [])}
+
     def insights(self, date_preset: str = 'maximum', time_range: Optional[dict] = None,
                  level: str = 'ad', ad_ids: Optional[list] = None) -> dict:
         """Trae métricas de gasto/resultados de la cuenta (por anuncio por defecto).

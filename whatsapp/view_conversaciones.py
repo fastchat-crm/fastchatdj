@@ -15,6 +15,7 @@ from seguridad.templatetags.templatefunctions import encrypt
 from .forms import CambiarClasificacionForm, CambiarNombreContactoForm, AsignarAgenteForm
 from .funcionesWhatsappConversacion import (
     cambiar_clasificacion_get,
+    asignacion_automatica_masiva_post,
     cambiar_clasificacion_post,
     cambiar_nombre_contacto_get,
     cambiar_nombre_contacto_post,
@@ -629,6 +630,12 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                 return JsonResponse({'error': True, 'message': str(ex)})
 
     # ====================== ENVIAR MENSAJE =========================
+    # Fuera del `transaction.atomic()` de abajo: el reparto masivo hace envíos
+    # de WhatsApp, emails y notificaciones por cada conversación, y encerrarlos
+    # en una sola transacción larga mantendría bloqueadas las filas todo el rato.
+    if request.method == 'POST' and request.POST.get('action') == 'asignacion-automatica-masiva':
+        return asignacion_automatica_masiva_post(request, sesiones, sesion_seleccionada)
+
     if request.method == 'POST':
         try:
             with transaction.atomic():
@@ -1340,6 +1347,7 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
     filtro_sin_responder = request.GET.get('sin_responder', '')
     filtro_mis_conv = request.GET.get('mis_conv', '')
     filtro_asesor = request.GET.get('asesor', '')
+    filtro_sin_asesor = request.GET.get('sin_asesor', '')
     filtro_por_caducar = request.GET.get('por_caducar', '')
 
     # `sesiones` ya viene acotado por canal_fijo (wrappers /instagram/ y
@@ -1393,6 +1401,11 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
         except (TypeError, ValueError):
             filtro_asesor = ''
 
+    if filtro_sin_asesor:
+        filtros = filtros & Q(asignado_a__isnull=True)
+        data["filtro_sin_asesor"] = True
+        url_vars += '&sin_asesor=1'
+
     if filtro_por_caducar:
         # El filtrado real se aplica en el branch load_conversations sobre la
         # anotación fecha_ultimo_entrante (ventana Meta de 24h).
@@ -1435,6 +1448,12 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
     data["total_finalizadas"] = ConversacionWhatsApp.objects.filter(
         contadores_scope, estado_conversacion=1,
     ).distinct().count()
+    data["total_sin_asesor"] = ConversacionWhatsApp.objects.sin_expirar.filter(
+        contadores_scope, asignado_a__isnull=True,
+    ).distinct().count()
+    # Botón "Asignación automática": permiso propio por sesión, no basta el rol.
+    from .permisos_sesion import puede_asignar_masivo
+    data["puede_asignar_masivo"] = puede_asignar_masivo(request.user, sesion_seleccionada)
 
     # Dropdown "Asesor": solo para quien tiene vista completa de la sesión.
     # Los candidatos salen de PerfilSesionWhatsApp (quién atiende la sesión).

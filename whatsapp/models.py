@@ -123,8 +123,10 @@ class SesionWhatsApp(ModeloBase):
         help_text='TZ database name, ej. America/Guayaquil, America/Bogota, UTC.'
     )
     auto_asignar_round_robin = models.BooleanField(
-        'Auto-asignar a agentes (round-robin)', default=False,
-        help_text='Al entrar una conversación sin agente, asignarla automáticamente al próximo agente disponible.'
+        'Asignar asesor apenas llega la conversación (round-robin)', default=False,
+        help_text='Al entrar una conversación nueva se asigna al próximo asesor disponible sin esperar al handoff. '
+                  'No pausa el bot ni avisa todavía al cliente: cuando el flujo llegue a "hablar con un asesor" no '
+                  'vuelve a repartirla, solo notifica al asesor que ya la tiene.'
     )
     pixel_meta = models.ForeignKey(
         'whatsapp.PixelMeta', on_delete=models.SET_NULL, null=True, blank=True,
@@ -2803,6 +2805,11 @@ class PerfilSesionWhatsApp(ModeloBase):
     sesion = models.ForeignKey(SesionWhatsApp, on_delete=models.CASCADE, null=True, blank=True, verbose_name='Sesión WhatsApp')
     usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE, verbose_name='Usuario')
     rol = models.CharField(max_length=20, choices=ROLES_SESION, default='asesor', verbose_name='Role')
+    # Permiso por sesión: habilita el botón "Asignación automática" del inbox,
+    # que reparte de golpe todas las conversaciones abiertas sin asesor.
+    puede_asignar_masivo_asesores = models.BooleanField(
+        'Puede asignar asesores masivamente', default=False,
+    )
 
     class Meta:
         verbose_name = 'Perfil Sesión WhatsApp'

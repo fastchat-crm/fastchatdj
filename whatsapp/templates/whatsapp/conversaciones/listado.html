@@ -80,7 +80,7 @@
             </div>
 
             <div class="cs-filter-bar" id="filtros-rapidos">
-                <button class="cs-chip filter-btn {% if not filtro_sin_responder and not filtro_mis_conv and not filtro_clasificacion and not filtro_asesor and not filtro_por_caducar %}active{% endif %}" data-filter="" title="Todas las conversaciones">
+                <button class="cs-chip filter-btn {% if not filtro_sin_responder and not filtro_mis_conv and not filtro_clasificacion and not filtro_asesor and not filtro_por_caducar and not filtro_sin_asesor %}active{% endif %}" data-filter="" title="Todas las conversaciones">
                     <i class="fa fa-inbox"></i><span>Todas</span>
                 </button>
                 <button class="cs-chip filter-btn {% if filtro_sin_responder %}active cs-chip-alert{% endif %}" data-filter="sin_responder=1" title="Último mensaje es del cliente">
@@ -92,6 +92,16 @@
                 <button class="cs-chip filter-btn {% if filtro_por_caducar %}active cs-chip-alert{% endif %}" data-filter="por_caducar=1" title="Ventana Meta de 24h con menos de 6 horas restantes para responder">
                     <i class="fa fa-hourglass-end"></i><span>Por caducar</span>
                 </button>
+                {% if mostrar_filtro_asesor %}
+                <button class="cs-chip filter-btn {% if filtro_sin_asesor %}active cs-chip-alert{% endif %}" data-filter="sin_asesor=1" title="Conversaciones abiertas sin asesor asignado">
+                    <i class="fa fa-user-slash"></i><span>Sin asesor{% if total_sin_asesor %} ({{ total_sin_asesor }}){% endif %}</span>
+                </button>
+                {% endif %}
+                {% if puede_asignar_masivo and total_sin_asesor %}
+                <button type="button" class="cs-chip" id="btn-asignacion-masiva" title="Repartir las conversaciones sin asesor entre los asesores disponibles">
+                    <i class="fa fa-wand-magic-sparkles"></i><span>Asignación automática</span>
+                </button>
+                {% endif %}
                 <div class="dropdown">
                     <button class="cs-chip filter-btn dropdown-toggle {% if filtro_clasificacion %}active{% endif %}" data-bs-toggle="dropdown" data-bs-strategy="fixed" title="Filtrar por etapa">
                         <i class="fa fa-layer-group"></i><span>Etapa</span>
@@ -1086,6 +1096,44 @@
                 alertaWarning('Error de red.');
                 btn.prop('disabled', false).html('<i class="fa fa-hand-pointer me-1"></i>Tomar conversación');
             });
+    });
+
+    $(document).on('click', '#btn-asignacion-masiva', function(e) {
+        e.preventDefault();
+        const $btn = $(this);
+        Swal.fire({
+            title: '¿Repartir las conversaciones sin asesor?',
+            text: 'Cada conversación se asigna al asesor disponible con menos carga y turno más antiguo. Se avisa solo al asesor: la conversación no se cierra, el bot sigue activo y el cliente no recibe ningún mensaje.',
+            type: 'warning',
+            showCancelButton: true,
+            allowOutsideClick: false,
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Repartir',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (!result.value) return;
+            $btn.prop('disabled', true);
+            pantallaespera();
+            $.post('{{ ruta }}', {
+                action: 'asignacion-automatica-masiva',
+                csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val()
+            }, function(r) {
+                $.unblockUI();
+                $btn.prop('disabled', false);
+                if (r.error) {
+                    mensajeWarning(r.message || 'No se pudo repartir las conversaciones.');
+                    return;
+                }
+                Swal.fire({ title: 'Listo', text: r.message, type: 'success' });
+                cargarConversaciones();
+            }, 'json').fail(function(xhr) {
+                $.unblockUI();
+                $btn.prop('disabled', false);
+                console.error('[asignacion-masiva] ajax fail', xhr.status, xhr.responseText);
+                mensajeDanger('Error al repartir las conversaciones (' + xhr.status + ').');
+            });
+        });
     });
 
     $(document).on('click', '#btn-confirmar-reiniciar-flujo', function() {

@@ -38,6 +38,23 @@ def es_vista_completa(usuario, sesion):
     return rol_en_sesion(usuario, sesion) in ('superuser', 'supervisor')
 
 
+def puede_asignar_masivo(usuario, sesion):
+    """Permiso por sesión para repartir de golpe las conversaciones sin asesor.
+
+    No basta con ser supervisor: el perfil de la sesión debe tener marcado
+    `puede_asignar_masivo_asesores`. El superusuario siempre puede.
+    """
+    if getattr(usuario, 'is_superuser', False):
+        return True
+    if not sesion:
+        return False
+    from .models import PerfilSesionWhatsApp
+    return PerfilSesionWhatsApp.objects.filter(
+        sesion=sesion, usuario=usuario, status=True,
+        puede_asignar_masivo_asesores=True,
+    ).exists()
+
+
 def filtro_conversaciones_por_rol(usuario, sesion):
     rol = rol_en_sesion(usuario, sesion)
     if rol in ('superuser', 'supervisor'):

@@ -1203,7 +1203,13 @@ class MotorFlujo:
         agente = None
         try:
             from crm.helpers_asignacion import auto_asignar_agente
-            agente = auto_asignar_agente(self.conversation, motivo=motivo)
+            # `avisar_si_ya_asignado`: en sesiones con `auto_asignar_round_robin`
+            # la conversación llega con asesor desde el primer mensaje. No se
+            # reasigna, pero el asesor que ya la tiene debe enterarse y el
+            # cliente recibir el handoff igual.
+            agente = auto_asignar_agente(
+                self.conversation, motivo=motivo, avisar_si_ya_asignado=True,
+            )
         except Exception:
             logger.exception('Auto-asignación fallida (%s) conv=%s',
                              motivo, self.conversation.id)
@@ -1777,7 +1783,9 @@ class MotorFlujo:
             self.estado.save()
             try:
                 from crm.helpers_asignacion import auto_asignar_agente
-                auto_asignar_agente(self.conversation, motivo='handoff')
+                auto_asignar_agente(
+                    self.conversation, motivo='handoff', avisar_si_ya_asignado=True,
+                )
             except Exception:
                 logger.exception('Auto-asignación fallida en handoff conv=%s', self.conversation.id)
             self._trace('handoff', 'Transferido a agente humano', True, {'nodo_id': nodo.id})

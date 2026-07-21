@@ -64,6 +64,11 @@ Rutas de montaje: `whatsapp/` → `/whatsapp/`, `crm/` → `/crm/`, `agenda/` �
 ### Campañas masivas (`/whatsapp/campanas/`, `view_campanas.py`)
 - Campañas texto/plantilla/media con segmentación por etiquetas incluir/excluir, throttle por minuto, multi-canal (whatsapp/instagram/messenger); estados borrador→programada→enviando→completada/pausada/cancelada/error.
 - Generación de campaña con IA; detalle por envío; stats por API. Despacho por `cron_jobs/ejecutar_campanas.py` con tope diario por tier Meta.
+- **Reporte de leads por campaña** (`?action=reporte` → `whatsapp/campanas/reporte.html`, helpers en `whatsapp/funciones_campanas_reporte.py`): una tarjeta por campaña con conversaciones generadas, leads/clientes por clasificación, atendidos vs. sin asesor, etiquetas del contacto y desglose por etapa de pipeline. Dos pestañas:
+  - *Campañas del sistema*: como `ConversacionWhatsApp.campana_origen` no lo escribe nadie, la atribución se resuelve por `EnvioCampana.contacto` → conversaciones del contacto desde `fecha_inicio_real`/`programada_para` en adelante.
+  - *Campañas en redes*: agrupa por `ConversacionWhatsApp.campaign_id` (referral CTWA/CTIG) y saca los nombres de `AnuncioMetaCache`.
+- `?action=reporte_detalle&origen=sistema|meta` devuelve el JSON con los leads de una campaña (contacto, clasificación, asesor, atendida, etiquetas, pipeline/etapa).
+- POST `action=sync_campanas_meta` trae las campañas de la cuenta publicitaria con `MetaAdsService.listar_campanas()` (`whatsapp/services_ads.py`) y cachea sus nombres en `AnuncioMetaCache` para dejar de mostrar IDs crudos.
 
 ### Plantillas Meta (`/whatsapp/plantillas/`)
 - CRUD con categorías UTILITY/MARKETING/AUTHENTICATION, variables `{{n}}`, botones; someter a aprobación Meta, sincronizar estados; generación/edición con IA (preview 2 pasos).

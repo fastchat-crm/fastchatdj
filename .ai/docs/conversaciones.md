@@ -325,9 +325,38 @@ filtros = Q(
 - `?asesor=<user_id>` — `asignado_a_id=<id>`. El dropdown "Asesor" del sidebar
   solo se renderiza con vista completa (`es_vista_completa`); candidatos salen
   de `PerfilSesionWhatsApp` de la sesión seleccionada (dedupe por usuario).
+- `?sin_asesor=1` — chip "Sin asesor": `asignado_a__isnull=True`. El chip solo se
+  renderiza con vista completa (`mostrar_filtro_asesor`) y muestra el contador
+  `total_sin_asesor` (mismo alcance que los contadores de abiertas/finalizadas).
 - `?por_caducar=1` — chip "Por caducar": ventana Meta de 24h con <6h restantes.
   Se filtra en el branch load sobre la anotación `fecha_ultimo_entrante`
   (último entrante entre 18h y 24h de antigüedad) + `sesion__proveedor='meta'`.
+
+**Acción masiva `asignacion-automatica-masiva`** (botón "Asignación automática",
+al lado del chip "Sin asesor"): reparte asesor a todas las conversaciones
+abiertas sin asignar de la sesión visible. Sale solo si
+`permisos_sesion.puede_asignar_masivo(user, sesion)` → permiso por sesión
+`PerfilSesionWhatsApp.puede_asignar_masivo_asesores` (superusuario siempre), que
+se marca con el switch "Asignación masiva" del modal "Usuarios asignables" de
+`/whatsapp/sesiones/` (acción `toggle_asignacion_masiva`).
+- Handler: `asignacion_automatica_masiva_post(request, sesiones, sesion_seleccionada)`
+  en `whatsapp/funcionesWhatsappConversacion.py`; el alcance sale de
+  `filtro_conversaciones_sin_asesor(usuario, sesiones, sesion_seleccionada)`
+  (mismo Q que el chip: sesiones visibles + rol en sesión + abiertas + sin asesor).
+- Se despacha **antes** del `transaction.atomic()` de la vista: hace envíos de
+  WhatsApp, emails y notificaciones por conversación y no debe encerrarlos en una
+  transacción larga.
+- Cada conversación pasa por `crm.helpers_asignacion.auto_asignar_agente(conv,
+  motivo='masivo', asignador=request.user, avisar_cliente=False, pausar_ia=False)`
+  — conserva `HistorialAsignacion` y los avisos al asesor (notificación/webpush +
+  email + WhatsApp, logueados en `LogNotificacionAsignacion`). **Es un reparto
+  administrativo**: no cierra la conversación, no pausa el bot y no le manda nada
+  al cliente. El bot solo se pausa cuando el cliente elige "hablar con un asesor"
+  en el flujo.
+- El reparto queda justo porque `candidatos_ordenados` se recalcula en cada
+  iteración: ordena por asignaciones de las últimas 24h, luego `ultimo_asignado_en`,
+  luego carga abierta. Tope de `LIMITE_ASIGNACION_MASIVA = 200` por ejecución; el
+  mensaje de respuesta informa los restantes.
 
 **Orden del listado:** explícito por `contacto__fecha_ultimo_mensaje` DESC
 (nulls last), NO por el default `-order` del modelo — el snapshot `order` puede

@@ -24,6 +24,7 @@
         <tr>
             <th class="text-center">User</th>
             <th class="text-center">Role</th>
+            <th class="text-center">Asignación masiva</th>
             <th class="text-center">Action</th>
         </tr>
         </thead>
@@ -75,6 +76,15 @@
                             <option value="{{ val }}" {% if s.rol == val %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
                     </select>
+                </td>
+                <td class="text-center">
+                    <div class="form-check form-switch d-inline-block">
+                        <input class="form-check-input" type="checkbox"
+                               id="asig_masiva_{{ s.id }}"
+                               {% if s.puede_asignar_masivo_asesores %}checked{% endif %}
+                               onchange="cambiarAsignacionMasivaSesion({{ s.id }}, this)"
+                               title="Permite repartir de golpe las conversaciones sin asesor">
+                    </div>
                 </td>
                 <td class="text-center">
                     <a href="javascript:void(0)"
@@ -205,11 +215,17 @@ function guardarUsuariosSesion(pk) {
                         '<option value="asesor"' + (user.rol === 'asesor' ? ' selected' : '') + '>Agente</option>' +
                         '<option value="supervisor"' + (user.rol === 'supervisor' ? ' selected' : '') + '>Supervisor</option>' +
                         '</select>';
+                    var asigHtml =
+                        '<div class="form-check form-switch d-inline-block">' +
+                        '<input class="form-check-input" type="checkbox" id="asig_masiva_' + user.id_relacion + '" ' +
+                        'onchange="cambiarAsignacionMasivaSesion(' + user.id_relacion + ', this)" ' +
+                        'title="Permite repartir de golpe las conversaciones sin asesor"></div>';
                     var accionHtml =
                         '<a href="javascript:void(0)" onclick="eliminarPerfilSesionUsuario(' + user.id_relacion + ', this)" class="btn btn-danger btn-mini"><i class="fa fa-trash"></i></a>';
-                    var rowNode = table.row.add([nombreHtml, rolHtml, accionHtml]).draw(false).node();
+                    var rowNode = table.row.add([nombreHtml, rolHtml, asigHtml, accionHtml]).draw(false).node();
                     $(rowNode).find('td:eq(1)').addClass('text-center');
                     $(rowNode).find('td:eq(2)').addClass('text-center');
+                    $(rowNode).find('td:eq(3)').addClass('text-center');
                     $(rowNode).attr('data-usuario-id', user.id).hide().fadeIn('slow');
                 }
             });
@@ -236,6 +252,26 @@ function cambiarRolSesionUsuario(pk, sel) {
         } else {
             if (typeof alertaWarning === 'function') alertaWarning(data.message || 'Error updating role.');
         }
+    });
+}
+
+function cambiarAsignacionMasivaSesion(pk, chk) {
+    var valor = chk.checked ? '1' : '0';
+    $.post('/whatsapp/sesiones/', {
+        csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').val() || $('meta[name=csrf-token]').attr('content'),
+        action: 'toggle_asignacion_masiva',
+        id: pk,
+        valor: valor
+    }, function (data) {
+        if (data.error === false) {
+            if (typeof alertaSuccess === 'function') alertaSuccess(data.valor ? 'Permiso de asignación masiva habilitado.' : 'Permiso de asignación masiva deshabilitado.');
+        } else {
+            chk.checked = !chk.checked;
+            if (typeof alertaWarning === 'function') alertaWarning(data.message || 'No se pudo actualizar el permiso.');
+        }
+    }).fail(function () {
+        chk.checked = !chk.checked;
+        if (typeof mensajeWarning === 'function') mensajeWarning('Error en el servidor');
     });
 }
 
