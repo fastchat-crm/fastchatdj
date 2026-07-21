@@ -1390,8 +1390,11 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
     contadores_scope = badge_scope & Q(contacto__status=True, status=True)
     if sesion_seleccionada:
         contadores_scope = contadores_scope & Q(contacto__sesion=sesion_seleccionada)
-    data["total_abiertas"] = ConversacionWhatsApp.objects.filter(
-        contadores_scope, estado_conversacion=0,
+    # `sin_expirar` (mismo manager que usa el listado) y no un filtro propio:
+    # con estado_conversacion=0 a secas el badge contaba conversaciones
+    # expiradas-sin-cerrar que el listado oculta (badge decía N, lista vacía).
+    data["total_abiertas"] = ConversacionWhatsApp.objects.sin_expirar.filter(
+        contadores_scope,
     ).distinct().count()
     data["total_finalizadas"] = ConversacionWhatsApp.objects.filter(
         contadores_scope, estado_conversacion=1,

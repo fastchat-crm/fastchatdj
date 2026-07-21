@@ -1065,6 +1065,12 @@ class ConversacionWhatsApp(ModeloBase):
             # de cierre ni la anotación `expirado`). min_sesion > 0 mantiene la
             # ventana de inactividad clásica.
             min_sesion = int(getattr(contacto.sesion, 'min_sesion', None) or 0)
+            # Messenger/TikTok: el asesor finaliza a mano (ver reopen abajo) —
+            # nunca expiran por inactividad aunque la sesión tenga min_sesion.
+            # Con expira seteada quedaban en limbo: `sin_expirar` las oculta
+            # del inbox pero siguen abiertas (badge N, lista vacía).
+            if (getattr(contacto.sesion, 'proveedor', '') or '') in ('messenger', 'tiktok'):
+                min_sesion = 0
             expira = (timezone.now() + relativedelta(minutes=min_sesion)) if min_sesion > 0 else None
             # Conversación abierta pero con la ventana vencida y que el cron
             # AÚN no cerró: el cliente volvió a escribir antes de la despedida

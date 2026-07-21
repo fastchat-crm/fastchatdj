@@ -309,8 +309,13 @@ class MessengerService(InstagramService):
         res['post_id'] = data.get('post_id') or data.get('id')
         return res
 
+    # comments con filter(stream): el summary default solo cuenta comentarios
+    # de PRIMER nivel — las respuestas anidadas no ("FB dice 3, acá 1").
+    # reactions en vez de likes: likes.summary solo cuenta el "Me gusta"
+    # clásico; ama/encanta/asombra/etc. no entran ("FB dice 2 likes, acá 0").
     _CAMPOS_POSTS_BASE = ('id,message,full_picture,permalink_url,created_time,shares,'
-                          'comments.summary(true).limit(0),likes.summary(true).limit(0)')
+                          'comments.filter(stream).summary(true).limit(0),'
+                          'reactions.summary(true).limit(0)')
     _CAMPOS_POSTS_INSIGHTS = ',insights.metric(post_impressions,post_impressions_unique,post_clicks){name,values}'
 
     def listar_publicaciones(self, session_id, limite=25):
@@ -334,7 +339,7 @@ class MessengerService(InstagramService):
         if res['success']:
             for post in data.get('data', []):
                 comments = ((post.get('comments') or {}).get('summary') or {})
-                likes = ((post.get('likes') or {}).get('summary') or {})
+                likes = ((post.get('reactions') or {}).get('summary') or {})
                 metricas = {}
                 for m in ((post.get('insights') or {}).get('data') or []):
                     valores = m.get('values') or []

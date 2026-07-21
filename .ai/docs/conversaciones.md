@@ -344,7 +344,20 @@ Optimización con `select_related('contacto', 'contacto__sesion', 'contacto__ses
 **Conteos `total_abiertas` / `total_finalizadas`** — badges `cs-tab-total` en
 las pestañas Abiertas/Finalizadas del sidebar. Mismo alcance de visibilidad
 que `total_sin_leer` (rol + sesiones visibles) acotado a la sesión
-seleccionada; `estado_conversacion=0` vs `=1`.
+seleccionada. Abiertas usa el manager `sin_expirar` (el MISMO criterio del
+listado) — con `estado_conversacion=0` a secas contaba expiradas-sin-cerrar
+que la lista oculta (badge 3, lista vacía en /facebook/). Finalizadas =
+`estado_conversacion=1`.
+
+**Expiración por canal:** Messenger y TikTok nunca expiran por inactividad —
+`obtener_o_crear_activa` fuerza `fecha_hora_expira=None` aunque la sesión
+tenga `min_sesion` (el asesor finaliza a mano). Datos viejos atascados se
+reparan con `python manage.py normalizar_conversaciones_social`.
+
+**Contactos por sesión (`view_contacto.py`):** visibilidad = `sesiones_visibles`
+(dueño O miembro por `PerfilSesionWhatsApp`), igual que el inbox. Antes
+filtraba solo `sesion__usuario=request.user`: miembros no-dueños veían
+conversaciones pero cero contactos (típico en canales sociales).
 
 **Render final** (línea 874): `render(request, 'whatsapp/conversaciones/listado.html', data)`.
 
