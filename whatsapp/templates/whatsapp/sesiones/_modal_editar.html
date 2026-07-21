@@ -232,6 +232,15 @@
                           placeholder="¿Sigues ahí? Seguimos atentos a tu mensaje 👋">{{ sesion.mensaje_reconexion|default:'' }}</textarea>
                 <small class="text-muted">Se envía solo (cron horario) a conversaciones abiertas cuyo último mensaje es nuestro y llevan +1 h sin respuesta, dentro de la ventana de 24 h. Requiere el check de arriba activo.</small>
             </div>
+
+            {% if sesion.proveedor == 'meta' %}
+                <div class="form-row">
+                    <label>Avisar cuando falten (horas)</label>
+                    <input type="number" name="horas_aviso_por_caducar" min="1" max="23" step="1"
+                           value="{{ sesion.horas_aviso_por_caducar|default:6 }}">
+                    <small class="text-muted">Anticipación con la que la conversación se marca "por caducar" en el inbox y aparece la alerta del panel, antes de que se cierre la ventana de 24 h de Meta. Por defecto 6 horas.</small>
+                </div>
+            {% endif %}
         </div>
 
         <div class="detail-actions">

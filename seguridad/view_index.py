@@ -10,6 +10,7 @@ from core.funciones import addData, secure_module
 from public.models import VisitaEntorno
 from seguridad.models import *
 from seguridad.templatetags.templatefunctions import encrypt
+from whatsapp.funcionesWhatsappConversacion import conversaciones_por_caducar_por_sesion
 from whatsapp.models import (
     SesionWhatsApp, Contacto, ConversacionWhatsApp, MensajeWhatsApp,
     PlantillaWhatsApp,
@@ -72,6 +73,15 @@ def index(request):
             'url_sesiones': url_ses,
         })
     data['canales_resumen'] = canales_resumen
+
+    # Alerta por sesión: conversaciones a punto de salirse de la ventana de 24h
+    # de Meta. Se calcula antes del corte por perfil porque el asesor —que no
+    # ve el resto del panel— es justamente quien tiene que responderlas. Cada
+    # tarjeta enlaza al inbox ya filtrado (`?por_caducar=1`) y, si solo queda
+    # una, abre su ventana de conversación directo.
+    alertas_por_caducar = conversaciones_por_caducar_por_sesion(persona, sesiones_qs)
+    data['alertas_por_caducar'] = alertas_por_caducar
+    data['total_por_caducar'] = sum(a['total'] for a in alertas_por_caducar)
 
     if not persona.es_administrativo():
         data['PERFIL_EXISTE'] = False

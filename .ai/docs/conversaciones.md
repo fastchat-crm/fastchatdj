@@ -328,9 +328,31 @@ filtros = Q(
 - `?sin_asesor=1` — chip "Sin asesor": `asignado_a__isnull=True`. El chip solo se
   renderiza con vista completa (`mostrar_filtro_asesor`) y muestra el contador
   `total_sin_asesor` (mismo alcance que los contadores de abiertas/finalizadas).
-- `?por_caducar=1` — chip "Por caducar": ventana Meta de 24h con <6h restantes.
-  Se filtra en el branch load sobre la anotación `fecha_ultimo_entrante`
-  (último entrante entre 18h y 24h de antigüedad) + `sesion__proveedor='meta'`.
+- `?por_caducar=1` — chip "Por caducar": ventana Meta de 24h a la que le quedan
+  menos horas que el aviso configurado en la sesión. Se filtra en el branch load
+  sobre la anotación `fecha_ultimo_entrante` (último entrante entre `24-N` y 24h
+  de antigüedad) + `sesion__proveedor='meta'`. El umbral `N` sale de
+  `SesionWhatsApp.horas_aviso_por_caducar` vía
+  `funcionesWhatsappConversacion.horas_aviso_de_sesion(sesion)` — **6h por
+  defecto**, rango 1-23, se edita en el modal "Editar sesión" de
+  `/whatsapp/sesiones/` (campo "Avisar cuando falten (horas)", solo sesiones
+  Meta) y lo valida `view_sesiones`.
+
+**Alerta "por caducar" del panel** (`/panel/`): `seguridad/view_index.py` publica
+`alertas_por_caducar` / `total_por_caducar` a partir de
+`funcionesWhatsappConversacion.conversaciones_por_caducar_por_sesion(usuario, sesiones)`.
+- Una entrada **por sesión Meta** con `total`, `horas_aviso`, `vence_en` (la que
+  cierra primero), `sesion_token` y `conversacion_token`. Mismo criterio y mismo
+  umbral por sesión que `?por_caducar=1` (`horas_aviso_de_sesion`, default
+  `HORAS_AVISO_POR_CADUCAR=6` sobre `HORAS_VENTANA_META_CUSTOMER_SERVICE=24`),
+  así que el conteo del panel y el listado del inbox no se contradicen.
+- El alcance pasa por `filtro_conversaciones_por_rol(usuario, sesion)`: el asesor
+  solo cuenta las suyas; supervisor y dueño de la sesión cuentan todas.
+- Se calcula **antes** del corte `es_administrativo()` de la vista: el asesor no ve
+  el resto del panel pero sí esta alerta, que es la que tiene que atender.
+- Cada tarjeta enlaza a `/whatsapp/conversaciones/?sesion=<token>&por_caducar=1`;
+  cuando queda una sola conversación usa el deep-link `?conv=<token>` para abrir
+  su ventana directamente.
 
 **Acción masiva `asignacion-automatica-masiva`** (botón "Asignación automática",
 al lado del chip "Sin asesor"): reparte asesor a todas las conversaciones

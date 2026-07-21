@@ -128,6 +128,11 @@ class SesionWhatsApp(ModeloBase):
                   'No pausa el bot ni avisa todavía al cliente: cuando el flujo llegue a "hablar con un asesor" no '
                   'vuelve a repartirla, solo notifica al asesor que ya la tiene.'
     )
+    horas_aviso_por_caducar = models.PositiveSmallIntegerField(
+        'Aviso de ventana por caducar (horas)', default=6,
+        help_text='Cuántas horas antes de que se cierre la ventana de 24h de Meta se avisa en el panel '
+                  'y se marca la conversación como "por caducar" en el inbox. Rango de 1 a 23.'
+    )
     pixel_meta = models.ForeignKey(
         'whatsapp.PixelMeta', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='sesiones_vinculadas', verbose_name='Pixel Meta (CAPI)',

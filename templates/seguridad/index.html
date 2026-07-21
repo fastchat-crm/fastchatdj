@@ -69,6 +69,25 @@
                 </div>
             {% endif %}
 
+            {% if alertas_por_caducar %}
+                <div class="pp-alerts">
+                    {% for a in alertas_por_caducar %}
+                        <div class="pp-alert pp-alert-danger">
+                            <i class="fa fa-hourglass-half"></i>
+                            <span>
+                                <b>{{ a.total }}</b> conversación{{ a.total|pluralize:"es" }} de
+                                <b>{{ a.sesion.nombre|default:a.sesion.config_meta.display_phone_number }}</b>
+                                por caducar — la más próxima cierra su ventana de 24h
+                                en {{ a.vence_en|timeuntil }} ({{ a.vence_en|date:"H:i" }}).
+                            </span>
+                            <a href="/whatsapp/conversaciones/?sesion={{ a.sesion_token }}{% if a.conversacion_token %}&conv={{ a.conversacion_token }}{% else %}&por_caducar=1{% endif %}">
+                                {% if a.conversacion_token %}Abrir conversación →{% else %}Responder ahora →{% endif %}
+                            </a>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
             {# ───────── Alertas reales ───────── #}
             {% if stats_sesiones.desconectadas or stats_sesiones.errores or calidad_alertas or convs_no_asignadas or stats_sesiones.pausadas %}
                 <div class="pp-alerts">

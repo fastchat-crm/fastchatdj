@@ -28,6 +28,97 @@ HORAS_VENTANA_REACTIVAR = 23
 
 HORAS_VENTANA_META_CUSTOMER_SERVICE = 24
 
+HORAS_AVISO_POR_CADUCAR = 6
+
+
+def horas_aviso_de_sesion(sesion):
+    """Horas de anticipación con las que se avisa que la ventana de 24h de Meta
+    está por cerrarse. Se configura por sesión (`horas_aviso_por_caducar`); si
+    el valor está vacío o fuera de rango se usa el default de 6 horas."""
+    horas = getattr(sesion, 'horas_aviso_por_caducar', None)
+    if not horas or not 1 <= horas < HORAS_VENTANA_META_CUSTOMER_SERVICE:
+        return HORAS_AVISO_POR_CADUCAR
+    return horas
+
+
+def conversaciones_por_caducar_por_sesion(usuario, sesiones, horas_aviso=None):
+    """Cuenta, sesión por sesión, las conversaciones a las que les queda poco
+    de la ventana de servicio de Meta (24h desde el último mensaje entrante).
+
+    Mismo criterio que el filtro `?por_caducar=1` del inbox: el último mensaje
+    del cliente tiene entre `24 - horas_aviso` y 24 horas de antigüedad. Solo
+    aplica a sesiones Meta — Baileys no tiene ventana.
+
+    `horas_aviso` sale de cada sesión (`horas_aviso_por_caducar`, 6h por
+    defecto); pasar el argumento fuerza el mismo umbral para todas.
+
+    El alcance respeta el rol del usuario en cada sesión: un asesor solo cuenta
+    las conversaciones que tiene asignadas; supervisor y dueño ven todas.
+
+    Devuelve una lista de dicts (solo sesiones con al menos una conversación),
+    ordenada por la que vence primero:
+        sesion, total, vence_en, conversacion_token
+    `conversacion_token` viene informado únicamente cuando hay una sola
+    conversación, para poder abrir su ventana directo desde el panel.
+    """
+    from core.funciones import encrypt_sesion_id
+    from django.db.models import OuterRef, Subquery
+
+    from .models import MensajeWhatsApp
+    from .permisos_sesion import filtro_conversaciones_por_rol
+
+    ahora = timezone.now()
+    limite_inferior = ahora - timedelta(hours=HORAS_VENTANA_META_CUSTOMER_SERVICE)
+    ultima_entrante = (
+        MensajeWhatsApp.objects
+        .filter(conversacion=OuterRef('pk'))
+        .exclude(remitente=OuterRef('contacto__sesion__numero'))
+        .order_by('-fecha')
+        .values('fecha')[:1]
+    )
+
+    listado = []
+    for sesion in sesiones:
+        if sesion.proveedor != 'meta':
+            continue
+        horas = horas_aviso or horas_aviso_de_sesion(sesion)
+        limite_superior = ahora - timedelta(
+            hours=HORAS_VENTANA_META_CUSTOMER_SERVICE - horas,
+        )
+        conversaciones = (
+            ConversacionWhatsApp.objects.sin_expirar
+            .filter(
+                filtro_conversaciones_por_rol(usuario, sesion),
+                status=True,
+                contacto__status=True,
+                estado_conversacion=0,
+                contacto__sesion=sesion,
+            )
+            .annotate(fecha_ultimo_entrante=Subquery(ultima_entrante))
+            .filter(
+                fecha_ultimo_entrante__gt=limite_inferior,
+                fecha_ultimo_entrante__lte=limite_superior,
+            )
+            .order_by('fecha_ultimo_entrante')
+            .distinct()
+        )
+        pendientes = list(conversaciones.values_list('id', 'fecha_ultimo_entrante')[:2])
+        if not pendientes:
+            continue
+        total = conversaciones.count()
+        primera_id, primera_fecha = pendientes[0]
+        listado.append({
+            'sesion': sesion,
+            'total': total,
+            'horas_aviso': horas,
+            'vence_en': primera_fecha + timedelta(hours=HORAS_VENTANA_META_CUSTOMER_SERVICE),
+            'sesion_token': encrypt_sesion_id(sesion.id),
+            'conversacion_token': encrypt_sesion_id(primera_id) if total == 1 else '',
+        })
+
+    listado.sort(key=lambda item: item['vence_en'])
+    return listado
+
 
 def persistir_y_difundir_automatico(conversacion, texto):
     """Persiste un mensaje saliente automático (handoff, presentación del

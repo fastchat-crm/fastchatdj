@@ -462,6 +462,22 @@ def _accion_editar(request):
     sesion.auto_asignar_round_robin = (
         request.POST.get('auto_asignar_round_robin') in ('on', 'true', '1', 'True')
     )
+    horas_aviso_raw = (request.POST.get('horas_aviso_por_caducar') or '').strip()
+    if horas_aviso_raw:
+        if not horas_aviso_raw.isdigit():
+            return JsonResponse([{
+                'error': True,
+                'message': 'El aviso de ventana por caducar debe ser un número entero de horas.',
+                'form': [{'horas_aviso_por_caducar': 'Valor inválido.'}],
+            }], safe=False)
+        horas_aviso_val = int(horas_aviso_raw)
+        if horas_aviso_val < 1 or horas_aviso_val > 23:
+            return JsonResponse([{
+                'error': True,
+                'message': 'El aviso de ventana por caducar debe estar entre 1 y 23 horas.',
+                'form': [{'horas_aviso_por_caducar': 'Rango permitido: 1 a 23.'}],
+            }], safe=False)
+        sesion.horas_aviso_por_caducar = horas_aviso_val
     min_sesion_raw = (request.POST.get('min_sesion') or '').strip()
     if min_sesion_raw:
         if not min_sesion_raw.isdigit():

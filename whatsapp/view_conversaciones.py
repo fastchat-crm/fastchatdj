@@ -28,6 +28,8 @@ from .funcionesWhatsappConversacion import (
     _estadisticas_conversacion,
     _tokens_conversacion,
     HORAS_VENTANA_REACTIVAR,
+    HORAS_VENTANA_META_CUSTOMER_SERVICE,
+    horas_aviso_de_sesion,
 )
 from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp, SENTIMIENTO_CHOICES, RespuestaRapidaGlobal
 from .services import WhatsAppService, get_whatsapp_service
@@ -1563,15 +1565,19 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
         from datetime import timedelta as _td
         ahora_ts = timezone.now()
 
-        # "Por caducar": ventana Meta de 24h con menos de 6h restantes.
-        # vence = fecha_ultimo_entrante + 24h → quedan <6h cuando el último
-        # entrante tiene entre 18h y 24h de antigüedad. Solo aplica a Meta
-        # (Baileys no tiene ventana de servicio).
+        # "Por caducar": ventana Meta de 24h a la que le quedan menos horas que
+        # el aviso configurado en la sesión (`horas_aviso_por_caducar`, 6h por
+        # defecto). vence = fecha_ultimo_entrante + 24h → quedan <N horas cuando
+        # el último entrante tiene entre 24-N y 24 horas de antigüedad. Solo
+        # aplica a Meta (Baileys no tiene ventana de servicio).
         if filtro_por_caducar:
+            horas_aviso = horas_aviso_de_sesion(sesion_seleccionada)
             qs = qs.filter(
                 contacto__sesion__proveedor='meta',
-                fecha_ultimo_entrante__gt=ahora_ts - _td(hours=24),
-                fecha_ultimo_entrante__lte=ahora_ts - _td(hours=18),
+                fecha_ultimo_entrante__gt=ahora_ts - _td(hours=HORAS_VENTANA_META_CUSTOMER_SERVICE),
+                fecha_ultimo_entrante__lte=ahora_ts - _td(
+                    hours=HORAS_VENTANA_META_CUSTOMER_SERVICE - horas_aviso,
+                ),
             )
 
         # Orden: última actividad primero. Se ordena por el dato vivo del
