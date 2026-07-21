@@ -1562,6 +1562,11 @@
 <link rel="stylesheet" href="/static/fancyboxv4/fancybox.css?1"/>
 <link rel="stylesheet" href="/static/fancyboxv4/panzoom.css"/>
 <script src="/static/fancyboxv4/fancybox.umd.js"></script>
+<script>
+    if (typeof Fancybox !== 'undefined') {
+        Fancybox.bind('[data-fancybox="chat"]', {});
+    }
+</script>
 <div class="modal fade" id="modalForm">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">

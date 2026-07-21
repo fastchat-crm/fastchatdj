@@ -15,7 +15,7 @@
             {% with url=mensaje.get_archivo_url %}
             {% if url %}
                 {% if mensaje.tipo == 'imagen' %}
-                    <a href="{{ url }}" target="_blank">
+                    <a href="{{ url }}" data-fancybox="chat">
                         <img src="{{ url }}" alt="imagen" class="msg-img">
                     </a>
                 {% elif mensaje.tipo == 'audio' %}

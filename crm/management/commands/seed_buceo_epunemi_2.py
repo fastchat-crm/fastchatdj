@@ -10,8 +10,11 @@ Recorrido:
   2. Cada bloque de info (curso, requisitos, costos, duración) termina en un
      cierre con tres salidas: inscribirme / ver más info / hablar con un asesor.
   3. Recién al elegir "inscribirme" pide la cédula, la valida contra SAGEST
-     (`consultar_cedula_sagest`), confirma nombres, valida mayoría de edad y
-     captura correo y ciudad.
+     (`consultar_cedula_sagest`), confirma nombres y captura correo y ciudad.
+     **No corta por edad**: la validación automática de mayoría de edad daba
+     problemas (edad ausente o mal calculada dejaba fuera a gente válida), así
+     que el requisito queda informado en el bloque de requisitos y lo verifica
+     el asesor. La edad se sigue capturando cuando la API no la trae.
   4. Registra el cliente (`cliente_upsert`) y cierra notificando a un asesor.
   5. "Hablar con un asesor" está disponible desde el menú y desde el cierre de
      cada bloque informativo.
@@ -76,7 +79,6 @@ ID_CIERRE_INFO = 100
 # Inscripción (recién acá se piden datos)
 ID_PEDIR_CEDULA = 200
 ID_HTTP_CEDULA = 210
-ID_EVAL_EDAD = 220
 ID_CONFIRMA_DATOS = 230
 ID_DEC_CORREO = 240
 ID_PEDIR_CORREO = 250
@@ -91,7 +93,6 @@ ID_MAN_EDAD = 320
 ID_FIX_NOMBRES = 340
 ID_FIX_APELLIDOS = 350
 # Terminales
-ID_MENOR_EDAD = 950
 ID_DESPEDIDA_NO = 960
 ID_ERR_REGISTRO = 970
 ID_HANDOFF_ASESOR = 990
@@ -114,7 +115,6 @@ COORDS = {
     # Inscripción (centro, hacia abajo)
     ID_PEDIR_CEDULA:    (440, 460),
     ID_HTTP_CEDULA:     (440, 600),
-    ID_EVAL_EDAD:       (440, 740),
     ID_CONFIRMA_DATOS:  (440, 880),
     ID_FIX_NOMBRES:     (640, 880),
     ID_FIX_APELLIDOS:   (640, 1020),
@@ -130,7 +130,6 @@ COORDS = {
     # Terminales (extrema derecha)
     ID_HANDOFF_ASESOR:  (1240, 320),
     ID_DESPEDIDA_NO:    (1240, 460),
-    ID_MENOR_EDAD:      (1240, 740),
     ID_ERR_REGISTRO:    (1240, 1440),
 }
 
@@ -278,13 +277,7 @@ PASOS = [
             '$fecha_nacimiento': '$.data.fecha_nacimiento',
             '$edad':             '$.data.edad',
         },
-        'siguiente_ok': ID_EVAL_EDAD, 'siguiente_error': ID_MAN_NOMBRES,
-    },
-    {
-        'id': ID_EVAL_EDAD, 'orden': 220, 'tipo': 'decision',
-        'codigo': 'eval_edad', 'nombre': '¿Mayor de edad?',
-        'condicion': '{{variables.edad}} >= 18',
-        'siguiente_si': ID_CONFIRMA_DATOS, 'siguiente_no': ID_MENOR_EDAD,
+        'siguiente_ok': ID_CONFIRMA_DATOS, 'siguiente_error': ID_MAN_NOMBRES,
     },
     {
         'id': ID_CONFIRMA_DATOS, 'orden': 230, 'tipo': 'menu_botones',
@@ -389,7 +382,7 @@ PASOS = [
         'guardar_en': 'edad',
         'validacion': r'^\d{1,3}$',
         'mensaje_error': '⚠️ Escribe tu edad en números (ej: 25):',
-        'siguiente': ID_EVAL_EDAD,
+        'siguiente': ID_CONFIRMA_DATOS,
     },
 
     {
@@ -416,17 +409,6 @@ PASOS = [
             'contigo* para coordinar el pago de la inscripción ($400), el apto '
             'médico y los siguientes pasos.\n\n'
             '¡Gracias por tu interés y bienvenido a la élite del buceo! 🌊'
-        ),
-    },
-    {
-        'id': ID_MENOR_EDAD, 'orden': 950, 'tipo': 'fin_conversacion',
-        'codigo': 'menor_edad', 'nombre': 'Menor de edad',
-        'mensaje': (
-            'Hola {{variables.nombres}}, gracias por tu interés. 🙏\n\n'
-            'Lamentablemente, uno de los requisitos del curso es tener '
-            '*mínimo 18 años de edad*, y según nuestros registros aún no '
-            'cumples con ese requisito.\n\n'
-            'Te invitamos a contactarnos más adelante. ¡Te esperamos! ⚓'
         ),
     },
     {

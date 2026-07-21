@@ -350,6 +350,14 @@
 </script>
 <script src="/static/snackbar/dist/snackbar.min.js"></script>
 <script src="/static/js/sysend.js"></script>
+<link rel="stylesheet" href="/static/fancyboxv4/fancybox.css?v1.0">
+<link rel="stylesheet" href="/static/fancyboxv4/panzoom.css?v1.0">
+<script src="/static/fancyboxv4/fancybox.umd.js"></script>
+<script>
+    if (typeof Fancybox !== 'undefined') {
+        Fancybox.bind('[data-fancybox="chat"]', {});
+    }
+</script>
 <script>
     function redondear(numero, decimales = 0) {
         var s = parseInt("1" + "0".repeat(decimales));

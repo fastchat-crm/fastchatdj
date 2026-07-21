@@ -25,7 +25,7 @@
 
                         {% if mensaje.get_archivo_url %}
                             {% if mensaje.tipo == 'imagen' %}
-                                <a href="{{ mensaje.get_archivo_url }}" data-fancybox="gallery" target="_blank">
+                                <a href="{{ mensaje.get_archivo_url }}" data-fancybox="chat">
                                     <img src="{{ mensaje.get_archivo_url }}" alt="imagen" class="msg-img">
                                 </a>
                             {% elif mensaje.tipo == 'sticker' %}
@@ -151,7 +151,7 @@
 
                         {% if mensaje.get_archivo_url %}
                             {% if mensaje.tipo == 'imagen' %}
-                                <a href="{{ mensaje.get_archivo_url }}" data-fancybox="gallery" target="_blank">
+                                <a href="{{ mensaje.get_archivo_url }}" data-fancybox="chat">
                                     <img src="{{ mensaje.get_archivo_url }}" alt="imagen" class="msg-img">
                                 </a>
                             {% elif mensaje.tipo == 'sticker' %}

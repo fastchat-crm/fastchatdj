@@ -358,6 +358,12 @@ se marca con el switch "Asignación masiva" del modal "Usuarios asignables" de
   luego carga abierta. Tope de `LIMITE_ASIGNACION_MASIVA = 200` por ejecución; el
   mensaje de respuesta informa los restantes.
 
+**Imágenes del hilo:** los `<a>` de las imágenes en `mensajes_partial.html` y
+`mensaje_enviado_partial.html` usan `data-fancybox="chat"` y ya **no** llevan
+`target="_blank"` — se abren en el visor Fancybox sin sacar al usuario del chat.
+El bind vive en `base_chat.html` y en `base.html` (`Fancybox.bind('[data-fancybox="chat"]')`),
+que delega en document, así los mensajes que llegan por websocket también lo usan.
+
 **Orden del listado:** explícito por `contacto__fecha_ultimo_mensaje` DESC
 (nulls last), NO por el default `-order` del modelo — el snapshot `order` puede
 estar desactualizado (solo se recalcula en save(); ver nota de
