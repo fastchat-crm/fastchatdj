@@ -459,6 +459,9 @@ def _accion_editar(request):
     sesion.mensaje_handoff     = (request.POST.get('mensaje_handoff')     or '').strip() or None
     sesion.mensaje_reconexion  = (request.POST.get('mensaje_reconexion')  or '').strip() or None
     sesion.reconexion_activa   = (request.POST.get('reconexion_activa') in ('on', 'true', '1', 'True'))
+    sesion.auto_asignar_round_robin = (
+        request.POST.get('auto_asignar_round_robin') in ('on', 'true', '1', 'True')
+    )
     min_sesion_raw = (request.POST.get('min_sesion') or '').strip()
     if min_sesion_raw:
         if not min_sesion_raw.isdigit():
@@ -929,6 +932,77 @@ def _accion_ads_probar(request):
     })
 
 
+def _accion_ads_campanas(request):
+    """Extrae las campañas de la cuenta publicitaria de Meta para conocerlas.
+
+    Solo lectura sobre la Marketing API; además cachea los nombres en
+    `AnuncioMetaCache` para que el reporte de leads por campaña
+    (`/whatsapp/campanas/?action=reporte`) deje de mostrar IDs crudos.
+    """
+    from .services_ads import MetaAdsService
+    from .models import AnuncioMetaCache
+
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('sesion_id') or request.POST.get('id'),
+                                           usuario=request.user).first()
+    if not sesion or not sesion.es_meta:
+        return JsonResponse({'error': True, 'message': 'Sesión Meta no encontrada.'})
+    cfg = getattr(sesion, 'config_meta', None)
+    if not cfg:
+        return JsonResponse({'error': True, 'message': 'La sesión no tiene configuración Meta.'})
+
+    servicio = MetaAdsService(cfg)
+    if not servicio.configurado:
+        return JsonResponse({
+            'error': True,
+            'message': 'Falta la cuenta publicitaria (act_XXXX) o el token de anuncios en esta sesión.',
+        })
+
+    solo_activas = request.POST.get('solo_activas') in ('on', 'true', '1', 'True')
+    res = servicio.listar_campanas()
+    if res.get('error'):
+        return JsonResponse({'error': True, 'message': res.get('message') or 'Meta rechazó la consulta.'})
+
+    filas = res.get('rows') or []
+    if solo_activas:
+        filas = [f for f in filas if (f.get('effective_status') or f.get('status')) == 'ACTIVE']
+
+    for f in filas:
+        campaign_id = (f.get('id') or '').strip()
+        nombre = (f.get('name') or '').strip()
+        if not campaign_id or not nombre:
+            continue
+        cacheadas = AnuncioMetaCache.objects.filter(campaign_id=campaign_id)
+        datos = {
+            'campaign_name': nombre[:300],
+            'effective_status': (f.get('effective_status') or f.get('status') or '')[:40],
+            'ultima_sync': timezone.now(),
+        }
+        if cacheadas.exists():
+            cacheadas.update(**datos)
+        else:
+            AnuncioMetaCache.objects.update_or_create(
+                ad_id=f'campaign:{campaign_id}',
+                defaults=dict(datos, campaign_id=campaign_id),
+            )
+
+    log(f"Campañas de Meta extraídas: sesion={sesion.id} ({len(filas)})", request, "change", obj=sesion.id)
+    return JsonResponse({
+        'error': False,
+        'message': f'{len(filas)} campañas encontradas.',
+        'campanas': [
+            {
+                'id': f.get('id'),
+                'nombre': f.get('name'),
+                'objetivo': f.get('objective'),
+                'estado': f.get('effective_status') or f.get('status'),
+                'inicio': f.get('start_time'),
+                'fin': f.get('stop_time'),
+            }
+            for f in filas
+        ],
+    })
+
+
 _ACCIONES = {
     'baileys_start':               _accion_baileys_start,
     'baileys_status':              _accion_baileys_status,
@@ -945,6 +1019,7 @@ _ACCIONES = {
     'toggle_activo':               _accion_toggle_activo,
     'ads_guardar_config':          _accion_ads_guardar_config,
     'ads_probar':                  _accion_ads_probar,
+    'ads_campanas':                _accion_ads_campanas,
     'menu_rapido_listar':          _accion_menu_rapido_listar,
     'menu_rapido_guardar':         _accion_menu_rapido_guardar,
     'menu_rapido_eliminar':        _accion_menu_rapido_eliminar,

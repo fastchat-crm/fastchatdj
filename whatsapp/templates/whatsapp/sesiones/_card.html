@@ -259,6 +259,12 @@
             {% else %}
                 <span class="tag tag-modo-ninguno"><i class="fa fa-user"></i> Solo humanos</span>
             {% endif %}
+
+            {% if sesion.auto_asignar_round_robin %}
+                <span class="tag" title="Cada conversación nueva se asigna al próximo asesor disponible sin esperar al handoff">
+                    <i class="fa fa-user-check"></i> Asigna asesor al llegar
+                </span>
+            {% endif %}
         </div>
         {% if sesion.es_baileys and sesion.config_baileys.error_mensaje %}
             <div class="card-error" title="{{ sesion.config_baileys.error_mensaje }}">

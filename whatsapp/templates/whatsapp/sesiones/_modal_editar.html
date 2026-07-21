@@ -210,6 +210,15 @@
 
             <div class="form-row">
                 <label class="d-flex align-items-center gap-2">
+                    <input type="checkbox" name="auto_asignar_round_robin" value="on"
+                           {% if sesion.auto_asignar_round_robin %}checked{% endif %}>
+                    Asignar asesor apenas llega la conversación
+                </label>
+                <small class="text-muted">Cada conversación nueva se reparte al próximo asesor disponible (por carga y turno) sin esperar al handoff. No pausa el bot ni le avisa al cliente: cuando el flujo llegue a "hablar con un asesor" no la reparte de nuevo, solo notifica al asesor que ya la tiene.</small>
+            </div>
+
+            <div class="form-row">
+                <label class="d-flex align-items-center gap-2">
                     <input type="checkbox" name="reconexion_activa" value="on"
                            {% if sesion.reconexion_activa %}checked{% endif %}>
                     Enviar mensajes de reconexión automáticos

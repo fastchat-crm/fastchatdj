@@ -26,10 +26,23 @@
       <button type="button" class="conex-btn conex-btn-light" id="ads-probar-btn">
         <i class="fa fa-satellite-dish me-1"></i> Probar conexión
       </button>
+      <button type="button" class="conex-btn conex-btn-light" id="ads-campanas-btn">
+        <i class="fa fa-bullhorn me-1"></i> Extraer campañas
+      </button>
       <button type="button" class="conex-btn conex-btn-primary" id="ads-guardar-btn">
         <i class="fa fa-save me-1"></i> Guardar
       </button>
     </div>
+
+    <div class="form-row mt-2">
+      <label class="d-flex align-items-center gap-2">
+        <input type="checkbox" id="ads-solo-activas" checked>
+        Solo campañas activas
+      </label>
+      <small class="muted">Las campañas viven en la cuenta publicitaria de Meta. Al extraerlas se guardan sus nombres para que el reporte de leads por campaña no muestre IDs.</small>
+    </div>
+
+    <div id="ads-campanas-lista" class="mt-2"></div>
   </div>
 </div>
 
@@ -78,6 +91,44 @@
         if (r.currency) det.push(r.currency);
         if (r.amount_spent) det.push('Gastado: ' + r.amount_spent);
         mostrarResultado('ok', '<i class="fa fa-check-circle me-1"></i>Conexión OK. ' + det.join(' · '));
+      }).catch(function () {
+        setTimeout($.unblockUI, 1);
+        mostrarResultado('err', 'Error de conexión.');
+      });
+    });
+
+    document.getElementById('ads-campanas-btn').addEventListener('click', function () {
+      var lista = document.getElementById('ads-campanas-lista');
+      if (typeof pantallaespera === 'function') pantallaespera();
+      post('ads_guardar_config', {
+        ad_account_id: document.getElementById('ads-account-id').value,
+        ads_access_token: document.getElementById('ads-token').value,
+      }).then(function () {
+        return post('ads_campanas', {
+          solo_activas: document.getElementById('ads-solo-activas').checked ? '1' : '0',
+        });
+      }).then(function (r) {
+        setTimeout($.unblockUI, 1);
+        if (r.error) {
+          mostrarResultado('err', '<i class="fa fa-times-circle me-1"></i>' + (r.message || 'No se pudieron traer las campañas.'));
+          lista.innerHTML = '';
+          return;
+        }
+        mostrarResultado('ok', '<i class="fa fa-check-circle me-1"></i>' + r.message);
+        var filas = (r.campanas || []).map(function (c) {
+          return '<tr><td>' + (c.nombre || '') + '<div class="muted small">ID ' + c.id + '</div></td>' +
+                 '<td>' + (c.objetivo || '') + '</td>' +
+                 '<td>' + (c.estado || '') + '</td>' +
+                 '<td>' + (c.inicio || '').substring(0, 10) + '</td></tr>';
+        }).join('');
+        if (!filas) {
+          lista.innerHTML = '<div class="muted small">La cuenta no tiene campañas con ese filtro.</div>';
+          return;
+        }
+        lista.innerHTML =
+          '<div class="table-responsive"><table class="table table-sm">' +
+          '<thead><tr><th>Campaña</th><th>Objetivo</th><th>Estado</th><th>Inicio</th></tr></thead>' +
+          '<tbody>' + filas + '</tbody></table></div>';
       }).catch(function () {
         setTimeout($.unblockUI, 1);
         mostrarResultado('err', 'Error de conexión.');
