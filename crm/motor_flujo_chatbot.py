@@ -1906,8 +1906,8 @@ def reiniciar_flujo_tradicional(conversation, depto=None) -> ResultadoFlujo:
     from whatsapp.services import get_whatsapp_service
 
     session = conversation.sesion
-    if (session.modo_bot or 'ia') != 'tradicional':
-        return ResultadoFlujo(manejado=False, error='La sesión no es tradicional.')
+    if (session.modo_bot or 'ia') not in ('tradicional', 'hibrido'):
+        return ResultadoFlujo(manejado=False, error='La sesión no tiene flujo de chatbot.')
 
     contacto = conversation.contacto
     if contacto is None:
@@ -1915,7 +1915,10 @@ def reiniciar_flujo_tradicional(conversation, depto=None) -> ResultadoFlujo:
 
     estado, _ = EstadoFlujoChatbot.objects.get_or_create(conversacion=conversation)
 
-    depto_objetivo = depto or estado.departamento or session.departamento_default
+    # Prioriza el flujo CONFIGURADO en la sesión (`departamento_default`) por
+    # sobre el depto en el que quedó el cliente: reiniciar tiene que devolverlo
+    # al primer mensaje del flujo de entrada, no al submenú donde se atascó.
+    depto_objetivo = depto or session.departamento_default or estado.departamento
     if depto_objetivo is None:
         return ResultadoFlujo(
             manejado=False,

@@ -1,13 +1,46 @@
 <p class="small text-muted mb-2">{{ titulo_scope }}</p>
+
+<div class="row g-2 mb-2">
+    <div class="col-6 col-lg-3">
+        <div class="card"><div class="card-body p-2 text-center">
+            <div class="text-muted small">Abiertas</div>
+            <div class="h5 mb-0">{{ resumen.total_abiertas }}</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card"><div class="card-body p-2 text-center">
+            <div class="text-muted small">Sin asignar</div>
+            <div class="h5 mb-0 text-warning">{{ resumen.sin_asignar }}</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card"><div class="card-body p-2 text-center">
+            <div class="text-muted small">Asesores</div>
+            <div class="h5 mb-0">{{ resumen.asesores }}</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card"><div class="card-body p-2 text-center">
+            <div class="text-muted small">Sin responder {{ resumen.horas }}h</div>
+            <div class="h5 mb-0 text-danger">{{ resumen.sin_responder_24h }}</div>
+        </div></div>
+    </div>
+</div>
+
 <div class="table-responsive">
     <table class="table table-sm table-bordered small align-middle mb-2">
         <thead>
         <tr>
             <th>Asesor</th>
             <th>Rol</th>
-            <th class="text-center">Conversaciones abiertas</th>
-            <th class="text-center">Asignaciones últimas 24h</th>
+            <th class="text-center">Abiertas</th>
+            <th class="text-center">Respondidas {{ resumen.horas }}h</th>
+            <th class="text-center">Sin tocar</th>
+            <th class="text-center">Mensajes {{ resumen.horas }}h</th>
+            <th class="text-center">Última respuesta</th>
+            <th class="text-center">Asignadas {{ resumen.horas }}h</th>
             <th class="text-center">Disponible</th>
+            <th class="text-center">Ver</th>
         </tr>
         </thead>
         <tbody>
@@ -16,6 +49,28 @@
                 <td>{{ f.nombre }}</td>
                 <td>{{ f.rol }}</td>
                 <td class="text-center"><b>{{ f.abiertas }}</b></td>
+                <td class="text-center">
+                    {% if f.respondio_24h %}
+                        <span class="badge bg-success">{{ f.respondidas_24h }}</span>
+                    {% else %}
+                        <span class="badge bg-danger">0</span>
+                    {% endif %}
+                </td>
+                <td class="text-center">
+                    {% if f.pendientes %}
+                        <span class="badge bg-warning text-dark">{{ f.pendientes }}</span>
+                    {% else %}
+                        0
+                    {% endif %}
+                </td>
+                <td class="text-center">{{ f.mensajes_24h }}</td>
+                <td class="text-center">
+                    {% if f.ultima_respuesta %}
+                        {{ f.ultima_respuesta|date:"d/m/Y H:i" }}
+                    {% else %}
+                        <span class="text-muted">Nunca</span>
+                    {% endif %}
+                </td>
                 <td class="text-center">{{ f.asig_24h }}</td>
                 <td class="text-center">
                     {% if f.disponible %}
@@ -24,14 +79,23 @@
                         <span class="badge bg-secondary">No</span>
                     {% endif %}
                 </td>
+                <td class="text-center">
+                    <a href="/whatsapp/conversaciones/?sesion={{ sesion_token }}&asesor={{ f.usuario_id }}"
+                       target="_blank" rel="noopener" class="btn btn-primary btn-sm"
+                       title="Ver en conversaciones lo que viene respondiendo">
+                        <i class="fa fa-comments"></i>
+                    </a>
+                </td>
             </tr>
         {% empty %}
-            <tr><td colspan="5" class="text-center text-muted">La sesión no tiene asesores asignados.</td></tr>
+            <tr><td colspan="10" class="text-center text-muted">La sesión no tiene asesores asignados.</td></tr>
         {% endfor %}
         </tbody>
     </table>
 </div>
-<p class="small mb-0">
-    <span class="badge bg-warning text-dark me-2">Sin asignar: {{ sin_asignar }}</span>
-    <span class="badge bg-light text-dark border">Total abiertas de la sesión: {{ total_abiertas }}</span>
+
+<p class="small text-muted mb-0">
+    <i class="fa fa-circle-info me-1"></i>
+    "Respondidas" cuenta las conversaciones donde el asesor escribió al menos un mensaje en las últimas
+    {{ resumen.horas }} horas. "Sin tocar" son sus conversaciones abiertas que no respondió en ese lapso.
 </p>

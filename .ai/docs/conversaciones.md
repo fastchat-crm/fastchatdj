@@ -355,8 +355,28 @@ se marca con el switch "Asignación masiva" del modal "Usuarios asignables" de
   en el flujo.
 - El reparto queda justo porque `candidatos_ordenados` se recalcula en cada
   iteración: ordena por asignaciones de las últimas 24h, luego `ultimo_asignado_en`,
-  luego carga abierta. Tope de `LIMITE_ASIGNACION_MASIVA = 200` por ejecución; el
-  mensaje de respuesta informa los restantes.
+  luego carga abierta.
+- **Por lotes con barra de progreso**: cada POST procesa `lote` conversaciones
+  (`LOTE_ASIGNACION_MASIVA = 10`, tope `LIMITE_ASIGNACION_MASIVA = 200`) y
+  devuelve `total_pendientes`, `procesadas`, `asignadas`, `sin_candidato`,
+  `restantes` y `continuar`. El inbox encadena lotes en `repartirLoteMasiva()`
+  pintando `#modalAsignacionMasiva`, y al terminar recarga la página.
+  `continuar` es False si un lote no asignó nada (sin candidatos disponibles),
+  para no quedar pidiendo lotes en vano.
+
+**Acción masiva `reasignacion-masiva-asesor`** (botón "Reasignar asesor", mismo
+permiso `puede_asignar_masivo`): pasa todas las conversaciones **abiertas** de un
+asesor a otro (vacaciones, bajas, rebalanceo). Handler
+`reasignacion_masiva_asesor_post`. Escribe `asignado_a` + `fecha_asignacion` +
+`HistorialAsignacion`, y manda **una** notificación por lote al asesor destino
+(no una por conversación). Tampoco cierra, ni pausa el bot, ni le escribe al
+cliente. Lotes de `LOTE_REASIGNACION_MASIVA = 50` con la misma barra de progreso.
+
+**Chips de filtro con dropdown:** `aplicarFiltro()` marca el chip padre
+(`.filter-btn.dropdown-toggle`) cuando el filtro viene de un `.filter-link`
+(Etapa / Asesor) y le agrega el valor elegido al label. Antes solo buscaba un
+`.filter-btn[data-filter=...]`, que no existe para las opciones del dropdown, y
+por eso filtrar por asesor no marcaba nada como activo.
 
 **Imágenes del hilo:** los `<a>` de las imágenes en `mensajes_partial.html` y
 `mensaje_enviado_partial.html` usan `data-fancybox="chat"` y ya **no** llevan

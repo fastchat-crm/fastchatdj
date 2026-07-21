@@ -16,6 +16,7 @@ from .forms import CambiarClasificacionForm, CambiarNombreContactoForm, AsignarA
 from .funcionesWhatsappConversacion import (
     cambiar_clasificacion_get,
     asignacion_automatica_masiva_post,
+    reasignacion_masiva_asesor_post,
     cambiar_clasificacion_post,
     cambiar_nombre_contacto_get,
     cambiar_nombre_contacto_post,
@@ -636,6 +637,9 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
     if request.method == 'POST' and request.POST.get('action') == 'asignacion-automatica-masiva':
         return asignacion_automatica_masiva_post(request, sesiones, sesion_seleccionada)
 
+    if request.method == 'POST' and request.POST.get('action') == 'reasignacion-masiva-asesor':
+        return reasignacion_masiva_asesor_post(request, sesiones, sesion_seleccionada)
+
     if request.method == 'POST':
         try:
             with transaction.atomic():
@@ -1130,10 +1134,10 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                     filtro = ConversacionWhatsApp.objects.select_related(
                         'sesion', 'contacto'
                     ).get(pk=int(request.POST['id']))
-                    if (filtro.sesion.modo_bot or '') != 'tradicional':
+                    if (filtro.sesion.modo_bot or '') not in ('tradicional', 'hibrido'):
                         return JsonResponse({
                             'error': True,
-                            'message': 'Esta acción solo aplica a sesiones con chatbot tradicional.',
+                            'message': 'Esta acción solo aplica a sesiones con flujo de chatbot (tradicional o híbrido).',
                         })
                     resultado = reiniciar_flujo_tradicional(filtro)
                     if resultado.error:

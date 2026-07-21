@@ -102,6 +102,11 @@
                     <i class="fa fa-wand-magic-sparkles"></i><span>Asignación automática</span>
                 </button>
                 {% endif %}
+                {% if puede_asignar_masivo and asesores_filtro %}
+                <button type="button" class="cs-chip" id="btn-reasignar-asesor" title="Pasar todas las conversaciones abiertas de un asesor a otro">
+                    <i class="fa fa-right-left"></i><span>Reasignar asesor</span>
+                </button>
+                {% endif %}
                 <div class="dropdown">
                     <button class="cs-chip filter-btn dropdown-toggle {% if filtro_clasificacion %}active{% endif %}" data-bs-toggle="dropdown" data-bs-strategy="fixed" title="Filtrar por etapa">
                         <i class="fa fa-layer-group"></i><span>Etapa</span>
@@ -607,6 +612,83 @@
         </div>
     </div>
 
+    {# Modal: reasignar en masa las conversaciones abiertas de un asesor a otro #}
+    <div class="modal fade" id="modalReasignarAsesor" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2 bg-primary bg-opacity-10">
+                    <h6 class="modal-title mb-0">
+                        <i class="fa fa-right-left me-1"></i> Reasignar conversaciones de un asesor
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Asesor de origen</label>
+                        <select class="form-select" id="reasignar-origen">
+                            <option value="">Selecciona el asesor</option>
+                            {% for a in asesores_filtro %}
+                                <option value="{{ a.id }}">{{ a.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Asesor de destino</label>
+                        <select class="form-select" id="reasignar-destino">
+                            <option value="">Selecciona el asesor</option>
+                            {% for a in asesores_filtro %}
+                                <option value="{{ a.id }}">{{ a.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="alert alert-info mb-0 small">
+                        <i class="fa fa-circle-info me-1"></i>
+                        Se pasan todas las conversaciones <b>abiertas</b> del asesor de origen. No se cierra
+                        ninguna conversación, el bot sigue igual y el cliente no recibe ningún mensaje.
+                    </div>
+                    <div class="progress mt-3 d-none" id="progreso-reasignar" style="height: 20px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated"
+                             id="barra-reasignar" role="progressbar" style="width: 0%;"
+                             aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" data-bs-dismiss="modal">
+                        <i class="fa fa-window-close me-1"></i> Cancelar
+                    </button>
+                    <button type="button" class="btn btn-success" id="btn-confirmar-reasignar">
+                        <i class="fa fa-right-left me-1"></i> Reasignar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Modal: progreso del reparto automático de conversaciones sin asesor #}
+    <div class="modal fade" id="modalAsignacionMasiva" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2 bg-primary bg-opacity-10">
+                    <h6 class="modal-title mb-0">
+                        <i class="fa fa-wand-magic-sparkles me-1"></i> Repartiendo conversaciones
+                    </h6>
+                </div>
+                <div class="modal-body">
+                    <div class="progress mb-2" style="height: 20px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated"
+                             id="barra-asignacion-masiva" role="progressbar"
+                             style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                    </div>
+                    <div class="small text-muted" id="detalle-asignacion-masiva"></div>
+                    <div class="small text-muted mt-2">
+                        <i class="fa fa-circle-info me-1"></i>
+                        Se avisa a cada asesor por notificación, correo y WhatsApp, por eso puede tardar unos segundos.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {# Modal: confirmar reinicio del flujo del chatbot tradicional #}
     <div class="modal fade" id="modalReiniciarFlujo" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
@@ -1098,12 +1180,133 @@
             });
     });
 
+    function actualizarProgresoMasiva(procesadas, total, asignadas, sinCandidato) {
+        var pct = total ? Math.round((procesadas / total) * 100) : 100;
+        $('#barra-asignacion-masiva')
+            .css('width', pct + '%')
+            .attr('aria-valuenow', pct)
+            .text(pct + '%');
+        $('#detalle-asignacion-masiva').html(
+            'Repartidas: <b>' + asignadas + '</b> de ' + total +
+            (sinCandidato ? ' · Sin asesor disponible: <b>' + sinCandidato + '</b>' : '')
+        );
+    }
+
+    function repartirLoteMasiva(estado, modal, $btn) {
+        $.post('{{ ruta }}', {
+            action: 'asignacion-automatica-masiva',
+            lote: 10,
+            csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val()
+        }, function(r) {
+            if (r.error) {
+                modal.hide();
+                $btn.prop('disabled', false);
+                mensajeWarning(r.message || 'No se pudo repartir las conversaciones.');
+                return;
+            }
+            if (!estado.total) { estado.total = r.total_pendientes; }
+            estado.asignadas += r.asignadas;
+            estado.sinCandidato += r.sin_candidato;
+            estado.procesadas += r.procesadas;
+            actualizarProgresoMasiva(estado.procesadas, estado.total, estado.asignadas, estado.sinCandidato);
+
+            if (r.continuar) {
+                repartirLoteMasiva(estado, modal, $btn);
+                return;
+            }
+            modal.hide();
+            $btn.prop('disabled', false);
+            var texto = 'Se repartieron ' + estado.asignadas + ' conversaciones.';
+            if (estado.sinCandidato) {
+                texto += ' ' + estado.sinCandidato + ' quedaron sin asesor porque no había candidatos disponibles.';
+            }
+            Swal.fire({
+                title: 'Listo',
+                text: texto,
+                type: 'success',
+                allowOutsideClick: false
+            }).then(function () {
+                window.location.reload();
+            });
+        }, 'json').fail(function(xhr) {
+            modal.hide();
+            $btn.prop('disabled', false);
+            console.error('[asignacion-masiva] ajax fail', xhr.status, xhr.responseText);
+            mensajeDanger('Error al repartir las conversaciones (' + xhr.status + ').');
+        });
+    }
+
+    $(document).on('click', '#btn-reasignar-asesor', function(e) {
+        e.preventDefault();
+        $('#reasignar-origen').val('');
+        $('#reasignar-destino').val('');
+        $('#progreso-reasignar').addClass('d-none');
+        $('#barra-reasignar').css('width', '0%').text('0%');
+        new bootstrap.Modal(document.getElementById('modalReasignarAsesor')).show();
+    });
+
+    function reasignarLoteAsesor(estado, $btn) {
+        $.post('{{ ruta }}', {
+            action: 'reasignacion-masiva-asesor',
+            origen_id: estado.origen,
+            destino_id: estado.destino,
+            lote: 50,
+            csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val()
+        }, function(r) {
+            if (r.error) {
+                $btn.prop('disabled', false);
+                mensajeWarning(r.message || 'No se pudo reasignar.');
+                return;
+            }
+            if (!estado.total) { estado.total = r.total_pendientes; }
+            estado.hechas += r.reasignadas;
+            var pct = estado.total ? Math.round((estado.hechas / estado.total) * 100) : 100;
+            $('#barra-reasignar').css('width', pct + '%').attr('aria-valuenow', pct).text(pct + '%');
+
+            if (r.continuar) {
+                reasignarLoteAsesor(estado, $btn);
+                return;
+            }
+            bootstrap.Modal.getInstance(document.getElementById('modalReasignarAsesor')).hide();
+            $btn.prop('disabled', false);
+            Swal.fire({
+                title: 'Listo',
+                text: 'Se reasignaron ' + estado.hechas + ' conversaciones.',
+                type: 'success',
+                allowOutsideClick: false
+            }).then(function () {
+                window.location.reload();
+            });
+        }, 'json').fail(function(xhr) {
+            $btn.prop('disabled', false);
+            console.error('[reasignacion-masiva] ajax fail', xhr.status, xhr.responseText);
+            mensajeDanger('Error al reasignar (' + xhr.status + ').');
+        });
+    }
+
+    $(document).on('click', '#btn-confirmar-reasignar', function() {
+        const $btn = $(this);
+        const origen = $('#reasignar-origen').val();
+        const destino = $('#reasignar-destino').val();
+        if (!origen || !destino) {
+            mensajeWarning('Selecciona el asesor de origen y el de destino.');
+            return;
+        }
+        if (origen === destino) {
+            mensajeWarning('El asesor de origen y el de destino son el mismo.');
+            return;
+        }
+        $btn.prop('disabled', true);
+        $('#progreso-reasignar').removeClass('d-none');
+        reasignarLoteAsesor({ origen: origen, destino: destino, total: 0, hechas: 0 }, $btn);
+    });
+
     $(document).on('click', '#btn-asignacion-masiva', function(e) {
         e.preventDefault();
         const $btn = $(this);
         Swal.fire({
             title: '¿Repartir las conversaciones sin asesor?',
-            text: 'Cada conversación se asigna al asesor disponible con menos carga y turno más antiguo. Se avisa solo al asesor: la conversación no se cierra, el bot sigue activo y el cliente no recibe ningún mensaje.',
+            text: 'Solo se tocan las conversaciones abiertas que no tienen asesor. Cada una se asigna al asesor disponible con menos carga y turno más antiguo. Se avisa solo al asesor: la conversación no se cierra, el bot sigue activo y el cliente no recibe ningún mensaje.',
             type: 'warning',
             showCancelButton: true,
             allowOutsideClick: false,
@@ -1114,25 +1317,14 @@
         }).then((result) => {
             if (!result.value) return;
             $btn.prop('disabled', true);
-            pantallaespera();
-            $.post('{{ ruta }}', {
-                action: 'asignacion-automatica-masiva',
-                csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val()
-            }, function(r) {
-                $.unblockUI();
-                $btn.prop('disabled', false);
-                if (r.error) {
-                    mensajeWarning(r.message || 'No se pudo repartir las conversaciones.');
-                    return;
-                }
-                Swal.fire({ title: 'Listo', text: r.message, type: 'success' });
-                cargarConversaciones();
-            }, 'json').fail(function(xhr) {
-                $.unblockUI();
-                $btn.prop('disabled', false);
-                console.error('[asignacion-masiva] ajax fail', xhr.status, xhr.responseText);
-                mensajeDanger('Error al repartir las conversaciones (' + xhr.status + ').');
+            actualizarProgresoMasiva(0, 0, 0, 0);
+            $('#barra-asignacion-masiva').css('width', '0%').text('0%');
+            $('#detalle-asignacion-masiva').html('Preparando el reparto...');
+            var modal = new bootstrap.Modal(document.getElementById('modalAsignacionMasiva'), {
+                backdrop: 'static', keyboard: false
             });
+            modal.show();
+            repartirLoteMasiva({ total: 0, asignadas: 0, sinCandidato: 0, procesadas: 0 }, modal, $btn);
         });
     });
 
@@ -2692,7 +2884,27 @@
         function aplicarFiltro(filtro) {
             filtroActivo = filtro;
             $('.filter-btn').removeClass('active');
-            $(`.filter-btn[data-filter="${filtro}"]`).addClass('active');
+            $('.filter-link').removeClass('active');
+            $('.filter-btn.dropdown-toggle').each(function () {
+                const $chip = $(this);
+                if ($chip.data('label-base') === undefined) {
+                    $chip.data('label-base', $chip.find('span').text());
+                }
+                $chip.find('span').text($chip.data('label-base'));
+            });
+
+            const $chip = $(`.filter-btn[data-filter="${filtro}"]`);
+            if ($chip.length) {
+                $chip.addClass('active');
+            } else {
+                const $link = $(`.filter-link[data-filter="${filtro}"]`);
+                $link.addClass('active');
+                const $toggle = $link.closest('.dropdown').find('.filter-btn.dropdown-toggle');
+                $toggle.addClass('active');
+                if ($link.length) {
+                    $toggle.find('span').text($toggle.data('label-base') + ': ' + $link.text().trim());
+                }
+            }
             const sesionId = $('#sesion-selector').val();
             cargarConversaciones(sesionId, $('#search-conversacion').val(), filtroActivo);
         }

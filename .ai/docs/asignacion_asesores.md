@@ -195,6 +195,22 @@ los afecta.
 
 ---
 
+## 6.b Reporte de carga y actividad de asesores
+
+`/whatsapp/sesiones/` → kebab de la sesión → **Carga de asesores**
+(`?action=carga_asesores`, `verCargaAsesores()` en `tablero.html`).
+
+- Datos: `whatsapp/funciones_carga_asesores.py:reporte_carga_asesores(sesion)`.
+- Por asesor: conversaciones **abiertas**, **respondidas** en las últimas 24 h
+  (conversaciones donde escribió al menos un mensaje: `MensajeWhatsApp.agente`),
+  **sin tocar** (abiertas − respondidas), mensajes escritos, **última respuesta**,
+  asignaciones recibidas en 24 h (`HistorialAsignacion`) y disponibilidad
+  (`DisponibilidadAgente`).
+- Resumen arriba: abiertas totales, sin asignar, asesores y cuántos tienen
+  conversaciones abiertas y **no** respondieron nada en la ventana.
+- Cada fila enlaza a `/whatsapp/conversaciones/?sesion=<token>&asesor=<id>` para
+  ir a ver lo que viene respondiendo. Orden: primero los que más "sin tocar" tienen.
+
 ## 7. Archivos referenciados
 
 | Archivo | Rol |

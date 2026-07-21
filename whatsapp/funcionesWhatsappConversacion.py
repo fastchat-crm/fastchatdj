@@ -915,6 +915,15 @@ def enviar_plantilla_reconexion(request):
 
 LIMITE_ASIGNACION_MASIVA = 200
 
+# Conversaciones por POST. El reparto manda notificación, email y WhatsApp por
+# cada asesor, así que se procesa de a lotes chicos para responder rápido y que
+# el inbox pueda pintar la barra de progreso.
+LOTE_ASIGNACION_MASIVA = 10
+
+# La reasignación entre asesores no manda correo ni WhatsApp por conversación,
+# así que puede ir en lotes más grandes.
+LOTE_REASIGNACION_MASIVA = 50
+
 
 def filtro_conversaciones_sin_asesor(usuario, sesiones, sesion_seleccionada=None):
     """Q() de las conversaciones abiertas y visibles que no tienen asesor.
@@ -937,6 +946,107 @@ def filtro_conversaciones_sin_asesor(usuario, sesiones, sesion_seleccionada=None
         filtros = filtros & Q(contacto__sesion=sesion_seleccionada)
         filtros = filtros & filtro_conversaciones_por_rol(usuario, sesion_seleccionada)
     return filtros
+
+
+def reasignacion_masiva_asesor_post(request, sesiones, sesion_seleccionada=None):
+    """POST: pasa todas las conversaciones abiertas de un asesor a otro.
+
+    Sirve para vacaciones, bajas o rebalanceo. Igual que el reparto automático
+    es administrativo: no cierra la conversación, no pausa el bot y no le avisa
+    al cliente. Al asesor destino se le manda **una** notificación por lote con
+    el total, no una por conversación.
+    """
+    from django.contrib.auth import get_user_model
+    from .permisos_sesion import puede_asignar_masivo
+    from .models import HistorialAsignacion
+
+    if not puede_asignar_masivo(request.user, sesion_seleccionada):
+        return JsonResponse({
+            'error': True,
+            'message': 'No tienes permiso para reasignar conversaciones en esta sesión.',
+        })
+
+    Usuario = get_user_model()
+    origen = Usuario.objects.filter(pk=request.POST.get('origen_id')).first()
+    destino = Usuario.objects.filter(pk=request.POST.get('destino_id'), is_active=True).first()
+    if not origen or not destino:
+        return JsonResponse({'error': True, 'message': 'Selecciona el asesor de origen y el de destino.'})
+    if origen.pk == destino.pk:
+        return JsonResponse({'error': True, 'message': 'El asesor de origen y el de destino son el mismo.'})
+
+    from django.db.models import Q
+    from .permisos_sesion import filtro_conversaciones_por_rol
+
+    filtros = Q(
+        contacto__status=True, status=True,
+        contacto__sesion__in=sesiones,
+        contacto__sesion__status=True,
+        estado_conversacion=0,
+        asignado_a=origen,
+    )
+    if sesion_seleccionada:
+        filtros = filtros & Q(contacto__sesion=sesion_seleccionada)
+        filtros = filtros & filtro_conversaciones_por_rol(request.user, sesion_seleccionada)
+
+    pendientes = ConversacionWhatsApp.objects.filter(filtros).distinct().order_by('id')
+    total_pendientes = pendientes.count()
+
+    try:
+        lote = int(request.POST.get('lote') or LOTE_REASIGNACION_MASIVA)
+    except (TypeError, ValueError):
+        lote = LOTE_REASIGNACION_MASIVA
+    lote = max(1, min(lote, LIMITE_ASIGNACION_MASIVA))
+
+    reasignadas = 0
+    for conversacion in list(pendientes[:lote]):
+        try:
+            conversacion.asignado_a = destino
+            conversacion.fecha_asignacion = timezone.now()
+            conversacion.save(update_fields=['asignado_a', 'fecha_asignacion'])
+            HistorialAsignacion.objects.create(
+                conversacion=conversacion,
+                asignado_a=destino,
+                asignado_por=request.user,
+                nota=f'Reasignación masiva desde {origen.get_full_name() or origen.username}.',
+            )
+            reasignadas += 1
+        except Exception:
+            import logging as _logging
+            _logging.getLogger(__name__).exception(
+                'Fallo la reasignación masiva conv#%s', conversacion.id)
+
+    if reasignadas:
+        try:
+            from seguridad.models import Notificacion
+            Notificacion.objects.create(
+                titulo=f'Se te reasignaron {reasignadas} conversaciones'[:300],
+                cuerpo=(
+                    f'{request.user.get_full_name() or request.user.username} te pasó '
+                    f'{reasignadas} conversaciones abiertas de '
+                    f'{origen.get_full_name() or origen.username}.'
+                ),
+                destinatario=destino,
+                url='/whatsapp/conversaciones/',
+                prioridad=2,
+                tipo=3,
+            )
+        except Exception:
+            import logging as _logging
+            _logging.getLogger(__name__).exception('No se pudo notificar la reasignación masiva')
+
+        log(f"Reasignación masiva: {reasignadas} conversaciones de {origen} a {destino}",
+            request, "change")
+
+    restantes = max(total_pendientes - reasignadas, 0)
+    return JsonResponse({
+        'error': False,
+        'message': f'Se reasignaron {reasignadas} conversaciones.',
+        'total_pendientes': total_pendientes,
+        'procesadas': reasignadas,
+        'reasignadas': reasignadas,
+        'restantes': restantes,
+        'continuar': bool(restantes and reasignadas),
+    })
 
 
 def asignacion_automatica_masiva_post(request, sesiones, sesion_seleccionada=None):
@@ -970,7 +1080,15 @@ def asignacion_automatica_masiva_post(request, sesiones, sesion_seleccionada=Non
     sin_candidato = 0
     fallidas = 0
 
-    for conversacion in pendientes[:LIMITE_ASIGNACION_MASIVA]:
+    # El cliente reparte de a lotes para poder pintar la barra de progreso: cada
+    # POST procesa `lote` conversaciones y devuelve cuántas quedan.
+    try:
+        lote = int(request.POST.get('lote') or LOTE_ASIGNACION_MASIVA)
+    except (TypeError, ValueError):
+        lote = LOTE_ASIGNACION_MASIVA
+    lote = max(1, min(lote, LIMITE_ASIGNACION_MASIVA))
+
+    for conversacion in pendientes[:lote]:
         try:
             candidato = auto_asignar_agente(
                 conversacion,
@@ -993,25 +1111,29 @@ def asignacion_automatica_masiva_post(request, sesiones, sesion_seleccionada=Non
         else:
             sin_candidato += 1
 
-    log(f"Asignación automática masiva: {asignadas} conversaciones repartidas", request, "change")
+    if asignadas:
+        log(f"Asignación automática masiva: {asignadas} conversaciones repartidas", request, "change")
 
-    restantes = max(total_pendientes - LIMITE_ASIGNACION_MASIVA, 0)
+    procesadas = asignadas + sin_candidato + fallidas
+    restantes = max(total_pendientes - procesadas, 0)
     if asignadas:
         message = f'Se repartieron {asignadas} conversaciones entre los asesores disponibles.'
     else:
-        message = 'No se pudo repartir ninguna conversación.'
+        message = 'No se repartió ninguna conversación.'
     if sin_candidato:
         message += f' {sin_candidato} quedaron sin asesor porque no había candidatos disponibles.'
     if fallidas:
         message += f' {fallidas} fallaron y quedan pendientes.'
-    if restantes:
-        message += f' Quedan {restantes} sin repartir, vuelve a ejecutar la acción para continuar.'
 
     return JsonResponse({
         'error': False,
         'message': message,
+        'total_pendientes': total_pendientes,
+        'procesadas': procesadas,
         'asignadas': asignadas,
         'sin_candidato': sin_candidato,
         'fallidas': fallidas,
         'restantes': restantes,
+        # Sin candidatos disponibles no tiene sentido seguir pidiendo lotes.
+        'continuar': bool(restantes and asignadas),
     })
