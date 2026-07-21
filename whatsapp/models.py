@@ -515,7 +515,10 @@ class ConversacionWhatsApp(ModeloBase):
     estado_conversacion = models.IntegerField(choices=ESTADOS_CONVERSACION, default=0, verbose_name='Estado de la conversación')
     # Campos para la gestión de mensajes
     conversacion_finalizada = models.BooleanField('Conversación finalizada', default=False)
-    fecha_hora_expira = models.DateTimeField('Fecha y Hora que expira la conversación')
+    fecha_hora_expira = models.DateTimeField(
+        'Fecha y Hora que expira la conversación', blank=True, null=True,
+        help_text='NULL = sin cierre automático (min_sesion=0 o canales Messenger/TikTok).'
+    )
     fecha_fin_conversacion = models.DateTimeField('Fecha y Hora de cierre de la conversación', blank=True, null=True)
     duracion_conversacion = models.DurationField('Duración de la conversación', blank=True, null=True)
     estado_mensaje = models.CharField(
@@ -854,7 +857,14 @@ class ConversacionWhatsApp(ModeloBase):
         if self.contacto.fecha_ultimo_mensaje:
             self.order = int(round(self.contacto.fecha_ultimo_mensaje.timestamp(), 0))
         if not self.fecha_hora_expira:
-            self.fecha_hora_expira = timezone.now() + relativedelta(minutes=self.contacto.sesion.min_sesion)
+            # min_sesion=0 o canal social (Messenger/TikTok) → sin cierre
+            # automático: se respeta el NULL. El backfill incondicional anterior
+            # ponía now()+0min = ya expirada — la conversación nacía invisible
+            # para el inbox (sin_expirar) sin estar cerrada.
+            _min_sesion = int(getattr(self.contacto.sesion, 'min_sesion', None) or 0)
+            _proveedor = getattr(self.contacto.sesion, 'proveedor', '') or ''
+            if _min_sesion > 0 and _proveedor not in ('messenger', 'tiktok'):
+                self.fecha_hora_expira = timezone.now() + relativedelta(minutes=_min_sesion)
         if not self.hashed_id:
             self.hashed_id = get_encrypt(self.id)[1]
         super().save(*args, **kwargs)
