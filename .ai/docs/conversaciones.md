@@ -324,6 +324,15 @@ filtros = Q(
 - `?asesor=<user_id>` — `asignado_a_id=<id>`. El dropdown "Asesor" del sidebar
   solo se renderiza con vista completa (`es_vista_completa`); candidatos salen
   de `PerfilSesionWhatsApp` de la sesión seleccionada (dedupe por usuario).
+- `?por_caducar=1` — chip "Por caducar": ventana Meta de 24h con <6h restantes.
+  Se filtra en el branch load sobre la anotación `fecha_ultimo_entrante`
+  (último entrante entre 18h y 24h de antigüedad) + `sesion__proveedor='meta'`.
+
+**Orden del listado:** explícito por `contacto__fecha_ultimo_mensaje` DESC
+(nulls last), NO por el default `-order` del modelo — el snapshot `order` puede
+estar desactualizado (solo se recalcula en save(); ver nota de
+procesar_mensaje). Es el mismo dato que muestra el "hace X min" de la card,
+así el orden visible siempre coincide.
 
 **AJAX `?load_conversations=1`** (línea 824): retorna el HTML del partial más
 `listado_count`, `total_abiertas` y `total_finalizadas` (el JS refresca los

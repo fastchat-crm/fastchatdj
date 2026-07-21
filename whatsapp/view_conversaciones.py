@@ -1304,6 +1304,7 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
     filtro_sin_responder = request.GET.get('sin_responder', '')
     filtro_mis_conv = request.GET.get('mis_conv', '')
     filtro_asesor = request.GET.get('asesor', '')
+    filtro_por_caducar = request.GET.get('por_caducar', '')
 
     # `sesiones` ya viene acotado por canal_fijo (wrappers /instagram/ y
     # /tiktok/): sin esto, con canal sin sesiones (sesion_seleccionada=None)
@@ -1355,6 +1356,12 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
             url_vars += f'&asesor={data["filtro_asesor"]}'
         except (TypeError, ValueError):
             filtro_asesor = ''
+
+    if filtro_por_caducar:
+        # El filtrado real se aplica en el branch load_conversations sobre la
+        # anotación fecha_ultimo_entrante (ventana Meta de 24h).
+        data["filtro_por_caducar"] = True
+        url_vars += '&por_caducar=1'
 
     data["url_vars"] = url_vars
     data['conversacion_selected'] = conversacion_selected
@@ -1493,6 +1500,27 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
 
         from datetime import timedelta as _td
         ahora_ts = timezone.now()
+
+        # "Por caducar": ventana Meta de 24h con menos de 6h restantes.
+        # vence = fecha_ultimo_entrante + 24h → quedan <6h cuando el último
+        # entrante tiene entre 18h y 24h de antigüedad. Solo aplica a Meta
+        # (Baileys no tiene ventana de servicio).
+        if filtro_por_caducar:
+            qs = qs.filter(
+                contacto__sesion__proveedor='meta',
+                fecha_ultimo_entrante__gt=ahora_ts - _td(hours=24),
+                fecha_ultimo_entrante__lte=ahora_ts - _td(hours=18),
+            )
+
+        # Orden: última actividad primero. Se ordena por el dato vivo del
+        # contacto (el mismo que muestra el "hace X min" de la card) y no por
+        # el snapshot `order`, que quedó desactualizado en conversaciones
+        # creadas antes del fix de procesar_mensaje.
+        qs = qs.order_by(
+            django_models.F('contacto__fecha_ultimo_mensaje').desc(nulls_last=True),
+            '-id',
+        )
+
         conv_list = list(qs)
         for _c in conv_list:
             if getattr(_c, 'atendida_por_meta', False) and getattr(_c, 'fecha_ultimo_entrante', None):

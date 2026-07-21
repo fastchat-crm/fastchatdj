@@ -80,7 +80,7 @@
             </div>
 
             <div class="cs-filter-bar" id="filtros-rapidos">
-                <button class="cs-chip filter-btn {% if not filtro_sin_responder and not filtro_mis_conv and not filtro_clasificacion and not filtro_asesor %}active{% endif %}" data-filter="" title="Todas las conversaciones">
+                <button class="cs-chip filter-btn {% if not filtro_sin_responder and not filtro_mis_conv and not filtro_clasificacion and not filtro_asesor and not filtro_por_caducar %}active{% endif %}" data-filter="" title="Todas las conversaciones">
                     <i class="fa fa-inbox"></i><span>Todas</span>
                 </button>
                 <button class="cs-chip filter-btn {% if filtro_sin_responder %}active cs-chip-alert{% endif %}" data-filter="sin_responder=1" title="Último mensaje es del cliente">
@@ -88,6 +88,9 @@
                 </button>
                 <button class="cs-chip filter-btn {% if filtro_mis_conv %}active{% endif %}" data-filter="mis_conv=1" title="Mis conversaciones">
                     <i class="fa fa-user-circle"></i><span>Mías</span>
+                </button>
+                <button class="cs-chip filter-btn {% if filtro_por_caducar %}active cs-chip-alert{% endif %}" data-filter="por_caducar=1" title="Ventana Meta de 24h con menos de 6 horas restantes para responder">
+                    <i class="fa fa-hourglass-end"></i><span>Por caducar</span>
                 </button>
                 <div class="dropdown">
                     <button class="cs-chip filter-btn dropdown-toggle {% if filtro_clasificacion %}active{% endif %}" data-bs-toggle="dropdown" data-bs-strategy="fixed" title="Filtrar por etapa">
