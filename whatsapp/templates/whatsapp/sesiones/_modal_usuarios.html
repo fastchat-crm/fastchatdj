@@ -150,9 +150,13 @@
         responsive: false,
         bInfo: false,
         ordering: false,
-        searching: false,
-        dom: 'Bfrtip',
-        language: {url: '/static/js/i18n/Spanish.json'},
+        searching: true,
+        dom: "<'row'<'col-12'f>><'row'<'col-12'tr>><'row'<'col-12'p>>",
+        language: {
+            url: '/static/js/i18n/Spanish.json',
+            search: 'Buscar:',
+            searchPlaceholder: 'Buscar usuario o rol'
+        },
         pageLength: 10,
         buttons: []
     });
