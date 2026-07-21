@@ -223,6 +223,11 @@ def process_incoming_message(session, event_data, channel_layer):
 
         try:
             conversation, created = ConversacionWhatsApp.obtener_o_crear_activa(contacto)
+            # `order` (orden del inbox, -order) se recalcula DENTRO de save()
+            # desde contacto.fecha_ultimo_mensaje (recién actualizado arriba).
+            # Sin este save las conversaciones existentes no suben al tope al
+            # recibir mensajes: obtener_o_crear_activa retorna sin guardar.
+            conversation.save(update_fields=['order'])
             if created:
                 logger.info("Nueva conversación creada #%s para contacto %s", conversation.id, contacto.id)
                 # Hereda canal del contacto

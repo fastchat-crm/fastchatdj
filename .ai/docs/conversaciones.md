@@ -699,7 +699,10 @@ procesar_mensaje.process_incoming_message()
    │  dos entregas simultáneas del mismo id) + chequeo BD por mensaje_id_externo
    │  (reenvíos tardíos de Meta/Baileys)
    ├─ persiste / actualiza Contacto
-   ├─ persiste / actualiza ConversacionWhatsApp (recalcula fecha_hora_expira)
+   ├─ persiste / actualiza ConversacionWhatsApp (recalcula fecha_hora_expira;
+   │  save(update_fields=['order']) explícito para burbujear al tope del inbox —
+   │  `order` deriva de contacto.fecha_ultimo_mensaje DENTRO de save() y
+   │  obtener_o_crear_activa retorna la conv existente sin guardar)
    ├─ persiste MensajeWhatsApp
    ├─ actualiza EstadisticasConversacion
    ├─ secuencias drip: mensaje entrante cancela inscripciones activas con
@@ -858,7 +861,7 @@ JsonResponse({pendiente: true, mensaje_html})
 | `whatsapp/webhook_baileys_view.py` | Endpoint `/webhook_handler/` (Baileys) |
 | `whatsapp/meta_social_webhook_view.py` | Webhooks IG DM + Messenger. `_enriquecer_perfil_social` (2026-07-16): antes de `process_incoming_message` completa `pushName`/`userImage` del evento con el User Profile API de Meta (`meta/perfiles.py::obtener_perfil_usuario_messenger` — first_name/last_name/profile_pic; `obtener_perfil_usuario_instagram` — name/username/profile_pic + follower_count/flags follow). Solo pega a Graph si el `Contacto` aún no tiene nombre o foto; resultado cacheado 6h por sender (incluye fallo, para no reintentar por mensaje). Messenger/IG no exponen email ni teléfono. TikTok ya trae `nickname`/`avatar` en el propio payload (`tiktok/webhook_view.py::_a_evento_interno`) |
 | `whatsapp/urls.py` | Registro de rutas |
-| `whatsapp/templates/whatsapp/conversaciones/listado.html` | Template abiertas |
+| `whatsapp/templates/whatsapp/conversaciones/listado.html` | Template abiertas. WS sessionroom `new_message`: la card se mueve al TOPE de la lista (remove + prepend, estilo WhatsApp); si la card no existía (conversación nueva) incrementa el badge `#total-abiertas-badge` en el cliente — los totales exactos se recalculan en cada `cargarConversaciones` |
 | `whatsapp/templates/whatsapp/conversaciones/listado_expirado.html` | Template finalizadas |
 | `whatsapp/templates/whatsapp/conversaciones/conversaciones_partial.html` | Wrapper sidebar |
 | `whatsapp/templates/whatsapp/conversaciones/conversacion_item.html` | Card de conversación |

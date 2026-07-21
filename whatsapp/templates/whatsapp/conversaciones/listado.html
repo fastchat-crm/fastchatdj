@@ -1226,15 +1226,18 @@
                 if ((data.type === 'new_message' || data.type === 'messages_update')) {
                     const conversacion = $(`#lista-conversaciones .conversacion-item[data-id="${data.conversacion_id}"]`);
                     if (data.html) {
+                        const $lista = $('#lista-conversaciones');
                         if (conversacion.length) {
-                            conversacion.replaceWith(data.html);
+                            conversacion.remove();
                         } else {
-                            const $lista = $('#lista-conversaciones');
-                            if ($lista.find('.conversacion-item').length === 0) {
-                                $lista.empty();
-                            }
-                            $lista.prepend(data.html);
+                            const $badgeAbiertas = $('#total-abiertas-badge');
+                            const totalActual = parseInt($badgeAbiertas.text(), 10);
+                            if (!isNaN(totalActual)) $badgeAbiertas.text(totalActual + 1);
                         }
+                        if ($lista.find('.conversacion-item').length === 0) {
+                            $lista.empty();
+                        }
+                        $lista.prepend(data.html);
                     } else {
                         cargarConversaciones($('#sesion-selector').val(), $('#search-conversacion').val(), filtroActivo);
                     }
