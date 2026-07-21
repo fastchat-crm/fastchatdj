@@ -391,6 +391,28 @@
     line-height: 1;
 }
 
+.cs-tab-total {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 99px;
+    background: var(--chat-surface);
+    border: 1px solid var(--chat-border-light);
+    color: var(--chat-text-secondary);
+    font-size: .64rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.cs-tab-btn.active .cs-tab-total {
+    background: rgba(255,255,255,.9);
+    border-color: transparent;
+    color: var(--chat-primary);
+}
+
 .cs-filter-bar {
     padding: 6px 10px 8px;
     display: flex;

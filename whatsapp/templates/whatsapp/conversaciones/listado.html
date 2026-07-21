@@ -63,12 +63,14 @@
             </div>
 
             <div class="cs-tabs">
-                <button class="cs-tab-btn active" id="open_chats_tab" data-bs-toggle="tab" data-bs-target="#open_chats_content" type="button" role="tab">
+                <button class="cs-tab-btn active" id="open_chats_tab" data-bs-toggle="tab" data-bs-target="#open_chats_content" type="button" role="tab" title="Conversaciones abiertas{% if total_sin_leer %} ({{ total_sin_leer }} sin leer){% endif %}">
                     <i class="fa fa-comment-dots me-1"></i>Abiertas
+                    <span class="cs-tab-total" id="total-abiertas-badge">{{ total_abiertas|default:0 }}</span>
                     {% if total_sin_leer %}<span class="cs-tab-count">{{ total_sin_leer }}</span>{% endif %}
                 </button>
-                <a href="{{ canal_branding.url_finalizadas }}" class="cs-tab-btn cs-tab-link bloqueo_pantalla" id="resolved_chats_tab">
+                <a href="{{ canal_branding.url_finalizadas }}" class="cs-tab-btn cs-tab-link bloqueo_pantalla" id="resolved_chats_tab" title="Conversaciones finalizadas">
                     <i class="fa fa-check-circle me-1"></i>Finalizadas
+                    <span class="cs-tab-total" id="total-finalizadas-badge">{{ total_finalizadas|default:0 }}</span>
                 </a>
                 {% if canal_branding.tiene_pendientes %}
                 <a href="{{ canal_branding.url_pendientes }}" class="cs-tab-btn cs-tab-link bloqueo_pantalla" id="pending_reconnection_tab">
@@ -78,7 +80,7 @@
             </div>
 
             <div class="cs-filter-bar" id="filtros-rapidos">
-                <button class="cs-chip filter-btn {% if not filtro_sin_responder and not filtro_mis_conv and not filtro_clasificacion %}active{% endif %}" data-filter="" title="Todas las conversaciones">
+                <button class="cs-chip filter-btn {% if not filtro_sin_responder and not filtro_mis_conv and not filtro_clasificacion and not filtro_asesor %}active{% endif %}" data-filter="" title="Todas las conversaciones">
                     <i class="fa fa-inbox"></i><span>Todas</span>
                 </button>
                 <button class="cs-chip filter-btn {% if filtro_sin_responder %}active cs-chip-alert{% endif %}" data-filter="sin_responder=1" title="Último mensaje es del cliente">
@@ -97,6 +99,18 @@
                         {% endfor %}
                     </ul>
                 </div>
+                {% if mostrar_filtro_asesor and asesores_filtro %}
+                <div class="dropdown">
+                    <button class="cs-chip filter-btn dropdown-toggle {% if filtro_asesor %}active{% endif %}" data-bs-toggle="dropdown" data-bs-strategy="fixed" title="Filtrar por asesor asignado">
+                        <i class="fa fa-user-check"></i><span>Asesor</span>
+                    </button>
+                    <ul class="dropdown-menu">
+                        {% for a in asesores_filtro %}
+                        <li><a class="dropdown-item filter-link {% if filtro_asesor == a.id %}active{% endif %}" href="#" data-filter="asesor={{ a.id }}">{{ a.nombre }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
             </div>
 
             <div class="cs-search-wrap">
@@ -2378,6 +2392,13 @@
                 headers: {'X-Requested-With': 'XMLHttpRequest'},
                 success: function(response) {
                     $('#lista-conversaciones').html(response.html);
+
+                    if (typeof response.total_abiertas !== 'undefined') {
+                        $('#total-abiertas-badge').text(response.total_abiertas);
+                    }
+                    if (typeof response.total_finalizadas !== 'undefined') {
+                        $('#total-finalizadas-badge').text(response.total_finalizadas);
+                    }
 
                     if (conversacionActiva) {
                         const $reactivated = $(`.conversacion-item[data-id="${conversacionActiva}"]`).addClass('active');

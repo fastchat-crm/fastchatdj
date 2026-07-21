@@ -1303,6 +1303,7 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
     filtro_clasificacion = request.GET.get('clasificacion', '')
     filtro_sin_responder = request.GET.get('sin_responder', '')
     filtro_mis_conv = request.GET.get('mis_conv', '')
+    filtro_asesor = request.GET.get('asesor', '')
 
     # `sesiones` ya viene acotado por canal_fijo (wrappers /instagram/ y
     # /tiktok/): sin esto, con canal sin sesiones (sesion_seleccionada=None)
@@ -1347,6 +1348,14 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
         data["filtro_mis_conv"] = True
         url_vars += '&mis_conv=1'
 
+    if filtro_asesor:
+        try:
+            data["filtro_asesor"] = int(filtro_asesor)
+            filtros = filtros & Q(asignado_a_id=data["filtro_asesor"])
+            url_vars += f'&asesor={data["filtro_asesor"]}'
+        except (TypeError, ValueError):
+            filtro_asesor = ''
+
     data["url_vars"] = url_vars
     data['conversacion_selected'] = conversacion_selected
     data["today"] = timezone.now().date()
@@ -1367,6 +1376,42 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
         mensajes__leido=False,
         mensajes__remitente=models.F('contacto__contacto_numero')
     ).distinct().count()
+
+    # Contadores de abiertas / finalizadas para las pestañas. Mismo alcance
+    # de visibilidad que el badge de no-leídos, pero acotado a la sesión
+    # seleccionada (es lo que el operador está mirando).
+    contadores_scope = badge_scope & Q(contacto__status=True, status=True)
+    if sesion_seleccionada:
+        contadores_scope = contadores_scope & Q(contacto__sesion=sesion_seleccionada)
+    data["total_abiertas"] = ConversacionWhatsApp.objects.filter(
+        contadores_scope, estado_conversacion=0,
+    ).distinct().count()
+    data["total_finalizadas"] = ConversacionWhatsApp.objects.filter(
+        contadores_scope, estado_conversacion=1,
+    ).distinct().count()
+
+    # Dropdown "Asesor": solo para quien tiene vista completa de la sesión.
+    # Los candidatos salen de PerfilSesionWhatsApp (quién atiende la sesión).
+    data["mostrar_filtro_asesor"] = es_vista_completa(request.user, sesion_seleccionada)
+    data["asesores_filtro"] = []
+    if data["mostrar_filtro_asesor"]:
+        from .models import PerfilSesionWhatsApp
+        perfiles = PerfilSesionWhatsApp.objects.filter(
+            status=True, usuario__is_active=True,
+        ).select_related('usuario')
+        if sesion_seleccionada:
+            perfiles = perfiles.filter(sesion=sesion_seleccionada)
+        else:
+            perfiles = perfiles.filter(sesion__in=sesiones)
+        vistos = set()
+        for p in perfiles.order_by('usuario__first_name', 'usuario__last_name'):
+            if p.usuario_id in vistos:
+                continue
+            vistos.add(p.usuario_id)
+            data["asesores_filtro"].append({
+                'id': p.usuario_id,
+                'nombre': p.usuario.get_full_name() or p.usuario.username,
+            })
 
     # Si es una solicitud AJAX para cargar conversaciones
     if request.GET.get('load_conversations'):
@@ -1466,7 +1511,10 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                                         'es_vista_completa': mostrar_supervisor,
                                         'sesion_numero': sesion_seleccionada.numero if sesion_seleccionada else '',
                                     },
-                                    request=request)
+                                    request=request),
+            'listado_count':     len(conv_list),
+            'total_abiertas':    data.get('total_abiertas', 0),
+            'total_finalizadas': data.get('total_finalizadas', 0),
         })
 
     # Pipelines disponibles para el modal "Asignar a pipeline"

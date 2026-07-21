@@ -271,7 +271,7 @@ SENTIMIENTO_CHOICES  # muy_positiva / positiva / neutral / tibia / pasiva / nega
 | `ver_estadisticas` | 241 | Solo el bloque de estadísticas (refresh del panel) | JSON con dict de `_estadisticas_conversacion` |
 | `cambiar-clasificacion` | 247 | Form modal | JSON + HTML de `form.html` |
 | `cambiar-nombre-contacto` | 259 | Form modal | JSON + HTML de `form.html` |
-| `asignar-conversacion` | 271 | Form modal con dropdown de agentes (anotados con carga de trabajo) | JSON + HTML de `form.html` |
+| `asignar-conversacion` | 271 | Form modal con dropdown de agentes (anotados con carga de trabajo). El select usa clase `jselect2` — se inicializa vía `static/js/form-controls-init.js` (incluido en `base_chat.html`), que engancha `shown.bs.modal` con `dropdownParent` al modal; sin ese include el combo queda como select plano sin buscador | JSON + HTML de `form.html` |
 | `listar_plantillas_meta` | 280 | Lista plantillas `APPROVED` de `sesion.config_meta` | JSON `{plantillas: [...]}` |
 | `ficha_cliente` | 477 | Ficha CRM de la conversación: clientes registrados + form de alta manual con prefill de variables del flujo (`_prefill_ficha_cliente`) | JSON + HTML de `_modal_ficha_cliente.html` |
 | `historial_cliente` / `historial_mensajes` | 471 / 495 | Historial de conversaciones/mensajes del contacto (`funcionesWhatsappConversacion`) | JSON |
@@ -321,11 +321,21 @@ filtros = Q(
 - `?clasificacion=<int>`
 - `?sin_responder=1` — Subquery sobre el último mensaje, excluye los que mandó la sesión
 - `?mis_conv=1` — `asignado_a=request.user`
+- `?asesor=<user_id>` — `asignado_a_id=<id>`. El dropdown "Asesor" del sidebar
+  solo se renderiza con vista completa (`es_vista_completa`); candidatos salen
+  de `PerfilSesionWhatsApp` de la sesión seleccionada (dedupe por usuario).
 
-**AJAX `?load_conversations=1`** (línea 824): retorna solo el HTML del partial.
+**AJAX `?load_conversations=1`** (línea 824): retorna el HTML del partial más
+`listado_count`, `total_abiertas` y `total_finalizadas` (el JS refresca los
+badges de las pestañas en cada recarga).
 Optimización con `select_related('contacto', 'contacto__sesion', 'contacto__sesion__config_meta', 'contacto__sesion__config_baileys', 'asignado_a')` + `.distinct()` (línea 830-841) para evitar N+1.
 
 **Conteo `total_sin_leer`** (línea 815) — badge global en el header.
+
+**Conteos `total_abiertas` / `total_finalizadas`** — badges `cs-tab-total` en
+las pestañas Abiertas/Finalizadas del sidebar. Mismo alcance de visibilidad
+que `total_sin_leer` (rol + sesiones visibles) acotado a la sesión
+seleccionada; `estado_conversacion=0` vs `=1`.
 
 **Render final** (línea 874): `render(request, 'whatsapp/conversaciones/listado.html', data)`.
 
@@ -843,7 +853,7 @@ JsonResponse({pendiente: true, mensaje_html})
 | `whatsapp/services_instagram.py` | `InstagramService`, `MessengerService` |
 | `whatsapp/consumers.py` | `ChatConsumer`, `SessionConsumer`, `SessionRoomConsumer` |
 | `whatsapp/routing.py` | Rutas WS |
-| `whatsapp/procesar_mensaje.py` | Handler del webhook entrante (broadcast WS) |
+| `whatsapp/procesar_mensaje.py` | Handler del webhook entrante (broadcast WS). Web push (`_push_to_team`, 2026-07-20): conversación NUEVA → dueño de sesión + equipo (una vez); mensaje en conversación existente → SOLO el asesor `asignado_a` (releído de BD en el on_commit), sin asignado no se pushea — la notificación de asignación la cubre `crm.helpers_asignacion.notificar_agente_asignado` |
 | `whatsapp/meta_webhook_view.py` | Endpoint `/meta_webhook/` (Meta) |
 | `whatsapp/webhook_baileys_view.py` | Endpoint `/webhook_handler/` (Baileys) |
 | `whatsapp/meta_social_webhook_view.py` | Webhooks IG DM + Messenger. `_enriquecer_perfil_social` (2026-07-16): antes de `process_incoming_message` completa `pushName`/`userImage` del evento con el User Profile API de Meta (`meta/perfiles.py::obtener_perfil_usuario_messenger` — first_name/last_name/profile_pic; `obtener_perfil_usuario_instagram` — name/username/profile_pic + follower_count/flags follow). Solo pega a Graph si el `Contacto` aún no tiene nombre o foto; resultado cacheado 6h por sender (incluye fallo, para no reintentar por mensaje). Messenger/IG no exponen email ni teléfono. TikTok ya trae `nickname`/`avatar` en el propio payload (`tiktok/webhook_view.py::_a_evento_interno`) |

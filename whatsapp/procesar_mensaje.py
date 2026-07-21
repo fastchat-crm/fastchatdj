@@ -391,21 +391,40 @@ def process_incoming_message(session, event_data, channel_layer):
                     from pwa.notificaciones import enviar_push_usuario
                 except Exception:
                     return
-                from .models import PerfilSesionWhatsApp
+                from .models import ConversacionWhatsApp, PerfilSesionWhatsApp
                 from autenticacion.models import Usuario
                 targets = set()
-                if session.usuario_id:
-                    targets.add(session.usuario_id)
-                try:
-                    team_ids = list(
-                        PerfilSesionWhatsApp.objects
-                        .filter(sesion_id=session.id, status=True,
-                                usuario__status=True, usuario__is_active=True)
-                        .values_list('usuario_id', flat=True)
+                if _is_new_conv:
+                    # Conversación nueva: avisar al dueño de la sesión + equipo
+                    # (una sola vez por conversación).
+                    if session.usuario_id:
+                        targets.add(session.usuario_id)
+                    try:
+                        team_ids = list(
+                            PerfilSesionWhatsApp.objects
+                            .filter(sesion_id=session.id, status=True,
+                                    usuario__status=True, usuario__is_active=True)
+                            .values_list('usuario_id', flat=True)
+                        )
+                        targets.update(team_ids)
+                    except Exception:
+                        logger.exception('Push: error fetching team for sesion=%s', session.id)
+                else:
+                    # Mensaje en conversación existente: push SOLO al asesor
+                    # asignado — el resto del equipo ya no recibe push por cada
+                    # mensaje. Sin asignado no se pushea: el bot atiende y el
+                    # handoff dispara su propia notificación de asignación
+                    # (crm.helpers_asignacion.notificar_agente_asignado).
+                    # Se relee de BD porque la asignación pudo ocurrir en este
+                    # mismo request después de capturar la closure.
+                    asignado_id = (
+                        ConversacionWhatsApp.objects
+                        .filter(pk=_conv_id)
+                        .values_list('asignado_a_id', flat=True)
+                        .first()
                     )
-                    targets.update(team_ids)
-                except Exception:
-                    logger.exception('Push: error fetching team for sesion=%s', session.id)
+                    if asignado_id:
+                        targets.add(asignado_id)
                 if not targets:
                     return
                 if _is_new_conv:
