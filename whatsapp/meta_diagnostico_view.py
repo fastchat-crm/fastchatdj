@@ -385,7 +385,15 @@ def meta_diagnostico(request, sesion_id: int):
         'detalle': (
             f'{eventos_firma_invalida} eventos con firma inválida' if eventos_firma_invalida else 'Todas las firmas OK'
         ),
-        'fix': 'App Secret desincronizado entre Meta y CredencialMetaApp.',
+        'fix': (
+            'App Secret desincronizado entre Meta y CredencialMetaApp. '
+            'Copiá la "Clave secreta de la app" desde Meta for Developers '
+            '(tu App → Configuración → Información básica → Mostrar) y pegala '
+            'en Seguridad → Credenciales Meta App. Los eventos rechazados quedan '
+            'guardados y se recuperan con: python manage.py reprocesar_eventos_meta'
+        ),
+        'fix_url': '/seguridad/credencial-meta/',
+        'fix_url_label': 'Ir a Credenciales Meta App',
     })
     quality = (config.quality_rating if config else 'UNKNOWN') or 'UNKNOWN'
     salud.append({

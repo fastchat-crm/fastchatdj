@@ -370,3 +370,21 @@
     .wlog-td-preview { display: none; }
     .wlog-th-preview { display: none; }
 }
+
+/* ─────── Paginación ─────── */
+.wlog-paginacion {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: .9rem;
+    flex-wrap: wrap;
+}
+.wlog-pag-info {
+    color: #64748b;
+    font-size: .85rem;
+}
+.wlog-pag-btns {
+    display: flex;
+    gap: .5rem;
+}

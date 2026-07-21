@@ -675,6 +675,13 @@ si no, los demás clientes no verán el mensaje hasta refrescar.
    ▼
 POST /whatsapp/meta_webhook/  ó  /whatsapp/webhook_handler/
    │   (validación verify_token / X-API-Key NODE_SECRET_KEY)
+   │   Meta: firma HMAC X-Hub-Signature-256 validada con meta.webhook.
+   │   validar_firma_hmac (acepta str o LISTA de secrets — get_meta_app_secrets;
+   │   la copia local str-only de meta_webhook_view marcaba TODO como firma
+   │   inválida al recibir la lista, hoy delega en el helper compartido).
+   │   Evento rechazado queda en EventoMetaRecibido (procesado=False,
+   │   error=firma_hmac_invalida) y se recupera con:
+   │   python manage.py reprocesar_eventos_meta [--dias N | --evento-id X | --dry-run]
    ▼
 procesar_mensaje.process_incoming_message()
    │

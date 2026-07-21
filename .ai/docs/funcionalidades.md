@@ -29,7 +29,8 @@ Rutas de montaje: `whatsapp/` → `/whatsapp/`, `crm/` → `/crm/`, `agenda/` �
 - Resumen de salud de la conexión (checklist con % de completitud), historial de cambios, modal post-conexión con pasos críticos Meta.
 - Configuración de anuncios (Marketing API, `services_ads.py`) para atribución CTWA.
 - Respuestas rápidas y menús rápidos por sesión (envío interactivo: botones/list en Meta, numerado en Baileys).
-- Diagnóstico Meta (`meta_diagnostico_view.py`): webhook, suscripción WABA, salud del número, trazas; foto de perfil.
+- Diagnóstico Meta (`meta_diagnostico_view.py`): webhook, suscripción WABA, salud del número, trazas; foto de perfil. Los checks de salud soportan `fix_url`/`fix_url_label` (botón "ir a configurar"); el check de firma HMAC linkea a Seguridad → Credenciales Meta App y menciona `manage.py reprocesar_eventos_meta` para recuperar eventos rechazados.
+- Webhook-log por sesión (`meta_webhook_log_view.py`): paginado server-side (100 por página, `?page=N` conserva fecha y filtros); el polling "en vivo" solo corre en la página 1.
 - Selector global de sesión activa (`/whatsapp/sesion-activa/`).
 
 ### Contactos (`/whatsapp/contacto/`, `view_contacto.py`)

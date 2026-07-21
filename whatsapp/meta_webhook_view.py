@@ -20,8 +20,6 @@ renderizamos una pagina HTML informativa — util para el dev que prueba la URL.
 
 URL: /whatsapp/meta_webhook/
 """
-import hashlib
-import hmac
 import json
 import logging
 
@@ -31,6 +29,8 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
 from channels.layers import get_channel_layer
+
+from meta.webhook import validar_firma_hmac
 
 from .models import ConfigMeta, EventoMetaRecibido, MetaWebhookHit, SesionWhatsApp
 from .procesar_mensaje import process_incoming_message
@@ -257,37 +257,13 @@ def _procesar_evento(request):
 # Validacion HMAC
 # ---------------------------------------------------------------------------
 
-def _validar_firma_hmac(raw_body: bytes, signature_header: str, app_secret: str) -> bool:
-    """Compara X-Hub-Signature-256 contra HMAC(app_secret_org, body).
+def _validar_firma_hmac(raw_body: bytes, signature_header: str, app_secret) -> bool:
+    """Delegación al helper compartido `meta.webhook.validar_firma_hmac`.
 
-    Con app_secret: valida y rechaza firmas inválidas (fail-closed). Sin
-    app_secret: por defecto acepta con warning; con META_WEBHOOK_FAIL_CLOSED=True
-    rechaza (recomendado en producción)."""
-    if not app_secret:
-        from django.conf import settings
-        if getattr(settings, 'META_WEBHOOK_FAIL_CLOSED', False):
-            logger.error(
-                "Webhook Meta RECHAZADO: app_secret no configurado y modo estricto "
-                "activo (META_WEBHOOK_FAIL_CLOSED)."
-            )
-            return False
-        logger.warning(
-            "Webhook Meta aceptado SIN validar firma (app_secret no configurado) — "
-            "activa META_WEBHOOK_FAIL_CLOSED=True en producción para cerrar el fail-open."
-        )
-        return True
-    if not signature_header:
-        return False
-    try:
-        expected = 'sha256=' + hmac.new(
-            app_secret.encode('utf-8'),
-            raw_body,
-            hashlib.sha256,
-        ).hexdigest()
-        return hmac.compare_digest(expected, signature_header)
-    except Exception:
-        logger.exception("Error computando HMAC")
-        return False
+    `app_secret` acepta un str o una lista de secrets (`get_meta_app_secrets`):
+    la copia local anterior solo aceptaba str, así que al recibir la lista
+    lanzaba AttributeError y marcaba TODA firma como inválida."""
+    return validar_firma_hmac(raw_body, signature_header, app_secret)
 
 
 # ---------------------------------------------------------------------------

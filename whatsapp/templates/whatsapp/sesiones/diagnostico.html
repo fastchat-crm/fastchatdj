@@ -3,7 +3,7 @@
 
 {% block head %}
     <link rel="stylesheet" href="{% static 'stylenew/sesiones.css' %}">
-    <link rel="stylesheet" href="{% static 'stylenew/diagnostico.css' %}?v1.2">
+    <link rel="stylesheet" href="{% static 'stylenew/diagnostico.css' %}?v1.3">
     <link rel="stylesheet" href="{% static 'stylenew/json-pretty.css' %}">
     <script src="{% static 'javascript/json-pretty.js' %}"></script>
 {% endblock %}
@@ -117,6 +117,11 @@
                             <div class="diag-check-detail">{{ item.detalle }}</div>
                             {% if not item.ok and item.fix %}
                                 <div class="diag-check-fix"><i class="fa fa-wrench"></i> {{ item.fix }}</div>
+                                {% if item.fix_url %}
+                                    <a class="diag-check-fix-link" href="{{ item.fix_url }}">
+                                        <i class="fa fa-arrow-up-right-from-square"></i> {{ item.fix_url_label|default:'Ir a configurar' }}
+                                    </a>
+                                {% endif %}
                             {% endif %}
                         </div>
                     </li>
