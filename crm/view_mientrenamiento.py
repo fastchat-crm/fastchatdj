@@ -228,21 +228,29 @@ def entrenamiento_ia_view(request):
                 except (AgentesIA.DoesNotExist, KeyError, ValueError):
                     return JsonResponse({'error': True, 'message': 'Agente no encontrado.'})
                 _r = _idx.reindexar_agente(_ag)
+                _errores = _r.get('errores') or []
                 if _r.get('ok') and _r.get('indexados'):
                     _m = f"RAG actualizado: {_r.get('indexados')} fragmentos indexados."
+                    _err_flag = False
                 elif _r.get('necesita_gemini'):
-                    _m = "Agrega una API Key Gemini al perfil para activar los embeddings del RAG."
+                    _m = "Agrega una API Key Gemini activa al perfil para los embeddings del RAG."
+                    _err_flag = True
+                elif _errores:
+                    _m = "No se pudo indexar al RAG: " + (_errores[0].get('error') or 'error desconocido') + "."
+                    _err_flag = True
                 elif _r.get('ok'):
-                    _m = "Sin fragmentos nuevos (verifica que Weaviate esté activo y que las fuentes tengan texto)."
+                    _m = "Sin fragmentos nuevos: verifica que Weaviate esté activo y que las fuentes tengan texto."
+                    _err_flag = True
                 else:
                     _m = f"No se pudo indexar: {_r.get('error', 'error desconocido')}."
+                    _err_flag = True
                 try:
                     from agents_ai import weaviate_rag as _wv2
                     _fuentes = _wv2.resumen_fuentes(_ag.id)
                 except Exception:
                     _fuentes = []
                 return JsonResponse({
-                    'error': not _r.get('ok', False),
+                    'error': _err_flag,
                     'message': _m,
                     'indexados': _r.get('indexados', 0),
                     'total_tenant': _r.get('total_tenant'),
@@ -286,8 +294,23 @@ def entrenamiento_ia_view(request):
                 except Exception:
                     _fuentes = []
                 if _r.get('necesita_gemini'):
-                    return JsonResponse({'error': True, 'message': 'Documento subido, pero falta una API Key Gemini en el perfil para indexarlo al RAG.', 'fuentes': _fuentes})
-                return JsonResponse({'error': False, 'message': 'Documento "' + _f.name + '" subido e indexado.', 'total_tenant': _r.get('total_tenant'), 'fuentes': _fuentes})
+                    return JsonResponse({'error': True, 'message': 'Documento subido, pero falta una API Key Gemini activa en el perfil para indexarlo al RAG.', 'fuentes': _fuentes})
+                _errores = _r.get('errores') or []
+                if _errores:
+                    return JsonResponse({
+                        'error': True,
+                        'message': 'Documento "' + _f.name + '" subido, pero falló la indexación al RAG: ' + (_errores[0].get('error') or 'error desconocido') + '. El archivo quedó guardado; revísalo en "Ver data".',
+                        'total_tenant': _r.get('total_tenant'),
+                        'fuentes': _fuentes,
+                    })
+                if not _r.get('indexados'):
+                    return JsonResponse({
+                        'error': True,
+                        'message': 'Documento "' + _f.name + '" subido, pero no se indexó ningún fragmento. Verifica que Weaviate esté activo y que el archivo tenga texto extraíble (revísalo en "Ver data").',
+                        'total_tenant': _r.get('total_tenant'),
+                        'fuentes': _fuentes,
+                    })
+                return JsonResponse({'error': False, 'message': 'Documento "' + _f.name + '" subido e indexado (' + str(_r.get('indexados')) + ' fragmentos).', 'total_tenant': _r.get('total_tenant'), 'fuentes': _fuentes})
             try:
                 with transaction.atomic():
                     if action == 'addagente':
@@ -2056,6 +2079,87 @@ def entrenamiento_ia_view(request):
                         })
                     except Exception as ex:
                         return JsonResponse({'result': False, 'message': str(ex)})
+
+                elif action == 'rag_ver_data':
+                    try:
+                        filtro = AgentesIA.objects.get(pk=int(request.GET['id']), perfil=perfil)
+                    except (AgentesIA.DoesNotExist, KeyError, ValueError):
+                        return JsonResponse({'result': False, 'message': 'Agente no encontrado.'})
+
+                    from agents_ai import weaviate_rag as _wv
+                    from agents_ai import indexador_conocimiento as _idx
+
+                    weaviate_ok = True
+                    weaviate_error = ''
+                    total_tenant = 0
+                    fuentes_por_source = {}
+                    try:
+                        _cli = _wv.get_client()
+                        try:
+                            if not _cli.is_ready():
+                                weaviate_ok = False
+                                weaviate_error = 'Weaviate respondió pero no está listo (not ready).'
+                        finally:
+                            _cli.close()
+                    except Exception as _exc:
+                        weaviate_ok = False
+                        weaviate_error = str(_exc)
+
+                    if weaviate_ok:
+                        try:
+                            total_tenant = _wv.contar(filtro.id)
+                            for _f in _wv.resumen_fuentes(filtro.id):
+                                fuentes_por_source[_f.get('source')] = _f.get('count', 0)
+                        except Exception as _exc:
+                            weaviate_error = str(_exc)
+
+                    documentos = []
+                    for d in filtro.detalleagentesai_set.filter(status=True).order_by('-id'):
+                        if d.tipo == 2 and d.archivo:
+                            nombre = os.path.basename(d.archivo.name)
+                            try:
+                                download_url = d.archivo.url
+                            except Exception:
+                                download_url = ''
+                        elif d.tipo == 1:
+                            nombre = d.enlace or '(enlace)'
+                            download_url = ''
+                        else:
+                            nombre = 'Texto directo'
+                            download_url = ''
+
+                        texto = ''
+                        if d.tipo in (2, 3):
+                            try:
+                                texto, _cat = _idx._extraer_detalle(d)
+                            except Exception as _exc:
+                                texto = ''
+                        texto = texto or ''
+
+                        documentos.append({
+                            'id': d.id,
+                            'tipo': d.get_tipo_display(),
+                            'tipo_raw': d.tipo,
+                            'nombre': nombre,
+                            'download_url': download_url,
+                            'texto_chars': len(texto),
+                            'texto_preview': texto[:800],
+                            'extraccion_ok': bool(texto.strip()) if d.tipo in (2, 3) else True,
+                            'chunks': fuentes_por_source.get(f'panel_detalle_{d.id}', 0),
+                        })
+
+                    est = (filtro.contexto_estatico or '').strip()
+                    return JsonResponse({
+                        'result': True,
+                        'agente': filtro.nombre,
+                        'weaviate_ok': weaviate_ok,
+                        'weaviate_error': weaviate_error,
+                        'total_tenant': total_tenant,
+                        'documentos': documentos,
+                        'contexto_estatico_chars': len(est),
+                        'contexto_estatico_preview': est[:800],
+                        'contexto_estatico_chunks': fuentes_por_source.get('contexto_estatico', 0),
+                    })
 
                 elif action == 'consumo_apikey':
                     try:

@@ -339,6 +339,9 @@
         <div class="d-flex align-items-center justify-content-between mb-1">
             <p class="section-header mb-0">Documentos del agente</p>
             <div>
+                {% if filtro %}
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="btnVerData" data-agente="{{ filtro.id }}"><i class="fa fa-eye me-1"></i> Ver data</button>
+                {% endif %}
                 <input type="file" id="inputSubirDoc" accept=".pdf,.csv,.xlsx,.xls,.json,.txt,.docx" hidden>
                 <button type="button" class="btn btn-primary btn-sm" id="btnSubirDoc"><i class="fa fa-upload me-1"></i> Subir documento</button>
             </div>
@@ -402,6 +405,134 @@
         {% endif %}
 
         <div id="contenedorDetalles" class="d-none"></div>
+
+        {% if filtro %}
+        <link rel="stylesheet" href="/static/css/crm/rag_ver_data.css?v1.0">
+        <div class="modal fade" id="modalVerData" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="fas fa-database me-2 text-success"></i>Datos cargados del agente</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                    </div>
+                    <div class="modal-body" id="verDataBody">
+                        <div class="text-center text-muted py-4"><i class="fas fa-spinner fa-spin me-1"></i> Cargando…</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script>
+        (function() {
+            'use strict';
+            var btn = document.getElementById('btnVerData');
+            if (!btn) return;
+            var modalEl = document.getElementById('modalVerData');
+            var body = document.getElementById('verDataBody');
+            var ruta = '{{ ruta_post }}';
+
+            function esc(s) {
+                return String(s == null ? '' : s)
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            }
+
+            function estadoDoc(d) {
+                if (d.chunks > 0) {
+                    return '<span class="vd-estado vd-ok"><i class="fas fa-check-circle me-1"></i>' + d.chunks + ' fragmentos</span>';
+                }
+                if (d.tipo_raw === 1) {
+                    return '<span class="vd-estado vd-info"><i class="fas fa-bolt me-1"></i>Consulta en vivo</span>';
+                }
+                if (!d.extraccion_ok) {
+                    return '<span class="vd-estado vd-err"><i class="fas fa-triangle-exclamation me-1"></i>Sin texto extraíble</span>';
+                }
+                return '<span class="vd-estado vd-warn"><i class="fas fa-triangle-exclamation me-1"></i>No indexado</span>';
+            }
+
+            function pintar(res) {
+                if (!res || !res.result) {
+                    body.innerHTML = '<div class="alert alert-danger mb-0">' + esc((res && res.message) || 'No se pudo cargar la data.') + '</div>';
+                    return;
+                }
+                var html = '';
+                if (res.weaviate_ok) {
+                    html += '<div class="alert alert-success py-2 d-flex align-items-center gap-2 mb-3">' +
+                        '<i class="fas fa-circle-check"></i><div><strong>Weaviate conectado.</strong> ' +
+                        esc(res.total_tenant) + ' fragmentos indexados en total para este agente.</div></div>';
+                } else {
+                    html += '<div class="alert alert-danger py-2 mb-3">' +
+                        '<div class="d-flex align-items-center gap-2"><i class="fas fa-circle-xmark"></i>' +
+                        '<strong>No hay conexión con Weaviate.</strong></div>' +
+                        '<div class="small mt-1 vd-errtext">' + esc(res.weaviate_error || 'Error desconocido de conexión.') + '</div>' +
+                        '<div class="small mt-1 text-muted">Los documentos de abajo están guardados, pero no se pudieron indexar. Revisa que el contenedor de Weaviate esté activo y la API key configurada.</div></div>';
+                }
+
+                var docs = res.documentos || [];
+                if (!docs.length) {
+                    html += '<div class="text-muted small">Aún no hay documentos cargados. Usa "Subir documento".</div>';
+                }
+                docs.forEach(function(d) {
+                    var descarga = d.download_url
+                        ? '<a href="' + esc(d.download_url) + '" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary"><i class="fas fa-download me-1"></i>Descargar</a>'
+                        : '';
+                    var toggle = (d.texto_preview && d.texto_preview.length)
+                        ? '<button type="button" class="btn btn-sm btn-link vd-toggle p-0" data-target="vd-prev-' + d.id + '">Ver contenido</button>'
+                        : '<span class="text-muted small">Sin previsualización</span>';
+                    html += '<div class="vd-card">' +
+                        '<div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">' +
+                            '<div class="vd-nombre"><i class="fas fa-file-alt me-1 text-muted"></i>' + esc(d.nombre) + '</div>' +
+                            estadoDoc(d) +
+                        '</div>' +
+                        '<div class="d-flex align-items-center gap-2 flex-wrap mt-1">' +
+                            '<span class="badge bg-light text-dark border">' + esc(d.tipo) + '</span>' +
+                            '<span class="text-muted small">' + esc(d.texto_chars) + ' caracteres extraídos</span>' +
+                            descarga +
+                            toggle +
+                        '</div>' +
+                        '<pre class="vd-preview d-none" id="vd-prev-' + d.id + '">' + esc(d.texto_preview) + '</pre>' +
+                    '</div>';
+                });
+
+                if (res.contexto_estatico_chars > 0) {
+                    html += '<div class="vd-card">' +
+                        '<div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">' +
+                            '<div class="vd-nombre"><i class="fas fa-align-left me-1 text-muted"></i>Contexto del negocio (texto directo)</div>' +
+                            (res.contexto_estatico_chunks > 0
+                                ? '<span class="vd-estado vd-ok"><i class="fas fa-check-circle me-1"></i>' + res.contexto_estatico_chunks + ' fragmentos</span>'
+                                : '<span class="vd-estado vd-info"><i class="fas fa-info-circle me-1"></i>Inyectado al prompt</span>') +
+                        '</div>' +
+                        '<div class="d-flex align-items-center gap-2 flex-wrap mt-1">' +
+                            '<span class="text-muted small">' + esc(res.contexto_estatico_chars) + ' caracteres</span>' +
+                            '<button type="button" class="btn btn-sm btn-link vd-toggle p-0" data-target="vd-ctx-est">Ver contenido</button>' +
+                        '</div>' +
+                        '<pre class="vd-preview d-none" id="vd-ctx-est">' + esc(res.contexto_estatico_preview) + '</pre>' +
+                    '</div>';
+                }
+
+                body.innerHTML = html;
+                body.querySelectorAll('.vd-toggle').forEach(function(t) {
+                    t.addEventListener('click', function() {
+                        var pre = document.getElementById(t.getAttribute('data-target'));
+                        if (!pre) return;
+                        var oculto = pre.classList.toggle('d-none');
+                        t.textContent = oculto ? 'Ver contenido' : 'Ocultar contenido';
+                    });
+                });
+            }
+
+            btn.addEventListener('click', function() {
+                var m = new bootstrap.Modal(modalEl);
+                body.innerHTML = '<div class="text-center text-muted py-4"><i class="fas fa-spinner fa-spin me-1"></i> Cargando…</div>';
+                m.show();
+                $.ajax({ url: ruta, method: 'GET', data: { action: 'rag_ver_data', id: btn.getAttribute('data-agente') } })
+                    .done(pintar)
+                    .fail(function() {
+                        body.innerHTML = '<div class="alert alert-danger mb-0">Error de red al cargar la data.</div>';
+                    });
+            });
+        })();
+        </script>
+        {% endif %}
 
         <div class="mt-2">
             <div class="d-flex align-items-center gap-2">
