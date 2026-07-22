@@ -965,6 +965,7 @@ PROVEEDOR_CHOICES = (
     (5, 'OLLAMA'),
     (6, 'DEEPSEEK'),
     (7, 'HUAWEI MAAS'),
+    (8, 'OLLAMA LOCAL'),
 )
 
 class ApiKeyIA(ModeloBase):
@@ -999,8 +1000,8 @@ class ApiKeyIA(ModeloBase):
         verbose_name_plural = 'Apis Keys IA'
 
     def __str__(self):
-        base = f"[{self.get_proveedor_display()}]: {self.alias}"
-        return f"{base} ({self.modelo})" if self.modelo else base
+        prov = self.get_proveedor_display()
+        return f"{prov} · {self.modelo}" if self.modelo else prov
 
     def save(self, *args, **kwargs):
         if not self.webservice_token:

@@ -37,11 +37,12 @@
     // Filtra el combo de modelos según el proveedor seleccionado.
     const PREFIJOS = { '2': 'gemini-', '3': 'gpt-', '4': 'claude-' };
     const LISTAS = {
-        '5': ['llama3.1', 'llama3.2', 'qwen2.5', 'mistral', 'deepseek-r1'],
+        '5': ['gpt-oss:20b', 'gpt-oss:120b', 'gemma3:12b', 'gemma3:27b', 'qwen3-next:80b', 'glm-4.7', 'deepseek-v3.2', 'ministral-3:8b'],
         '6': ['deepseek-chat', 'deepseek-reasoner'],
-        '7': ['DeepSeek-V3', 'DeepSeek-R1', 'Qwen3-32B']
+        '7': ['DeepSeek-V3', 'DeepSeek-R1', 'Qwen3-32B'],
+        '8': ['llama3.1', 'llama3.2', 'qwen2.5', 'mistral', 'deepseek-r1']
     };
-    const USAN_BASE_URL = ['5', '6', '7'];
+    const USAN_BASE_URL = ['6', '7', '8'];
 
     function filtrarModelos() {
         const $prov = $('#id_proveedor');
@@ -83,7 +84,7 @@
         }
 
         // Mostrar texto guía bajo el combo
-        const labels = { '2': 'Gemini', '3': 'OpenAI', '4': 'Claude', '5': 'Ollama', '6': 'DeepSeek', '7': 'Huawei MaaS' };
+        const labels = { '2': 'Gemini', '3': 'OpenAI', '4': 'Claude', '5': 'Ollama', '6': 'DeepSeek', '7': 'Huawei MaaS', '8': 'Ollama Local' };
         const prov_label = labels[provVal] || 'este proveedor';
         let $hint = $modelo.siblings('.modelo-hint');
         if (!$hint.length) {

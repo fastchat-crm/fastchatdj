@@ -9,6 +9,8 @@ Pasos:
     2. Contexto del negocio (textarea libre — se guarda como contexto_estatico).
     3. ApiKey (selección o creación rápida) y crear.
 """
+import logging
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
@@ -17,6 +19,8 @@ from django.shortcuts import redirect, render
 from core.constantes import PERSONALIDAD_PRESETS
 from core.funciones import addData, secure_module, get_encrypt
 from crm.models import AgentesIA, ApiKeyIA, PerfilNegocioIA
+
+logger = logging.getLogger(__name__)
 
 
 @login_required
@@ -71,6 +75,15 @@ def agente_wizard_view(request):
 
         ok_enc, enc = get_encrypt(agente.id)
         chat_url = f'/crm/entrenamiento/chat/{enc}/' if ok_enc else ''
+
+        # Provisiona el tenant RAG del agente e indexa el conocimiento inicial
+        # (contexto_estatico). No fatal — el agente queda creado igual.
+        try:
+            from agents_ai import indexador_conocimiento as _idx
+            _idx.provisionar_e_indexar_inicial(agente)
+        except Exception as exc:
+            logger.warning('Provisión/indexado RAG del agente %s falló: %s', agente.id, exc)
+
         return JsonResponse({
             'result': True,
             'agente_id': agente.id,

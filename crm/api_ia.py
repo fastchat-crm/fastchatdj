@@ -39,6 +39,7 @@ import mimetypes
 import os
 import tempfile
 import time
+from types import SimpleNamespace
 
 from django.conf import settings
 from django.http import JsonResponse
@@ -123,9 +124,9 @@ def consultar_ia_view(request):
             tipo = 'documento'
 
     # ── Provider info ────────────────────────────────────────────────
-    provider_map = {2: 'gemini', 3: 'openai', 4: 'claude'}
+    provider_map = {2: 'gemini', 3: 'openai', 4: 'claude', 5: 'ollama', 8: 'ollama_local'}
     provider = provider_map.get(apikey_obj.proveedor, 'gemini')
-    _default_model = {'gemini': 'gemini-2.5-flash', 'openai': 'gpt-4o-mini', 'claude': 'claude-haiku-4-5-20251001'}
+    _default_model = {'gemini': 'gemini-2.5-flash', 'openai': 'gpt-4o-mini', 'claude': 'claude-haiku-4-5-20251001', 'ollama': 'gpt-oss:20b', 'ollama_local': 'llama3.1'}
     model_name = apikey_obj.modelo or _default_model.get(provider, 'gemini-2.5-flash')
 
     registrar_traza(
@@ -154,7 +155,7 @@ def consultar_ia_view(request):
             )
         elif tipo == 'audio':
             respuesta_texto, tokens = _procesar_audio(
-                mensaje, archivo, agente, apikey_obj, provider, model_name,
+                mensaje, archivo, agente, apikey_obj, provider, model_name, session_id,
             )
         else:
             respuesta_texto, tokens = _procesar_texto(
@@ -239,13 +240,16 @@ def _procesar_texto(mensaje, agente, apikey_obj, provider, model_name, session_i
     )
     prompt_tpl = (agente.prompt_template or '').strip() or PROMPT_TEMPLATES.get('es', '')
 
+    # SimpleNamespace provee el .id que AgenteConsultor usa para memoria multi-turno
+    fake_conv = SimpleNamespace(id=session_id, contacto=None, contacto_id=None) if session_id else None
+
     consultor = AgenteConsultor(
         vectorstore_path=vs_path,
         vectorstore_enlaces_path=vectorstore_enlaces_path,
         provider=provider,
         apikey=apikey_obj.descripcion,
         model_name=model_name,
-        conversacion=None,
+        conversacion=fake_conv,
         prompt_template_text=prompt_tpl,
         contexto_estatico=agente.contexto_estatico or None,
         perfil=agente.perfil,
@@ -270,6 +274,10 @@ def _procesar_texto(mensaje, agente, apikey_obj, provider, model_name, session_i
 
 
 def _procesar_imagen(mensaje, archivo, agente, apikey_obj, provider, model_name):
+    if provider in ('ollama', 'ollama_local'):
+        # Ollama (Cloud/local) no soporta multimodal aquí; evitar misroutear la key a OpenAI.
+        return 'Este agente (Ollama) no procesa imágenes por ahora.', {'entrada': 0, 'salida': 0, 'total': 0}
+
     b64 = base64.b64encode(archivo.read()).decode('utf-8')
     ct = archivo.content_type or 'image/jpeg'
 
@@ -295,7 +303,7 @@ def _procesar_imagen(mensaje, archivo, agente, apikey_obj, provider, model_name)
     return resp.content.strip(), tokens
 
 
-def _procesar_audio(mensaje, archivo, agente, apikey_obj, provider, model_name):
+def _procesar_audio(mensaje, archivo, agente, apikey_obj, provider, model_name, session_id=None):
     from whatsapp.transcribe_whatsapp_audio import convert_audio, transcribe_audio, extract_voiced_audio
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(archivo.name)[1] or '.ogg')
     try:
@@ -314,7 +322,7 @@ def _procesar_audio(mensaje, archivo, agente, apikey_obj, provider, model_name):
                     pass
 
     pregunta = f"{mensaje}\n\n[Transcripcion del audio]: {transcripcion}" if mensaje else transcripcion
-    return _procesar_texto(pregunta, agente, apikey_obj, provider, model_name)[0], {
+    return _procesar_texto(pregunta, agente, apikey_obj, provider, model_name, session_id)[0], {
         'entrada': 0, 'salida': 0, 'total': 0,
         'transcripcion': transcripcion,
     }
