@@ -366,7 +366,7 @@ class FaqAgenteForm(ModelFormBase):
 
 
 _PREFIJO_MODELO_POR_PROVEEDOR = {2: 'gemini-', 3: 'gpt-', 4: 'claude-', 6: 'deepseek-'}
-_NOMBRE_PROVEEDOR = {2: 'Gemini', 3: 'OpenAI', 4: 'Claude', 5: 'Ollama', 6: 'DeepSeek', 7: 'Huawei MaaS'}
+_NOMBRE_PROVEEDOR = {2: 'Gemini', 3: 'OpenAI', 4: 'Claude', 5: 'Ollama', 6: 'DeepSeek', 7: 'Huawei MaaS', 8: 'Ollama Local'}
 _PROVEEDORES_REQUIEREN_BASE_URL = (7,)
 
 
@@ -395,9 +395,6 @@ class ApiKeyIAForm(ModelFormBase):
             if k in ('proveedor',):
                 self.fields[k].widget.attrs['class'] = "form-control jselect"
                 self.fields[k].widget.attrs['col'] = '6'
-            if k == 'modelo':
-                self.fields[k].widget.attrs['class'] = 'form-control'
-                self.fields[k].widget.attrs['col'] = '6'
             if ver:
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
 
@@ -414,7 +411,7 @@ class ApiKeyIAForm(ModelFormBase):
         if proveedor in _PROVEEDORES_REQUIEREN_BASE_URL and not base_url:
             nombre = _NOMBRE_PROVEEDOR.get(proveedor, 'este proveedor')
             self.add_error('base_url', f'{nombre} requiere la Base URL del despliegue.')
-        if proveedor in (2, 3, 4) and base_url:
+        if proveedor in (2, 3, 4, 5) and base_url:
             cleaned['base_url'] = ''
         return cleaned
 

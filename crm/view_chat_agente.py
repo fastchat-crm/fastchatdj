@@ -149,7 +149,7 @@ def chat_agente_view(request, agente_enc_id):
                     'etapa': 'consultor_listo',
                     'label': 'Consultor configurado',
                     'ok': True,
-                    'detalle': f'Proveedor: {"Gemini" if apikey_obj.proveedor == 2 else "OpenAI"} | Modelo: {consultor.model_name}',
+                    'detalle': 'Proveedor: ' + {2: 'Gemini', 3: 'OpenAI', 4: 'Claude', 5: 'Ollama'}.get(apikey_obj.proveedor, 'LLM') + ' | Modelo: ' + str(consultor.model_name),
                     'ts_ms': int((time.time() - _t0) * 1000),
                 })
                 _t_llm = time.time()
@@ -247,12 +247,12 @@ def chat_agente_view(request, agente_enc_id):
                     'tokens_out': resultado.tokens_salida,
                     'tokens_total': resultado.tokens_total,
                     'modelo': consultor.model_name,
-                    'proveedor': 'Gemini' if apikey_obj.proveedor == 2 else 'OpenAI',
+                    'proveedor': {2: 'Gemini', 3: 'OpenAI', 4: 'Claude', 5: 'Ollama'}.get(apikey_obj.proveedor, 'LLM'),
                     'caracteres_respuesta': len(resultado.respuesta or ''),
                     'score_calidad': score,
                     'problemas': problemas,
-                    'usa_rag': bool(agente.vectorstore_path),
-                    'usa_contexto_estatico': bool(agente.contexto_estatico),
+                    'usa_rag': bool(getattr(consultor, 'usar_weaviate', False)),
+                    'usa_contexto_estatico': (not getattr(consultor, 'usar_weaviate', False)) and bool(agente.contexto_estatico),
                     'fin_detectado': fin_detectado,
                     'etapas': traza_etapas,
                 },
@@ -305,6 +305,12 @@ def _billing_info_por_proveedor(proveedor):
             'docs_url': 'https://docs.anthropic.com/claude/reference/rate-limits',
         }
     if proveedor == 5:
+        return {
+            'proveedor': 'Ollama Cloud',
+            'billing_url': 'https://ollama.com/settings/billing',
+            'docs_url': 'https://docs.ollama.com',
+        }
+    if proveedor == 8:
         return {
             'proveedor': 'Ollama (local)',
             'billing_url': '',
@@ -406,7 +412,7 @@ def _handle_media(request, agente, session_id):
     if not apikey_obj:
         return JsonResponse({'error': True, 'message': 'Este agente no tiene una API Key activa.'})
 
-    _provider_map = {2: 'gemini', 3: 'openai', 4: 'claude'}
+    _provider_map = {2: 'gemini', 3: 'openai', 4: 'claude', 5: 'ollama', 8: 'ollama_local'}
     provider = _provider_map.get(apikey_obj.proveedor, 'openai')
     ext = os.path.splitext(archivo.name)[1].lower()
 
@@ -444,6 +450,14 @@ def _leer_base64(path: str) -> str:
 
 def _analizar_imagen(tmp_path, filename, texto_adicional, apikey_obj, provider, agente):
     """Llama al LLM con la imagen (multimodal) y devuelve la respuesta."""
+    if provider in ('ollama', 'ollama_local'):
+        # Ollama (Cloud/local) no soporta multimodal aquí; evitar misroutear la key a OpenAI.
+        return JsonResponse({
+            'error': False,
+            'respuesta': 'Este agente (Ollama) no procesa imágenes por ahora.',
+            'tipo': 'imagen',
+        })
+
     mime_type = mimetypes.guess_type(filename)[0] or 'image/jpeg'
     b64 = _leer_base64(tmp_path)
 

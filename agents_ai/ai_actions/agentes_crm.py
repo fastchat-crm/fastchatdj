@@ -129,6 +129,14 @@ def generar(*, descripcion: str, tono: str, idioma: str,
     agente.save(request)
     agente.apikey.add(apikey_obj)
 
+    # Provisiona el tenant RAG e indexa el conocimiento inicial (contexto_estatico
+    # generado por el LLM). No fatal — el agente queda creado igual.
+    try:
+        from agents_ai import indexador_conocimiento as _idx
+        _idx.provisionar_e_indexar_inicial(agente)
+    except Exception as exc:
+        logger.warning('Provisión/indexado RAG del agente %s falló: %s', agente.id, exc)
+
     return {
         'agente_id': agente.id,
         'nombre': agente.nombre,
@@ -204,6 +212,14 @@ def crear_desde_depto(request):
     )
     agente.save()
     agente.apikey.add(apikey_obj)
+
+    # Provisiona el tenant RAG e indexa el conocimiento inicial: el
+    # contexto_estatico volcado desde el departamento + perfil. No fatal.
+    try:
+        from agents_ai import indexador_conocimiento as _idx
+        _idx.provisionar_e_indexar_inicial(agente)
+    except Exception as ex:
+        logger.warning('Provisión/indexado RAG del agente %s falló: %s', agente.id, ex)
 
     # Migrar nodos del flujo → HerramientaAgente. Si falla, no rompemos la
     # creación del agente — solo logueamos y devolvemos stats vacíos.

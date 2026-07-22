@@ -1,0 +1,26 @@
+#btnCargarPromptRecomendado {
+    border-color: #667eea;
+    color: #667eea;
+    white-space: nowrap;
+}
+
+#btnCargarPromptRecomendado:hover {
+    background: #667eea;
+    color: #fff;
+}
+
+#promptRecomendadoSrc {
+    display: none;
+}
+
+.detalles-scroll {
+    max-height: 440px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+#id_prompt_template {
+    min-height: 440px;
+    font-size: 0.85rem;
+    line-height: 1.45;
+}

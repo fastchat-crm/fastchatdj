@@ -131,6 +131,7 @@ INSTALLED_APPS = [
     'voz.apps.VozConfig',
     'agenda.apps.AgendaConfig',
     'pwa.apps.PwaConfig',
+    'cotizador.apps.CotizadorConfig',
     # packages
     'wkhtmltopdf',
     'django_select2',

@@ -257,22 +257,24 @@ def _invocar_llm(apikey_obj, prompt_text):
             temperature=0.3,
             model_kwargs={"response_format": {"type": "json_object"}},
         )
-    elif proveedor == 4:
-        try:
-            from langchain_anthropic import ChatAnthropic
-        except ImportError:
-            raise RuntimeError("langchain_anthropic no instalado")
-        modelo = modelo_cfg or 'claude-haiku-4-5-20251001'
-        llm = ChatAnthropic(
-            model=modelo,
-            anthropic_api_key=apikey_obj.descripcion,
-            max_tokens=16000,
+    elif proveedor in (4, 5, 8):
+        # Claude (4), Ollama Cloud (5) y Ollama local (8): sin forcing nativo de JSON via model_kwargs
+        # como Gemini/OpenAI arriba — el meta-prompt del auditor ya exige
+        # salida JSON estricta (ver AUDITOR_SYSTEM_PROMPT), y _parsear_json_respuesta
+        # repara desvios menores. Construccion via registry de providers.
+        from .providers import get_provider
+        provider = get_provider(proveedor)
+        modelo = modelo_cfg or provider.default_model()
+        llm = provider.get_llm(
+            apikey=apikey_obj.descripcion,
+            model_name=modelo,
+            max_output_tokens=16000,
             temperature=0.3,
         )
     else:
         raise RuntimeError(
             f"Proveedor {proveedor} no soportado por el auditor. "
-            f"Usá una API Key con proveedor Gemini, OpenAI o Claude."
+            f"Usá una API Key con proveedor Gemini, OpenAI, Claude u Ollama."
         )
 
     msg = llm.invoke(prompt_text)

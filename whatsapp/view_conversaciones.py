@@ -1271,7 +1271,7 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                             # 2. Agregar al FAISS si está configurado (compatibilidad)
                             if agente.vectorstore_path and agente.apikey.filter(estado=True).exists():
                                 apikey_obj = (
-                                    agente.apikey.filter(estado=True, proveedor__in=(2, 3, 5)).first()
+                                    agente.apikey.filter(estado=True, proveedor__in=(2, 3, 8)).first()
                                     or agente.apikey.filter(estado=True).first()
                                 )
                                 try:
@@ -1291,6 +1291,22 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                                     invalidate_vectorstore_cache(vs_abs)
                                 except Exception as ex:
                                     log(f"Error al agregar corrección al vectorstore: {ex}", request, "error")
+
+                            # 3. Indexar la corrección en Weaviate (RAG oficial del agente)
+                            try:
+                                from agents_ai.indexador_conocimiento import _resolver_gemini_key
+                                from agents_ai import weaviate_rag
+                                gemini_key = _resolver_gemini_key(agente.perfil_id)
+                                if gemini_key:
+                                    doc_correccion = {
+                                        'content': f"Pregunta: {pregunta}\nRespuesta correcta: {correccion}",
+                                        'source': 'correccion',
+                                        'tipo': 'faq',
+                                        'categoria': '',
+                                    }
+                                    weaviate_rag.indexar_documentos(agente.id, gemini_key, [doc_correccion])
+                            except Exception as ex:
+                                log(f"Error al indexar corrección en Weaviate: {ex}", request, "error")
 
                     return JsonResponse({
                         'error': False,
