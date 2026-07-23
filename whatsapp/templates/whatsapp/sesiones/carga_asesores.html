@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/whatsapp/carga_asesores.css?v1.1">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+
+    <div class="alert alert-info d-flex align-items-center gap-3 mb-3">
+        <i class="fa fa-users-line fa-2x"></i>
+        <div class="flex-grow-1">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <strong>Carga de asesores</strong>
+                <a href="/whatsapp/sesiones/" class="btn btn-sm btn-outline-primary">
+                    <i class="fa fa-arrow-left me-1"></i> Volver a canales
+                </a>
+            </div>
+            <small>{{ titulo_scope }}</small>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-lg-3">
+            <div class="card ca-stat h-100">
+                <div class="card-body py-3 text-center">
+                    <div class="ca-stat-label">Abiertas</div>
+                    <div class="ca-stat-valor">{{ resumen.total_abiertas }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card ca-stat h-100">
+                <div class="card-body py-3 text-center">
+                    <div class="ca-stat-label">Sin asignar</div>
+                    <div class="ca-stat-valor text-warning">{{ resumen.sin_asignar }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card ca-stat h-100">
+                <div class="card-body py-3 text-center">
+                    <div class="ca-stat-label">Asesores</div>
+                    <div class="ca-stat-valor">{{ resumen.asesores }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card ca-stat h-100">
+                <div class="card-body py-3 text-center">
+                    <div class="ca-stat-label">Sin responder {{ resumen.horas }}h</div>
+                    <div class="ca-stat-valor text-danger">{{ resumen.sin_responder_24h }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Asesor</th>
+                            <th>Rol</th>
+                            <th class="text-center">Abiertas</th>
+                            <th class="text-center">Respondidas {{ resumen.horas }}h</th>
+                            <th class="text-center">Sin tocar</th>
+                            <th class="text-center">Mensajes {{ resumen.horas }}h</th>
+                            <th class="text-center">Última respuesta</th>
+                            <th class="text-center">Asignadas {{ resumen.horas }}h</th>
+                            <th class="text-center">Disponible</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for f in filas %}
+                        <tr>
+                            <td><strong>{{ f.nombre }}</strong></td>
+                            <td class="small text-muted">{{ f.rol }}</td>
+                            <td class="text-center"><strong>{{ f.abiertas }}</strong></td>
+                            <td class="text-center">
+                                {% if f.respondio_24h %}
+                                    <span class="badge bg-success">{{ f.respondidas_24h }}</span>
+                                {% else %}
+                                    <span class="badge bg-danger">0</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if f.pendientes %}
+                                    <span class="badge bg-warning text-dark">{{ f.pendientes }}</span>
+                                {% else %}
+                                    <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center small">{{ f.mensajes_24h }}</td>
+                            <td class="text-center small text-muted">
+                                {% if f.ultima_respuesta %}
+                                    {{ f.ultima_respuesta|date:"d/m/Y H:i" }}
+                                {% else %}
+                                    Nunca
+                                {% endif %}
+                            </td>
+                            <td class="text-center small">{{ f.asig_24h }}</td>
+                            <td class="text-center">
+                                {% if f.disponible %}
+                                    <span class="badge bg-success">Sí</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">No</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-light border" data-bs-toggle="dropdown">
+                                        <i class="fa fa-ellipsis-v"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                        <li>
+                                            <a class="dropdown-item"
+                                               href="/whatsapp/conversaciones/?sesion={{ sesion_token|urlencode }}&asesor={{ f.usuario_id }}"
+                                               target="_blank" rel="noopener">
+                                                <i class="fa fa-comments me-2 text-primary"></i>Ver en conversaciones
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="10" class="text-center text-muted py-4">
+                                <i class="fa fa-inbox fa-2x mb-2 d-block"></i>
+                                La sesión no tiene asesores asignados.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer bg-white">
+            <p class="small text-muted mb-0">
+                <i class="fa fa-circle-info me-1"></i>
+                "Respondidas" cuenta las conversaciones donde el asesor escribió al menos un mensaje en las últimas
+                {{ resumen.horas }} horas. "Sin tocar" son sus conversaciones abiertas que no respondió en ese lapso.
+            </p>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

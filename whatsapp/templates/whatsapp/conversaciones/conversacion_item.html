@@ -42,7 +42,9 @@
                     {% endif %}
                     {% if not show_date and conversacion.atendida_por_meta and conversacion.vence_meta_en %}
                         {% if conversacion.vence_meta_expirada %}
-                            <span class="ci-badge meta-countdown bg-danger" title="Ventana 24h vencida"><i class="fa fa-hourglass-end me-1"></i><span class="meta-countdown-val">Vencido</span></span>
+                            <span class="ci-badge meta-countdown meta-caducada bg-danger"
+                                  data-vence="{{ conversacion.vence_meta_en.isoformat }}"
+                                  title="Ventana 24h vencida"><i class="fa fa-hourglass-end me-1"></i><span class="meta-countdown-val">Vencido</span></span>
                         {% else %}
                             <span class="ci-badge meta-countdown bg-warning text-dark"
                                   data-vence="{{ conversacion.vence_meta_en.isoformat }}"

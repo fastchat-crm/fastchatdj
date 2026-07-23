@@ -302,7 +302,9 @@ BRANDING_INBOX_CANAL = {
         'url_conversaciones': '/whatsapp/conversaciones/',
         'url_finalizadas': '/whatsapp/conversaciones-finalizadas/',
         'url_pendientes': '/whatsapp/conversaciones-pendiente-reconexion/',
+        'url_caducadas': '/whatsapp/conversaciones-caducadas/',
         'tiene_pendientes': True,
+        'tiene_caducadas': True,
         'vacio_titulo': 'Aún no hay sesiones de WhatsApp',
         'vacio_texto': 'Para ver conversaciones primero necesitás conectar al menos una sesión de WhatsApp.',
         'vacio_boton': 'Crear o conectar una sesión',
@@ -363,17 +365,26 @@ def canal_conversacion_permitido(sesion, canal_fijo):
     return proveedor in PROVEEDORES_WHATSAPP
 
 
+def conversacionesCaducadasView(request):
+    """Vista dedicada /whatsapp/conversaciones-caducadas/: mismas conversaciones
+    activas del inbox pero acotadas a la ventana Meta de 24h ya vencida
+    (`caducada=1` forzado). Comparte layout y template con `conversacionesView`
+    (`base_chat.html` + `listado.html`), con la pestaña Caducadas activa."""
+    return conversacionesView(request, forzar_caducada=True)
+
+
 @login_required
 @secure_module
-def conversacionesView(request, canal_fijo=None, template='whatsapp/conversaciones/listado.html'):
+def conversacionesView(request, canal_fijo=None, template='whatsapp/conversaciones/listado.html', forzar_caducada=False):
     branding = BRANDING_INBOX_CANAL.get(canal_fijo, BRANDING_INBOX_CANAL[None])
-    titulo = branding['titulo']
+    titulo = 'Conversaciones caducadas' if forzar_caducada else branding['titulo']
     data = {
         'titulo': titulo,
         'modulo': titulo,
         'ruta': request.path,
         'canal_fijo': canal_fijo or '',
         'canal_branding': branding,
+        'vista_actual': 'caducadas' if forzar_caducada else 'abiertas',
     }
     addData(request, data)
 
@@ -1371,6 +1382,10 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
     filtro_asesor = request.GET.get('asesor', '')
     filtro_sin_asesor = request.GET.get('sin_asesor', '')
     filtro_por_caducar = request.GET.get('por_caducar', '')
+    filtro_caducada = request.GET.get('caducada', '')
+    if forzar_caducada:
+        # Vista dedicada /conversaciones-caducadas/: el filtro es la base fija.
+        filtro_caducada = '1'
 
     # `sesiones` ya viene acotado por canal_fijo (wrappers /instagram/ y
     # /tiktok/): sin esto, con canal sin sesiones (sesion_seleccionada=None)
@@ -1382,11 +1397,13 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
         estado_conversacion=0
     )
     url_vars = ''
+    sesion_url_frag = ''
 
     if sesion_seleccionada:
         filtros = filtros & Q(contacto__sesion=sesion_seleccionada)
         filtros = filtros & filtro_conversaciones_por_rol(request.user, sesion_seleccionada)
-        url_vars += f'&sesion={encrypt_sesion_id(sesion_seleccionada.id)}'
+        sesion_url_frag = f'&sesion={encrypt_sesion_id(sesion_seleccionada.id)}'
+        url_vars += sesion_url_frag
 
     if criterio:
         filtros = filtros & (Q(contacto__contacto_numero__icontains=criterio) | Q(contacto__contacto_nombre__icontains=criterio))
@@ -1434,7 +1451,17 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
         data["filtro_por_caducar"] = True
         url_vars += '&por_caducar=1'
 
+    if filtro_caducada:
+        # El filtrado real se aplica en el branch load_conversations sobre la
+        # anotación fecha_ultimo_entrante (ventana Meta de 24h ya vencida).
+        data["filtro_caducada"] = True
+        url_vars += '&caducada=1'
+
     data["url_vars"] = url_vars
+    # Filtros activos sin el fragmento de sesión: el JS del listado los usa para
+    # rearmar el load_conversations sin depender de un replace frágil sobre el
+    # token firmado (que lleva timestamp y puede diferir entre renders).
+    data["filtros_activos_qs"] = (url_vars.replace(sesion_url_frag, '', 1) if sesion_url_frag else url_vars).lstrip('&')
     data['conversacion_selected'] = conversacion_selected
     data["today"] = timezone.now().date()
     data["SENTIMIENTO_CHOICES"] = SENTIMIENTO_CHOICES
@@ -1461,12 +1488,40 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
     contadores_scope = badge_scope & Q(contacto__status=True, status=True)
     if sesion_seleccionada:
         contadores_scope = contadores_scope & Q(contacto__sesion=sesion_seleccionada)
+    # Caducadas = ventana Meta de 24h ya vencida (último entrante > 24h). Se
+    # define por la ventana Meta y NO por el timer interno `fecha_hora_expira`
+    # (con min_sesion≈1440 ambos coincidían y las caducadas quedaban ocultas de
+    # `sin_expirar`). Abiertas y Caducadas quedan disjuntas: <24h Abiertas,
+    # >24h Caducadas. El cron sigue respetando las asignadas a un humano.
+    from django.db.models import OuterRef as _OE_bdg, Subquery as _SQ_bdg
+    from datetime import timedelta as _td_bdg
+    _ult_entrante_bdg = (
+        MensajeWhatsApp.objects
+        .filter(conversacion=_OE_bdg('pk'))
+        .exclude(remitente=_OE_bdg('contacto__sesion__numero'))
+        .order_by('-fecha').values('fecha')[:1]
+    )
+    _limite_caducada_bdg = timezone.now() - _td_bdg(hours=HORAS_VENTANA_META_CUSTOMER_SERVICE)
+    data["total_caducadas"] = (
+        ConversacionWhatsApp.objects
+        .filter(contadores_scope, estado_conversacion=0,
+                conversacion_finalizada=False,
+                contacto__sesion__proveedor='meta')
+        .annotate(_fue=_SQ_bdg(_ult_entrante_bdg))
+        .filter(_fue__lte=_limite_caducada_bdg)
+        .distinct().count()
+    )
     # `sin_expirar` (mismo manager que usa el listado) y no un filtro propio:
     # con estado_conversacion=0 a secas el badge contaba conversaciones
     # expiradas-sin-cerrar que el listado oculta (badge decía N, lista vacía).
-    data["total_abiertas"] = ConversacionWhatsApp.objects.sin_expirar.filter(
-        contadores_scope,
-    ).distinct().count()
+    # Además excluimos las caducadas (ventana Meta vencida) para no doblarlas.
+    data["total_abiertas"] = (
+        ConversacionWhatsApp.objects.sin_expirar
+        .filter(contadores_scope)
+        .annotate(_fue=_SQ_bdg(_ult_entrante_bdg))
+        .exclude(contacto__sesion__proveedor='meta', _fue__lte=_limite_caducada_bdg)
+        .distinct().count()
+    )
     data["total_finalizadas"] = ConversacionWhatsApp.objects.filter(
         contadores_scope, estado_conversacion=1,
     ).distinct().count()
@@ -1500,6 +1555,24 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                 'nombre': p.usuario.get_full_name() or p.usuario.username,
             })
 
+        # Deep-link `?asesor=<id>` (ej. desde "Carga de asesores"): si ese asesor
+        # tiene conversaciones asignadas pero ya no es perfil activo de la sesión,
+        # igual lo agregamos como candidato para que el chip resuelva su nombre y
+        # se marque. Además exponemos el nombre para la etiqueta del chip.
+        asesor_sel = data.get("filtro_asesor")
+        if asesor_sel:
+            if asesor_sel not in vistos:
+                u_sel = Usuario.objects.filter(id=asesor_sel).first()
+                if u_sel:
+                    vistos.add(asesor_sel)
+                    data["asesores_filtro"].append({
+                        'id': u_sel.id,
+                        'nombre': u_sel.get_full_name() or u_sel.username,
+                    })
+            data["nombre_asesor_filtro"] = next(
+                (a['nombre'] for a in data["asesores_filtro"] if a['id'] == asesor_sel), ''
+            )
+
     # Si es una solicitud AJAX para cargar conversaciones
     if request.GET.get('load_conversations'):
         from django.db import models as django_models
@@ -1508,9 +1581,16 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
         # numero de la sesión, foto del contacto). Sin esto, el render del
         # partial dispara N+1 queries por cada item del listado.
         from django.db.models import Count, Q as _Q_nl, F as _F_nl
+        # La vista Caducadas parte del manager base (NO `sin_expirar`): las
+        # caducadas suelen tener `expirado=True` (min_sesion≈24h) y `sin_expirar`
+        # las ocultaba. Se acota luego a Meta + ventana de 24h vencida.
+        _base_listado = (
+            ConversacionWhatsApp.objects.filter(filtros, conversacion_finalizada=False)
+            if filtro_caducada
+            else ConversacionWhatsApp.objects.sin_expirar.filter(filtros)
+        )
         qs = (
-            ConversacionWhatsApp.objects.sin_expirar
-            .filter(filtros)
+            _base_listado
             .select_related(
                 'contacto',
                 'contacto__sesion',
@@ -1596,6 +1676,23 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                 ),
             )
 
+        # "Caducadas": ventana Meta de 24h ya vencida por completo (el último
+        # mensaje entrante tiene más de 24h). Solo texto libre bloqueado —
+        # solo aplica a Meta. Espejo del gate `_bloqueo_ventana_meta`.
+        if filtro_caducada:
+            qs = qs.filter(
+                contacto__sesion__proveedor='meta',
+                fecha_ultimo_entrante__lte=ahora_ts - _td(hours=HORAS_VENTANA_META_CUSTOMER_SERVICE),
+            )
+        else:
+            # En cualquier vista que NO sea Caducadas (Abiertas y sus chips), las
+            # conversaciones con la ventana Meta ya vencida no cuentan como
+            # abiertas: viven en la pestaña Caducadas. Mantiene ambos disjuntos.
+            qs = qs.exclude(
+                contacto__sesion__proveedor='meta',
+                fecha_ultimo_entrante__lte=ahora_ts - _td(hours=HORAS_VENTANA_META_CUSTOMER_SERVICE),
+            )
+
         # Orden: última actividad primero. Se ordena por el dato vivo del
         # contacto (el mismo que muestra el "hace X min" de la card) y no por
         # el snapshot `order`, que quedó desactualizado en conversaciones
@@ -1627,6 +1724,7 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
             'listado_count':     len(conv_list),
             'total_abiertas':    data.get('total_abiertas', 0),
             'total_finalizadas': data.get('total_finalizadas', 0),
+            'total_caducadas':   data.get('total_caducadas', 0),
         })
 
     # Pipelines disponibles para el modal "Asignar a pipeline"

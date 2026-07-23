@@ -1294,21 +1294,22 @@ def sesionesView(request):
             or sesion_ca.es_participante(request.user)
             or request.user.is_superuser
         ):
-            return JsonResponse({'error': True, 'message': 'Sesión no encontrada o sin acceso.'})
-        from django.template.loader import get_template as _get_template
+            log('Sesión no encontrada o sin acceso al ver carga de asesores.', request)
+            return redirect('/whatsapp/sesiones/')
         from .funciones_carga_asesores import reporte_carga_asesores
 
         filas, resumen = reporte_carga_asesores(sesion_ca)
-        html = _get_template('whatsapp/sesiones/_modal_carga_asesores.html').render({
-            'filas': filas,
-            'resumen': resumen,
-            'sesion_token': encrypt_sesion_id(sesion_ca.id),
-            'titulo_scope': (
-                f'Carga de asesores de "{sesion_ca.nombre or sesion_ca.numero}" — '
-                f'conversaciones abiertas y actividad de las últimas {resumen["horas"]} horas.'
-            ),
-        })
-        return JsonResponse({'result': True, 'data': html})
+        data['titulo'] = f'Carga de asesores · {sesion_ca.nombre or sesion_ca.numero}'
+        data['descripcion'] = 'Conversaciones abiertas y actividad reciente de cada asesor de la sesión.'
+        data['filas'] = filas
+        data['resumen'] = resumen
+        data['sesion_ca'] = sesion_ca
+        data['sesion_token'] = encrypt_sesion_id(sesion_ca.id)
+        data['titulo_scope'] = (
+            f'Carga de asesores de "{sesion_ca.nombre or sesion_ca.numero}" — '
+            f'conversaciones abiertas y actividad de las últimas {resumen["horas"]} horas.'
+        )
+        return render(request, 'whatsapp/sesiones/carga_asesores.html', data)
 
     if request.GET.get('action') == 'logs_notificaciones':
         sesion_logs = SesionWhatsApp.objects.filter(

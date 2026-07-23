@@ -324,7 +324,13 @@ filtros = Q(
 - `?mis_conv=1` — `asignado_a=request.user`
 - `?asesor=<user_id>` — `asignado_a_id=<id>`. El dropdown "Asesor" del sidebar
   solo se renderiza con vista completa (`es_vista_completa`); candidatos salen
-  de `PerfilSesionWhatsApp` de la sesión seleccionada (dedupe por usuario).
+  de `PerfilSesionWhatsApp` de la sesión seleccionada (dedupe por usuario). En
+  deep-link (ej. desde "Carga de asesores") si el `<user_id>` ya no es perfil
+  activo pero tiene conversaciones asignadas, se agrega como candidato para que
+  el chip resuelva su nombre. La vista expone `nombre_asesor_filtro` y el chip lo
+  muestra como "Asesor: <nombre>" (etiqueta base fija con `data-label-base`). El
+  JS arma `load_conversations` desde `filtros_activos_qs` (los filtros activos sin
+  el fragmento `&sesion=`), no con un replace sobre el token firmado.
 - `?sin_asesor=1` — chip "Sin asesor": `asignado_a__isnull=True`. El chip solo se
   renderiza con vista completa (`mostrar_filtro_asesor`) y muestra el contador
   `total_sin_asesor` (mismo alcance que los contadores de abiertas/finalizadas).
@@ -337,6 +343,46 @@ filtros = Q(
   defecto**, rango 1-23, se edita en el modal "Editar sesión" de
   `/whatsapp/sesiones/` (campo "Avisar cuando falten (horas)", solo sesiones
   Meta) y lo valida `view_sesiones`.
+- `?caducada=1` — ventana Meta de 24h **ya vencida por completo**
+  (`fecha_ultimo_entrante <= now - 24h` + `sesion__proveedor='meta'`). Espejo del
+  gate `_bloqueo_ventana_meta`. **No es un chip**: es la base fija de la pestaña
+  dedicada **Caducadas** (`/whatsapp/conversaciones-caducadas/`, ver §Pestañas).
+  Al abrir una conversación caducada, el composer se **bloquea** (ver §5).
+
+**Caducadas independiente del timer interno (clave):** "caducada" se define por
+la **ventana Meta de 24h** (último entrante), NO por `fecha_hora_expira`/`expirado`.
+Con `min_sesion≈1440` ambos coincidían y las caducadas quedaban `expirado=True` →
+ocultas de `sin_expirar` (la pestaña marcaba 0 teniendo cientos). Por eso:
+- La vista Caducadas parte del **manager base** (`ConversacionWhatsApp.objects`,
+  no `sin_expirar`) + `estado_conversacion=0` + `conversacion_finalizada=False`
+  + Meta + `fecha_ultimo_entrante <= now-24h`. Así surgen aunque `expirado=True`.
+- **Abiertas EXCLUYE las caducadas** (`qs.exclude(proveedor='meta',
+  fecha_ultimo_entrante<=now-24h)` en el branch load, y el badge `total_abiertas`
+  igual). Quedan **disjuntas**: `<24h` Abiertas · `>24h` Caducadas.
+- Badge `total_caducadas` (mismo scope que los otros contadores) en la pestaña,
+  refrescado por AJAX (`load_conversations` lo devuelve). Solo se computa en la
+  vista Abiertas/Caducadas (`conversacionesView`); las vistas finalizadas/
+  pendientes muestran la pestaña sin contador.
+- El cron de cierre por inactividad (`fecha_hora_expira`) es ortogonal: sigue
+  respetando las asignadas a un humano. Para que las caducadas **sin asignar**
+  tampoco se autocierren hay que apagar el timer interno de la sesión
+  (`min_sesion=0` + `dias_cierre_higienico=0`).
+
+**Pestaña "Caducadas"** (`/whatsapp/conversaciones-caducadas/`): cuarta pestaña
+del inbox junto a Abiertas/Finalizadas/Pendientes. **Comparte layout y template
+con Abiertas** (`base_chat.html` + `listado.html`) porque las caducadas siguen
+siendo conversaciones **activas** (`estado_conversacion=0`) con chat/composer —
+por eso NO clona el template (evita duplicar ~4000 líneas, coherente con la
+unificación 2026-07-15). La vista es el wrapper
+`conversacionesCaducadasView` → `conversacionesView(request,
+forzar_caducada=True)`, que fuerza `filtro_caducada='1'` server-side (robusto:
+persiste aunque los chips rápidos reseteen `filtroActivo`) y setea
+`data['vista_actual']='caducadas'`. El template renderiza la pestaña activa según
+`vista_actual` (Abiertas pasa a link, Caducadas a botón activo). Solo se muestra
+en el inbox WhatsApp (`branding.tiene_caducadas=True` solo para `canal_fijo=None`;
+Instagram/Messenger/TikTok no tienen ventana de 24h). Ruta registrada en
+`whatsapp/urls.py` (`sub_urls`) — staff no-superuser necesita el módulo
+`/whatsapp/conversaciones-caducadas/` en Seguridad (como finalizadas/pendientes).
 
 **Alerta "por caducar" del panel** (`/panel/`): `seguridad/view_index.py` publica
 `alertas_por_caducar` / `total_por_caducar` a partir de
@@ -617,6 +663,19 @@ Sin `canal_fijo` todo queda igual (verde WhatsApp).
 textarea con auto-grow, emoji picker, input de archivo (`#archivo`),
 botón plantillas Meta (`#plantillas-btn`). Al enviar, `action=send`.
 Al pulsar enviar el JS pausa la IA preventivamente para evitar double-reply.
+
+**Composer bloqueado por ventana Meta vencida (caducada):** cuando `ver_mensajes`
+devuelve `meta_bloqueada=True` (= `vence_meta_expirada`), `aplicarBloqueoCaducado()`
+(en `listado.html`) deshabilita textarea/emoji/adjuntar/enviar (clase
+`cm-composer-caducado` en `#chat-footer`) y muestra `#composer-caducado-banner`
+con el contador vivo "Caducada hace Xh Ym" (`_fmtMetaElapsed`) y dos acciones que
+siguen activas: **Enviar plantilla** (`#cad-btn-plantilla` → abre `#plantillas-btn`)
+y **Finalizar** (`#cad-btn-finalizar` → dispara `#marcar-resuelto`). El mismo
+contador vivo se pinta en el badge del header (`#meta-countdown-header`) y en la
+card del sidebar (`.meta-caducada[data-vence]` en `conversacion_item.html`) vía
+`tickMetaCountdowns()` — que ahora conserva `data-vence` tras vencer en vez de fijar
+"Vencido" estático. El backend igual bloquea el envío (`_bloqueo_ventana_meta` →
+`requiere_plantilla:True`); el bloqueo del composer es la capa visual.
 
 **Finalizadas** (footer reemplazado):
 - `#bloqueo-reactivar-aviso` (oculto por defecto) — alerta amarilla cuando la

@@ -86,9 +86,9 @@
                 <button type="button" class="kebab-item" onclick="verLogsNotif({{ sesion.id }})">
                     <i class="fa fa-bell"></i> Avisos al asesor
                 </button>
-                <button type="button" class="kebab-item" onclick="verCargaAsesores({{ sesion.id }})">
+                <a class="kebab-item" href="?action=carga_asesores&id={{ sesion.id }}" target="_blank" rel="noopener">
                     <i class="fa fa-users-line"></i> Carga de asesores
-                </button>
+                </a>
                 <div class="kebab-sep"></div>
                 {% if sesion.es_instagram %}
                     <div class="kebab-heading">Instagram</div>

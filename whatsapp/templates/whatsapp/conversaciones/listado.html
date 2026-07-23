@@ -63,20 +63,40 @@
             </div>
 
             <div class="cs-tabs">
+                {% if vista_actual == 'caducadas' %}
+                <a href="{{ canal_branding.url_conversaciones }}" class="cs-tab-btn cs-tab-link bloqueo_pantalla" id="open_chats_tab" title="Conversaciones abiertas">
+                    <i class="fa fa-comment-dots me-1"></i>Abiertas
+                    <span class="cs-tab-total" id="total-abiertas-badge">{{ total_abiertas|default:0 }}</span>
+                </a>
+                {% else %}
                 <button class="cs-tab-btn active" id="open_chats_tab" data-bs-toggle="tab" data-bs-target="#open_chats_content" type="button" role="tab" title="Conversaciones abiertas{% if total_sin_leer %} ({{ total_sin_leer }} sin leer){% endif %}">
                     <i class="fa fa-comment-dots me-1"></i>Abiertas
                     <span class="cs-tab-total" id="total-abiertas-badge">{{ total_abiertas|default:0 }}</span>
                     {% if total_sin_leer %}<span class="cs-tab-count">{{ total_sin_leer }}</span>{% endif %}
                 </button>
-                <a href="{{ canal_branding.url_finalizadas }}" class="cs-tab-btn cs-tab-link bloqueo_pantalla" id="resolved_chats_tab" title="Conversaciones finalizadas">
-                    <i class="fa fa-check-circle me-1"></i>Finalizadas
-                    <span class="cs-tab-total" id="total-finalizadas-badge">{{ total_finalizadas|default:0 }}</span>
-                </a>
+                {% endif %}
+                {% if canal_branding.tiene_caducadas %}
+                    {% if vista_actual == 'caducadas' %}
+                    <button class="cs-tab-btn active cs-tab-caducadas" id="caducadas_tab" type="button" role="tab" title="Conversaciones con la ventana Meta de 24h vencida">
+                        <i class="fa fa-ban me-1"></i>Caducadas
+                        <span class="cs-tab-total" id="total-caducadas-badge">{{ total_caducadas|default:0 }}</span>
+                    </button>
+                    {% else %}
+                    <a href="{{ canal_branding.url_caducadas }}" class="cs-tab-btn cs-tab-link bloqueo_pantalla" id="caducadas_tab" title="Conversaciones con la ventana Meta de 24h vencida">
+                        <i class="fa fa-ban me-1"></i>Caducadas
+                        <span class="cs-tab-total" id="total-caducadas-badge">{{ total_caducadas|default:0 }}</span>
+                    </a>
+                    {% endif %}
+                {% endif %}
                 {% if canal_branding.tiene_pendientes %}
                 <a href="{{ canal_branding.url_pendientes }}" class="cs-tab-btn cs-tab-link bloqueo_pantalla" id="pending_reconnection_tab">
                     <i class="fa fa-hourglass-half me-1"></i>Pendientes
                 </a>
                 {% endif %}
+                <a href="{{ canal_branding.url_finalizadas }}" class="cs-tab-btn cs-tab-link bloqueo_pantalla" id="resolved_chats_tab" title="Conversaciones finalizadas">
+                    <i class="fa fa-check-circle me-1"></i>Finalizadas
+                    <span class="cs-tab-total" id="total-finalizadas-badge">{{ total_finalizadas|default:0 }}</span>
+                </a>
             </div>
 
             <div class="cs-filter-bar" id="filtros-rapidos">
@@ -119,8 +139,8 @@
                 </div>
                 {% if mostrar_filtro_asesor and asesores_filtro %}
                 <div class="dropdown">
-                    <button class="cs-chip filter-btn dropdown-toggle {% if filtro_asesor %}active{% endif %}" data-bs-toggle="dropdown" data-bs-strategy="fixed" title="Filtrar por asesor asignado">
-                        <i class="fa fa-user-check"></i><span>Asesor</span>
+                    <button class="cs-chip filter-btn dropdown-toggle {% if filtro_asesor %}active{% endif %}" data-bs-toggle="dropdown" data-bs-strategy="fixed" data-label-base="Asesor" title="Filtrar por asesor asignado">
+                        <i class="fa fa-user-check"></i><span>{% if filtro_asesor and nombre_asesor_filtro %}Asesor: {{ nombre_asesor_filtro }}{% else %}Asesor{% endif %}</span>
                     </button>
                     <ul class="dropdown-menu">
                         {% for a in asesores_filtro %}
@@ -137,7 +157,7 @@
             </div>
         </div>
 
-        <div class="cs-conv-list" data-simplebar id="conversaciones-container">
+        <div class="cs-conv-list" id="conversaciones-container">
             <div id="lista-conversaciones"></div>
         </div>
 
@@ -441,6 +461,21 @@
                 <input type="hidden" name="pk" id="conversacion-id" value="">
 
                 <div id="wa-offline-banner" class="wa-offline-banner d-none"></div>
+
+                <div id="composer-caducado-banner" class="composer-caducado-banner d-none">
+                    <div class="ccb-info">
+                        <i class="fa fa-hourglass-end"></i>
+                        <span>Ventana de 24h caducada hace <span class="cad-elapsed">—</span> · solo puedes enviar plantilla o finalizar</span>
+                    </div>
+                    <div class="ccb-actions">
+                        <button type="button" class="ccb-btn ccb-btn-primary" id="cad-btn-plantilla">
+                            <i class="fa fa-layer-group me-1"></i>Enviar plantilla
+                        </button>
+                        <button type="button" class="ccb-btn ccb-btn-finalizar" id="cad-btn-finalizar">
+                            <i class="fa fa-check-circle me-1"></i>Finalizar
+                        </button>
+                    </div>
+                </div>
 
                 <div id="footer-file-preview" class="d-none mb-2 d-flex align-items-center gap-2"
                      style="font-size:.82rem;background:#e9f5ff;border-radius:8px;padding:6px 10px;">
@@ -1415,7 +1450,7 @@
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 
         // Declarar filtroActivo aquí para evitar ReferenceError antes de su uso
-        let filtroActivo = '{{ url_vars }}'.replace('&sesion={{ sesion_seleccionada.id|encrypt_id }}', '').replace(/^&/, '');
+        let filtroActivo = '{{ filtros_activos_qs }}';
 
         function conectarWebSocket(conversacionId) {
             const wsUrl = `${wsProtocol}//${window.location.host}/ws/chat/${conversacionId}/`;
@@ -2673,6 +2708,9 @@
                     if (typeof response.total_finalizadas !== 'undefined') {
                         $('#total-finalizadas-badge').text(response.total_finalizadas);
                     }
+                    if (typeof response.total_caducadas !== 'undefined') {
+                        $('#total-caducadas-badge').text(response.total_caducadas);
+                    }
 
                     if (conversacionActiva) {
                         const $reactivated = $(`.conversacion-item[data-id="${conversacionActiva}"]`).addClass('active');
@@ -2714,6 +2752,7 @@
             $('#resolver-btn, #dropdowns-btn, #bot-toggle-container, #asignado-container, #tokens-container, #referral-container, #chat-footer, #clasificacion-inline-container, #btn-wa-web, #btn-trazas').addClass('d-none').hide();
             $('#stats-panel, #control-respuestas-panel').addClass('d-none');
             $('#respuestas-btn').removeClass('visible');
+            if (typeof aplicarBloqueoCaducado === 'function') aplicarBloqueoCaducado(false);
             cerrarModalRespuestas();
             $('#cm-empty-state').hide();
             $('#mensajes-container')
@@ -2858,6 +2897,9 @@
 
                     // Boton de plantillas Meta — visible solo si la sesion es Meta Y hay plantillas aprobadas
                     mostrarPlantillasSiMeta(response.es_meta === true, response.conversacion_id);
+
+                    // Ventana Meta de 24h caducada: bloquea el composer (solo plantilla/finalizar)
+                    aplicarBloqueoCaducado(response.meta_bloqueada === true, response.vence_meta);
 
                     if (typeof cargarHistorialCliente === 'function') cargarHistorialCliente(response.conversacion_id);
 
@@ -3732,6 +3774,18 @@
         return d > 0 ? (d + 'd ' + hms) : hms;
     }
 
+    function _fmtMetaElapsed(ts) {
+        let sec = Math.floor((Date.now() - ts) / 1000);
+        if (sec < 0) sec = 0;
+        const d = Math.floor(sec / 86400);
+        sec %= 86400;
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        if (d > 0) return d + 'd ' + h + 'h';
+        if (h > 0) return h + 'h ' + m + 'm';
+        return m + 'm';
+    }
+
     window.tickMetaCountdowns = function() {
         document.querySelectorAll('.meta-countdown[data-vence]').forEach(function(el) {
             const raw = el.getAttribute('data-vence');
@@ -3741,19 +3795,49 @@
             const valEl = el.querySelector('.meta-countdown-val');
             const txt = _fmtMetaRemain(ts);
             if (txt === null) {
+                // Ventana vencida: contador vivo de cuánto lleva caducada.
                 el.classList.remove('bg-warning', 'text-dark');
-                el.classList.add('bg-danger');
-                el.removeAttribute('data-vence');
+                el.classList.add('bg-danger', 'meta-caducada');
                 const icon = el.querySelector('i.fa');
                 if (icon) icon.className = 'fa fa-hourglass-end me-1';
-                if (valEl) valEl.textContent = 'Vencido';
+                if (valEl) valEl.textContent = 'Caducada hace ' + _fmtMetaElapsed(ts);
             } else if (valEl) {
+                el.classList.remove('bg-danger', 'meta-caducada');
                 valEl.textContent = txt;
             }
         });
+        if (window._convCaducadaVence) {
+            var elapsed = _fmtMetaElapsed(window._convCaducadaVence);
+            document.querySelectorAll('#composer-caducado-banner .cad-elapsed').forEach(function (n) {
+                n.textContent = elapsed;
+            });
+        }
     };
     setInterval(window.tickMetaCountdowns, 1000);
     $(document).ready(window.tickMetaCountdowns);
+
+    function aplicarBloqueoCaducado(bloqueada, venceISO) {
+        var $footer = $('#chat-footer');
+        var $banner = $('#composer-caducado-banner');
+        var $inputs = $('#footer-mensaje-input, #emoji-btn, #respuestas-btn, #archivo, #footer-send-btn');
+        var $attach = $('.cm-attach-label');
+        if (bloqueada) {
+            window._convCaducadaVence = venceISO ? Date.parse(venceISO) : Date.now();
+            $footer.addClass('cm-composer-caducado');
+            $inputs.prop('disabled', true);
+            $attach.addClass('cm-attach-disabled');
+            var elapsed = window._convCaducadaVence ? _fmtMetaElapsed(window._convCaducadaVence) : '—';
+            $banner.find('.cad-elapsed').text(elapsed);
+            $banner.removeClass('d-none');
+        } else {
+            window._convCaducadaVence = null;
+            $footer.removeClass('cm-composer-caducado');
+            $inputs.prop('disabled', false);
+            $attach.removeClass('cm-attach-disabled');
+            $banner.addClass('d-none');
+        }
+    }
+    window.aplicarBloqueoCaducado = aplicarBloqueoCaducado;
 
     function _sincronizarCountdownHeader(convId) {
         var item = $('#lista-conversaciones [data-id="' + convId + '"]');
@@ -3762,10 +3846,17 @@
         var badge = $('#meta-countdown-badge');
         if (src.length) {
             var vence = src.attr('data-vence');
-            badge.removeClass('bg-warning text-dark bg-danger');
+            badge.removeClass('bg-warning text-dark bg-danger meta-caducada');
             if (vence) {
-                badge.attr('data-vence', vence).addClass('bg-warning text-dark');
-                badge.find('i').attr('class', 'fa fa-clock me-1');
+                var _ts = Date.parse(vence);
+                badge.attr('data-vence', vence);
+                if (!isNaN(_ts) && (_ts - Date.now() <= 0)) {
+                    badge.addClass('bg-danger meta-caducada');
+                    badge.find('i').attr('class', 'fa fa-hourglass-end me-1');
+                } else {
+                    badge.addClass('bg-warning text-dark');
+                    badge.find('i').attr('class', 'fa fa-clock me-1');
+                }
             } else {
                 badge.removeAttr('data-vence').addClass('bg-danger');
                 badge.find('i').attr('class', 'fa fa-hourglass-end me-1');
@@ -3792,6 +3883,13 @@
 
     $(document).on('click', '.cargar-conversacion', function () {
         _sincronizarCountdownHeader($(this).data('id'));
+    });
+
+    $(document).on('click', '#cad-btn-plantilla', function () {
+        if (!$('#plantillas-panel').hasClass('open')) $('#plantillas-btn').trigger('click');
+    });
+    $(document).on('click', '#cad-btn-finalizar', function () {
+        $('#marcar-resuelto').trigger('click');
     });
 
     var _formEnviar = document.getElementById('form-enviar-mensaje');

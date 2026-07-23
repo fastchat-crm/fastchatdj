@@ -16,7 +16,7 @@ from .meta_diagnostico_view import (
 from .meta_webhook_log_view import meta_webhook_log, meta_webhook_log_poll, meta_webhook_log_detalle
 from .meta_webhook_hits_view import meta_webhook_hits, meta_webhook_hits_poll, meta_webhook_hit_detalle
 from .meta_foto_perfil_view import meta_actualizar_foto_perfil
-from .view_conversaciones import conversacionesView
+from .view_conversaciones import conversacionesView, conversacionesCaducadasView
 from .sync_contacts import sync_contacts_view
 from .update_profile_view import update_profile_view
 from .view_contacto import contactoView
@@ -68,6 +68,11 @@ whatsapp_urls = (
         "nombre": "Conversaciones pendiente reconexión",
         "url": 'conversaciones-pendiente-reconexion/',
         "vista": conversacionesPendienteReconexionView,
+    },
+    {
+        "nombre": "Conversaciones caducadas",
+        "url": 'conversaciones-caducadas/',
+        "vista": conversacionesCaducadasView,
     },
     {
         "nombre": "Contactos",

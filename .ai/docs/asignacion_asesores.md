@@ -197,8 +197,11 @@ los afecta.
 
 ## 6.b Reporte de carga y actividad de asesores
 
-`/whatsapp/sesiones/` → kebab de la sesión → **Carga de asesores**
-(`?action=carga_asesores`, `verCargaAsesores()` en `tablero.html`).
+`/whatsapp/sesiones/` → kebab de la sesión → **Carga de asesores**. El ítem del
+kebab es un enlace `?action=carga_asesores&id=<id>` con `target="_blank"`: el
+branch en `view_sesiones.py` hace `render` de la **página completa**
+`whatsapp/sesiones/carga_asesores.html` (extiende `base.html`), ya no un modal
+SweetAlert. Sin acceso → `redirect('/whatsapp/sesiones/')`.
 
 - Datos: `whatsapp/funciones_carga_asesores.py:reporte_carga_asesores(sesion)`.
 - Por asesor: conversaciones **abiertas**, **respondidas** en las últimas 24 h
@@ -208,8 +211,11 @@ los afecta.
   (`DisponibilidadAgente`).
 - Resumen arriba: abiertas totales, sin asignar, asesores y cuántos tienen
   conversaciones abiertas y **no** respondieron nada en la ventana.
-- Cada fila enlaza a `/whatsapp/conversaciones/?sesion=<token>&asesor=<id>` para
-  ir a ver lo que viene respondiendo. Orden: primero los que más "sin tocar" tienen.
+- Cada fila enlaza a `/whatsapp/conversaciones/?sesion=<token>&asesor=<id>` (token
+  con `|urlencode`) para ir a ver lo que viene respondiendo. `asesor` es el
+  `Usuario.id` (= `ConversacionWhatsApp.asignado_a_id`). En conversaciones el chip
+  "Asesor" queda marcado con el nombre del asesor (`nombre_asesor_filtro`); ver
+  `conversaciones.md`. Orden: primero los que más "sin tocar" tienen.
 
 ## 7. Archivos referenciados
 
