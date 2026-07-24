@@ -273,7 +273,11 @@ def _gestionar_atencion(request, action):
             return JsonResponse({'error': True, 'message': 'Estado inválido'})
         conversacion.estado_atencion = estado
         conversacion.save(update_fields=['estado_atencion'])
-        return JsonResponse({'error': False, 'estado_atencion': estado})
+        etiqueta = dict(ESTADOS_ATENCION).get(estado, estado)
+        return JsonResponse({
+            'error': False, 'estado_atencion': estado,
+            'message': f'Estado de la conversación: {etiqueta}.',
+        })
 
     if action == 'posponer_conversacion':
         try:
@@ -284,13 +288,21 @@ def _gestionar_atencion(request, action):
         conversacion.snooze_hasta = timezone.now() + timezone.timedelta(minutes=minutos)
         conversacion.estado_atencion = 'pendiente'
         conversacion.save(update_fields=['snooze_hasta', 'estado_atencion'])
-        return JsonResponse({'error': False, 'snooze_hasta': conversacion.snooze_hasta.isoformat()})
+        return JsonResponse({
+            'error': False, 'snooze_hasta': conversacion.snooze_hasta.isoformat(),
+            'message': f'Conversación pospuesta {minutos} minuto(s). Volverá a Pendientes cuando venza.',
+        })
 
-    # reabrir_conversacion
+    # reabrir_conversacion — solo cambia el estado de bandeja a "abierta" y quita
+    # el snooze. NO reabre la ventana Meta ni reactiva el bot ni envía nada al
+    # cliente; el copy lo deja explícito para no confundir con esas acciones.
     conversacion.snooze_hasta = None
     conversacion.estado_atencion = 'abierta'
     conversacion.save(update_fields=['snooze_hasta', 'estado_atencion'])
-    return JsonResponse({'error': False})
+    return JsonResponse({
+        'error': False, 'estado_atencion': 'abierta',
+        'message': 'Conversación marcada como Abierta en la bandeja.',
+    })
 
 
 BRANDING_INBOX_CANAL = {
@@ -981,6 +993,18 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                     if conversacion.ai_activo:
                         conversacion.ai_activo = False
                         campos_plantilla.append('ai_activo')
+                    # Reconexión de una conversación CADUCADA en sesión con bot
+                    # tradicional/híbrido: dejamos marcado que, cuando el cliente
+                    # responda a esta plantilla, el webhook debe REINICIAR el flujo
+                    # desde el inicio (no dejar el bot pausado en silencio). Se
+                    # marca solo si la ventana Meta estaba vencida (escenario real
+                    # de reconexión), no en envíos proactivos dentro de las 24h.
+                    if (sesion.modo_bot or '') in ('tradicional', 'hibrido'):
+                        from .funcionesWhatsappConversacion import _bloqueo_ventana_meta
+                        _caducada_al_enviar, _ = _bloqueo_ventana_meta(conversacion)
+                        if _caducada_al_enviar and not conversacion.reiniciar_flujo_al_responder:
+                            conversacion.reiniciar_flujo_al_responder = True
+                            campos_plantilla.append('reiniciar_flujo_al_responder')
                     if campos_plantilla:
                         conversacion.save(update_fields=campos_plantilla)
 
@@ -1151,6 +1175,17 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                         return JsonResponse({
                             'error': True,
                             'message': 'Esta acción solo aplica a sesiones con flujo de chatbot (tradicional o híbrido).',
+                        })
+                    # Ventana Meta 24h vencida (caducada): Meta rechaza todo texto
+                    # libre, así que el flujo no podría enviar el saludo. Avisamos
+                    # con la causa real en vez de dejar que reviente en el transporte.
+                    from .funcionesWhatsappConversacion import _bloqueo_ventana_meta
+                    meta_bloqueada, _vence_meta = _bloqueo_ventana_meta(filtro)
+                    if meta_bloqueada:
+                        return JsonResponse({
+                            'error': True,
+                            'requiere_plantilla': True,
+                            'message': 'La ventana de 24 horas de Meta venció. Para reiniciar el flujo primero envía una plantilla aprobada y espera la respuesta del cliente.',
                         })
                     resultado = reiniciar_flujo_tradicional(filtro)
                     if resultado.error:

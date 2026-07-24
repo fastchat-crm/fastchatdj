@@ -285,6 +285,10 @@ def process_incoming_message(session, event_data, channel_layer):
         # min_sesion == 0 → sin cierre automático (fecha_hora_expira=None):
         # la conversación solo la termina el usuario o el cliente al reescribir
         # tras un cierre manual.
+        # Se pone True si el cliente respondió a una plantilla de reconexión
+        # enviada sobre una conversación caducada (bot tradicional/híbrido): tras
+        # persistir el entrante, reiniciamos el flujo del bot desde nodo_inicio.
+        _auto_reiniciar_flujo = False
         if from_number != session.numero:  # sólo mensajes del cliente
             min_sesion = int(getattr(session, 'min_sesion', None) or 0)
             conversation.fecha_hora_expira = (
@@ -295,6 +299,22 @@ def process_incoming_message(session, event_data, channel_layer):
             if getattr(conversation, 'reconexion_enviada', False):
                 conversation.reconexion_enviada = False
                 campos_conv.append('reconexion_enviada')
+            # El agente mandó una plantilla de reconexión a una caducada y el
+            # cliente respondió: reactivar el bot y reiniciar el flujo (el
+            # ai_activo=False lo dejó el envío de la plantilla, no un humano).
+            if getattr(conversation, 'reiniciar_flujo_al_responder', False) \
+                    and (session.modo_bot or '') in ('tradicional', 'hibrido'):
+                conversation.reiniciar_flujo_al_responder = False
+                campos_conv.append('reiniciar_flujo_al_responder')
+                if not conversation.ai_activo:
+                    conversation.ai_activo = True
+                    campos_conv.append('ai_activo')
+                _auto_reiniciar_flujo = True
+                _traza(
+                    etapa='webhook_recibido', sesion=session, conversacion=conversation,
+                    numero=from_number, nivel='info',
+                    detalle={'accion': 'reinicio_flujo_por_reconexion', 'bot_reactivado': True},
+                )
             # El asesor la marcó RESUELTA y el cliente volvió a escribir:
             # se reabre y el bot retoma la palabra (el ai_activo=False que
             # dejó el asesor al responder ya cumplió su función). Si el
@@ -371,6 +391,52 @@ def process_incoming_message(session, event_data, channel_layer):
             )
 
         transaction.on_commit(_broadcast_message_events)
+
+        # Reinicio de flujo por reconexión: el cliente respondió a la plantilla
+        # que el agente envió sobre una conversación caducada. Reiniciamos el
+        # flujo tradicional desde nodo_inicio (menú de bienvenida) en vez de
+        # dejar que el motor procese el texto suelto del cliente en el nodo
+        # donde había quedado. Corta el pipeline normal del bot.
+        if _auto_reiniciar_flujo:
+            try:
+                from crm.motor_flujo_chatbot import reiniciar_flujo_tradicional
+                _res_reinicio = reiniciar_flujo_tradicional(conversation)
+                _err_reinicio = getattr(_res_reinicio, 'error', None)
+                _n_reinicio = len(getattr(_res_reinicio, 'respuestas', []) or [])
+                _traza(
+                    etapa='motor_flujo', sesion=session, conversacion=conversation, mensaje=message,
+                    numero=from_number, nivel=('error' if _err_reinicio else 'info'),
+                    detalle={
+                        'accion': 'reinicio_flujo_por_reconexion',
+                        'respuestas': _n_reinicio,
+                        'error': _err_reinicio or '',
+                    },
+                )
+                if _err_reinicio:
+                    # Reinicio controlado que no pudo enviar (ventana Meta, Node
+                    # caído, sin departamento de entrada, etc.): queda registrado
+                    # en /whatsapp/trazas/ para diagnóstico del asesor.
+                    logger.warning(
+                        'Reinicio flujo por reconexión conv=%s NO envió: %s',
+                        conversation.id, _err_reinicio,
+                    )
+                else:
+                    logger.info(
+                        'Reinicio flujo por reconexión conv=%s OK (%s mensaje/s)',
+                        conversation.id, _n_reinicio,
+                    )
+            except Exception as _ex_reinicio:
+                logger.exception('Auto-reinicio de flujo falló conv=%s: %s',
+                                 conversation.id, _ex_reinicio)
+                _traza(
+                    etapa='error_general', sesion=session, conversacion=conversation, mensaje=message,
+                    numero=from_number, nivel='error',
+                    detalle={
+                        'accion': 'reinicio_flujo_por_reconexion',
+                        'error': f'{type(_ex_reinicio).__name__}: {str(_ex_reinicio)[:500]}',
+                    },
+                )
+            return JsonResponse({'status': 'ok', 'modo': 'reinicio_flujo_por_reconexion'})
 
         if from_number != session.numero:
             _contact_label = (

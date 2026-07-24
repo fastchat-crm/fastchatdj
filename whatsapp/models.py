@@ -629,6 +629,12 @@ class ConversacionWhatsApp(ModeloBase):
     # mensaje_reconexion de la sesión; se resetea a False cuando el cliente vuelve
     # a escribir (procesar_mensaje), de modo que solo se envía un nudge por silencio.
     reconexion_enviada = models.BooleanField('Reconexión enviada', default=False, db_index=True)
+    # Sesiones con bot tradicional/híbrido: el agente envió una plantilla Meta a
+    # una conversación CADUCADA (ventana 24h vencida) para reengancharla. Se marca
+    # True al enviar la plantilla; cuando el cliente responde, el webhook
+    # (procesar_mensaje) reinicia el flujo del bot desde nodo_inicio y limpia el
+    # flag. Distingue este caso del bot pausado a mano por un asesor humano.
+    reiniciar_flujo_al_responder = models.BooleanField('Reiniciar flujo al responder', default=False, db_index=True)
     conv_origen = models.ForeignKey(
         'self', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='reconexiones', verbose_name='Conversación de origen',

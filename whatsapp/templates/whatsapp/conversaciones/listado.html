@@ -1177,24 +1177,45 @@
         const id = $('#conversacion-id').val();
         if (!id) return;
         $.post('', { action: 'cambiar_estado_atencion', pk: id, estado: estado, csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val() })
-            .done(function (r) { if (r.error) { alertaWarning(r.message || 'No se pudo cambiar el estado.'); } })
-            .fail(function () { alertaWarning('Error de red.'); });
+            .done(function (r) {
+                if (r.error) { alertaWarning(r.message || 'No se pudo cambiar el estado.'); return; }
+                mensajeSuccess(r.message || 'Estado actualizado.');
+                if (typeof window.cargarConversaciones === 'function') window.cargarConversaciones();
+            })
+            .fail(function (xhr) {
+                console.error('[setEstadoAtencion] ajax fail', xhr.status, xhr.responseText);
+                alertaWarning('Error de red.');
+            });
     }
 
     function posponerConversacion(minutos) {
         const id = $('#conversacion-id').val();
         if (!id) return;
         $.post('', { action: 'posponer_conversacion', pk: id, minutos: minutos, csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val() })
-            .done(function (r) { if (r.error) { alertaWarning(r.message || 'No se pudo posponer.'); } })
-            .fail(function () { alertaWarning('Error de red.'); });
+            .done(function (r) {
+                if (r.error) { alertaWarning(r.message || 'No se pudo posponer.'); return; }
+                mensajeSuccess(r.message || 'Conversación pospuesta.');
+                if (typeof window.cargarConversaciones === 'function') window.cargarConversaciones();
+            })
+            .fail(function (xhr) {
+                console.error('[posponerConversacion] ajax fail', xhr.status, xhr.responseText);
+                alertaWarning('Error de red.');
+            });
     }
 
     function reabrirConversacion() {
         const id = $('#conversacion-id').val();
         if (!id) return;
         $.post('', { action: 'reabrir_conversacion', pk: id, csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val() })
-            .done(function (r) { if (r.error) { alertaWarning(r.message || 'No se pudo reabrir.'); } })
-            .fail(function () { alertaWarning('Error de red.'); });
+            .done(function (r) {
+                if (r.error) { alertaWarning(r.message || 'No se pudo reabrir.'); return; }
+                mensajeSuccess(r.message || 'Conversación marcada como Abierta en la bandeja.');
+                if (typeof window.cargarConversaciones === 'function') window.cargarConversaciones();
+            })
+            .fail(function (xhr) {
+                console.error('[reabrirConversacion] ajax fail', xhr.status, xhr.responseText);
+                alertaWarning('Error de red.');
+            });
     }
 
     $(document).on('click', '.ci-tomar-btn', function(e) {
@@ -1373,11 +1394,14 @@
             .done(function(r) {
                 bootstrap.Modal.getInstance(modalEl)?.hide();
                 if (r.error) {
+                    console.warn('[reiniciarFlujoChatbot] servidor rechazó:', r.requiere_plantilla ? 'ventana Meta vencida' : '', r.message);
                     mensajeDanger(r.message || 'No se pudo reiniciar el flujo.');
                     return;
                 }
                 mensajeSuccess(r.message || 'Flujo reiniciado.');
-                console.info('[reiniciarFlujoChatbot] respuestas enviadas:', r.respuestas_enviadas);
+                if (r.respuestas_enviadas != null) {
+                    console.info('[reiniciarFlujoChatbot] respuestas enviadas:', r.respuestas_enviadas);
+                }
             })
             .fail(function(xhr) {
                 bootstrap.Modal.getInstance(modalEl)?.hide();
@@ -2728,6 +2752,7 @@
                 }
             });
         }
+        window.cargarConversaciones = cargarConversaciones;
 
         const $btnsAction = ['#cambiar-nombre-contacto',
                             '#guardar-contacto',
