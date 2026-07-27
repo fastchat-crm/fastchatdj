@@ -28,3 +28,77 @@
     letter-spacing: .02em;
     color: #6b7280;
 }
+
+.ca-count {
+    border: none;
+    border-radius: 999px;
+    padding: .2rem .6rem;
+    font-size: .8rem;
+    font-weight: 600;
+    line-height: 1;
+    color: #fff;
+    cursor: pointer;
+    transition: transform .08s ease, box-shadow .08s ease, filter .08s ease;
+    min-width: 2.1rem;
+}
+
+.ca-count:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(16, 24, 40, .18);
+    filter: brightness(1.05);
+}
+
+.ca-count:focus {
+    outline: 2px solid rgba(59, 130, 246, .5);
+    outline-offset: 1px;
+}
+
+.ca-count-abiertas {
+    background: #2563eb;
+}
+
+.ca-count-caducadas {
+    background: #dc2626;
+}
+
+.ca-count-pendientes {
+    background: #d97706;
+}
+
+.ca-count-finalizadas {
+    background: #6b7280;
+}
+
+.ca-stat-caducadas {
+    border-color: #fecaca;
+}
+
+.ca-stat-pendientes {
+    border-color: #fde68a;
+}
+
+#tablaDetalleAsesor {
+    font-size: .875rem;
+}
+
+#tablaDetalleAsesor td,
+#tablaDetalleAsesor th {
+    vertical-align: middle;
+}
+
+#modalDetalleAsesor .modal-title {
+    font-weight: 600;
+}
+
+#modalDetalleAsesor .modal-dialog {
+    height: 85vh;
+}
+
+#modalDetalleAsesor .modal-content {
+    max-height: 85vh;
+}
+
+#modalDetalleAsesor .modal-body {
+    min-height: 55vh;
+    overflow-y: auto;
+}

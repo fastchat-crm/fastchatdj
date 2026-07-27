@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block head %}
-<link rel="stylesheet" href="/static/css/whatsapp/carga_asesores.css?v1.1">
+<link rel="stylesheet" href="/static/css/whatsapp/carga_asesores.css?v1.3">
 {% endblock %}
 
 {% block content %}
@@ -55,6 +55,41 @@
         </div>
     </div>
 
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-lg-3">
+            <div class="card ca-stat ca-stat-abiertas h-100">
+                <div class="card-body py-3 text-center">
+                    <div class="ca-stat-label">Abiertas</div>
+                    <div class="ca-stat-valor">{{ resumen.estado_abiertas }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card ca-stat ca-stat-caducadas h-100">
+                <div class="card-body py-3 text-center">
+                    <div class="ca-stat-label">Caducadas</div>
+                    <div class="ca-stat-valor text-danger">{{ resumen.estado_caducadas }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card ca-stat ca-stat-pendientes h-100">
+                <div class="card-body py-3 text-center">
+                    <div class="ca-stat-label">Pendientes</div>
+                    <div class="ca-stat-valor text-warning">{{ resumen.estado_pendientes }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card ca-stat ca-stat-finalizadas h-100">
+                <div class="card-body py-3 text-center">
+                    <div class="ca-stat-label">Finalizadas</div>
+                    <div class="ca-stat-valor text-secondary">{{ resumen.estado_finalizadas }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="card">
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -64,6 +99,9 @@
                             <th>Asesor</th>
                             <th>Rol</th>
                             <th class="text-center">Abiertas</th>
+                            <th class="text-center">Caducadas</th>
+                            <th class="text-center">Pendientes</th>
+                            <th class="text-center">Finalizadas</th>
                             <th class="text-center">Respondidas {{ resumen.horas }}h</th>
                             <th class="text-center">Sin tocar</th>
                             <th class="text-center">Mensajes {{ resumen.horas }}h</th>
@@ -78,7 +116,42 @@
                         <tr>
                             <td><strong>{{ f.nombre }}</strong></td>
                             <td class="small text-muted">{{ f.rol }}</td>
-                            <td class="text-center"><strong>{{ f.abiertas }}</strong></td>
+                            <td class="text-center">
+                                {% if f.c_abiertas %}
+                                    <button type="button" class="ca-count ca-count-abiertas"
+                                            data-asesor="{{ f.usuario_id }}" data-estado="abiertas"
+                                            data-nombre="{{ f.nombre }}">{{ f.c_abiertas }}</button>
+                                {% else %}
+                                    <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if f.c_caducadas %}
+                                    <button type="button" class="ca-count ca-count-caducadas"
+                                            data-asesor="{{ f.usuario_id }}" data-estado="caducadas"
+                                            data-nombre="{{ f.nombre }}">{{ f.c_caducadas }}</button>
+                                {% else %}
+                                    <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if f.c_pendientes %}
+                                    <button type="button" class="ca-count ca-count-pendientes"
+                                            data-asesor="{{ f.usuario_id }}" data-estado="pendientes"
+                                            data-nombre="{{ f.nombre }}">{{ f.c_pendientes }}</button>
+                                {% else %}
+                                    <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if f.c_finalizadas %}
+                                    <button type="button" class="ca-count ca-count-finalizadas"
+                                            data-asesor="{{ f.usuario_id }}" data-estado="finalizadas"
+                                            data-nombre="{{ f.nombre }}">{{ f.c_finalizadas }}</button>
+                                {% else %}
+                                    <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
                             <td class="text-center">
                                 {% if f.respondio_24h %}
                                     <span class="badge bg-success">{{ f.respondidas_24h }}</span>
@@ -128,7 +201,7 @@
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="10" class="text-center text-muted py-4">
+                            <td colspan="13" class="text-center text-muted py-4">
                                 <i class="fa fa-inbox fa-2x mb-2 d-block"></i>
                                 La sesión no tiene asesores asignados.
                             </td>
@@ -148,4 +221,139 @@
     </div>
 
 </div>
+
+<div class="modal fade" id="modalDetalleAsesor" tabindex="-1" aria-hidden="true"
+     data-sesion="{{ sesion_ca.id }}">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="detalleAsesorTitulo">Detalle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="detalleAsesorCargando" class="text-center text-muted py-5 d-none">
+                    <i class="fa fa-spinner fa-spin fa-2x mb-2 d-block"></i>
+                    Cargando conversaciones...
+                </div>
+                <div id="detalleAsesorVacio" class="text-center text-muted py-5 d-none">
+                    <i class="fa fa-inbox fa-2x mb-2 d-block"></i>
+                    Sin conversaciones en este estado.
+                </div>
+                <div class="table-responsive" id="detalleAsesorTablaWrap">
+                    <table class="table table-bordered table-hover align-middle w-100" id="tablaDetalleAsesor">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Contacto</th>
+                                <th>Nº Teléfono</th>
+                                <th>Último mensaje enviado</th>
+                                <th id="detalleAsesorColTiempo">Tiempo</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block jscript %}
+<script>
+$(function () {
+    var dtDetalle = null;
+    var $modal = $('#modalDetalleAsesor');
+    var sesionId = $modal.data('sesion');
+
+    var etiquetaEstado = {
+        abiertas: 'Abiertas',
+        caducadas: 'Caducadas',
+        pendientes: 'Pendientes',
+        finalizadas: 'Finalizadas'
+    };
+    var etiquetaTiempo = {
+        abiertas: 'Tiempo disponible',
+        caducadas: 'Caducó hace',
+        pendientes: 'Pendiente hace',
+        finalizadas: 'Finalizó hace'
+    };
+
+    function destruirTabla() {
+        if (dtDetalle) {
+            dtDetalle.destroy();
+            dtDetalle = null;
+        }
+        $('#tablaDetalleAsesor tbody').empty();
+    }
+
+    function pintarTabla(filas) {
+        var cuerpo = $('#tablaDetalleAsesor tbody');
+        cuerpo.empty();
+        filas.forEach(function (f) {
+            var tr = $('<tr>');
+            tr.append($('<td>').text(f.contacto));
+            tr.append($('<td>').text(f.telefono));
+            tr.append($('<td>').text(f.ultimo_msj));
+            tr.append($('<td>').text(f.tiempo));
+            cuerpo.append(tr);
+        });
+        dtDetalle = $('#tablaDetalleAsesor').DataTable({
+            responsive: true,
+            ordering: true,
+            dom: "<'row'<'col-sm-5'f><'col-sm-4'l><'col-sm-3'B>>" +
+                "<'row'<'col-sm-12'tr>>" +
+                "<'row'<'col-md-5 col-sm-12'i><'col-md-7 col-sm-12'p>>",
+            language: { "url": '/static/js/i18n/Spanish.json' },
+            buttons: [{
+                extend: 'excelHtml5',
+                filename: 'Detalle carga asesor',
+                text: '<i class="fa fa-file-excel"></i> EXCEL',
+                exportOptions: { search: 'applied', order: 'applied' }
+            }]
+        });
+    }
+
+    $('.ca-count').on('click', function () {
+        var $btn = $(this);
+        var estado = $btn.data('estado');
+        var asesor = $btn.data('asesor');
+        var nombre = $btn.data('nombre');
+
+        $('#detalleAsesorTitulo').text(etiquetaEstado[estado] + ' · ' + nombre);
+        $('#detalleAsesorColTiempo').text(etiquetaTiempo[estado]);
+        destruirTabla();
+        $('#detalleAsesorTablaWrap').addClass('d-none');
+        $('#detalleAsesorVacio').addClass('d-none');
+        $('#detalleAsesorCargando').removeClass('d-none');
+        $modal.modal('show');
+
+        $.get('/whatsapp/sesiones/', {
+            action: 'carga_asesores_detalle',
+            id: sesionId,
+            asesor: asesor,
+            estado: estado
+        }).done(function (resp) {
+            $('#detalleAsesorCargando').addClass('d-none');
+            if (resp.error) {
+                $('#detalleAsesorVacio').removeClass('d-none').find('span').remove();
+                return;
+            }
+            if (!resp.filas || !resp.filas.length) {
+                $('#detalleAsesorVacio').removeClass('d-none');
+                return;
+            }
+            $('#detalleAsesorTablaWrap').removeClass('d-none');
+            pintarTabla(resp.filas);
+        }).fail(function () {
+            $('#detalleAsesorCargando').addClass('d-none');
+            $('#detalleAsesorVacio').removeClass('d-none');
+        });
+    });
+
+    $modal.on('hidden.bs.modal', function () {
+        destruirTabla();
+        $('#detalleAsesorTablaWrap').addClass('d-none');
+    });
+});
+</script>
 {% endblock %}

@@ -1311,6 +1311,24 @@ def sesionesView(request):
         )
         return render(request, 'whatsapp/sesiones/carga_asesores.html', data)
 
+    if request.GET.get('action') == 'carga_asesores_detalle':
+        sesion_det = SesionWhatsApp.objects.filter(
+            id=request.GET.get('id'), status=True,
+        ).first()
+        if not sesion_det or not (
+            sesion_det.usuario_id == request.user.id
+            or sesion_det.es_participante(request.user)
+            or request.user.is_superuser
+        ):
+            return JsonResponse({'error': True, 'message': 'Sesión no encontrada o sin acceso.'})
+        estado_det = request.GET.get('estado', '')
+        if estado_det not in ('abiertas', 'caducadas', 'pendientes', 'finalizadas'):
+            return JsonResponse({'error': True, 'message': 'Estado no válido.'})
+        from .funciones_carga_asesores import detalle_carga_asesor
+
+        filas_det = detalle_carga_asesor(sesion_det, request.GET.get('asesor'), estado_det)
+        return JsonResponse({'error': False, 'estado': estado_det, 'filas': filas_det})
+
     if request.GET.get('action') == 'logs_notificaciones':
         sesion_logs = SesionWhatsApp.objects.filter(
             id=request.GET.get('id'), status=True,
