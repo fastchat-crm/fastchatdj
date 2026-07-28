@@ -789,6 +789,32 @@ $(document).on('click', '.cargar-conversacion', function() {
 });
 ```
 
+**Deadlock del spinner en móvil (2026-07-28) — no quitar estas guardas.** El
+`cargarMensajes` de los 3 listados usa la pareja `_cargandoMensajes` /
+`conversacionActiva` como anti-doble-click:
+`if (_cargandoMensajes || id == conversacionActiva) return;`. El AJAX
+`?action=ver_mensajes` **no tenía `timeout`**, así que en redes móviles
+inestables (cambio WiFi↔4G, pantalla bloqueada, iOS Safari suspendiendo el XHR
+al pasar a segundo plano) la petición quedaba colgada sin disparar `success` ni
+`error`: `_cargandoMensajes` se quedaba en `true` **para siempre** y el spinner
+"Cargando mensajes..." no se iba nunca. Peor: la guarda bloqueaba después
+cualquier tap sobre cualquier otra conversación, así que el inbox entero quedaba
+muerto hasta recargar la página. En móvil no se nota que es un cuelgue porque
+`chat-mobile-open` ya tapó la lista y solo se ve el panel del chat girando.
+Lo que sostiene el fix (los 3 listados: `listado.html`, `listado_expirado.html`,
+`listado_pendiente_reconexion.html`):
+- `timeout: 25000` en el `$.ajax` → jQuery dispara `error` con
+  `status === 'timeout'` en vez de colgarse indefinidamente.
+- `complete:` que resetea `_cargandoMensajes` — se ejecuta sí o sí (éxito, error,
+  timeout y abort), es el backstop del reset que ya hacían `success`/`error`.
+- `conversacionActiva = null` en el handler de `error`: sin esto, tras un fallo
+  volver a tocar **la misma** conversación chocaba con
+  `id == conversacionActiva` y no hacía nada — segundo camino de bloqueo.
+- Botón `.btn-reintentar-mensajes` (con `data-id`) en el estado de error, con
+  handler delegado que limpia ambas variables y reintenta, para que el asesor se
+  recupere sin recargar. Copy distinto si fue timeout ("La conexión tardó
+  demasiado…") o error genérico.
+
 ### Específico de finalizadas — plantillas Meta
 
 - Cache local `_plantillasCache[convId]` evita refetch.

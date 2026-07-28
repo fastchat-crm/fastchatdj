@@ -2807,6 +2807,7 @@
             $.ajax({
                 url: '{{ ruta }}?action=ver_mensajes&pk=' + conversacionId,
                 type: 'GET',
+                timeout: 25000,
                 success: function(response) {
                     _cargandoMensajes = false;
 
@@ -2955,11 +2956,30 @@
                 },
                 error: function(xhr, status, error) {
                     _cargandoMensajes = false;
+                    conversacionActiva = null;
                     console.error('[cargarMensajes] ajax error', status, error, xhr.responseText);
-                    $('#mensajes-container').removeClass('is-loading').html('<div class="p-3 text-center"><p class="text-danger"><i class="fa fa-exclamation-circle me-1"></i>Error al cargar mensajes: ' + error + '</p></div>');
+                    const _msg = status === 'timeout'
+                        ? 'La conexión tardó demasiado. Revisa tu señal e intenta de nuevo.'
+                        : 'No se pudieron cargar los mensajes.';
+                    $('#mensajes-container').removeClass('is-loading').html(
+                        '<div class="p-3 text-center"><p class="text-danger mb-2"><i class="fa fa-exclamation-circle me-1"></i>' + _msg + '</p>' +
+                        '<button type="button" class="btn btn-sm btn-outline-primary btn-reintentar-mensajes" data-id="' + conversacionId + '">' +
+                        '<i class="fa fa-rotate-right me-1"></i>Reintentar</button></div>'
+                    );
+                },
+                complete: function() {
+                    _cargandoMensajes = false;
                 }
             });
         }
+
+        $(document).on('click', '.btn-reintentar-mensajes', function() {
+            const _id = $(this).data('id');
+            if (!_id) return;
+            _cargandoMensajes = false;
+            conversacionActiva = null;
+            cargarMensajes(_id);
+        });
 
         let conversacionId = '{{ conversacion_selected.id }}';
         if (conversacionId) {
