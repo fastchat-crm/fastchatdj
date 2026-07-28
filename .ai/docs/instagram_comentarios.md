@@ -90,7 +90,28 @@ correcto pero la extracción llevaba semanas sin capturar nada:
   en el panel de Meta (agregar los scopes + reautorizar la página para emitir un
   token nuevo), no desde el código.
 - Instagram sí tiene `instagram_manage_comments`: su lectura de comentarios
-  responde OK.
+  responde OK. Su bloqueo es otro: **el webhook nunca fue verificado**
+  (`config.webhook_verificado_en` vacío) — por eso no llegó ni un evento.
+
+**Chequeo de permisos en el diagnóstico (2026-07-28).** `diagnostico_social.py`
+solo probaba `obtener_perfil()`, así que daba **"Conexión correcta"** con un
+token que lee el perfil pero no los comentarios — así fue como Facebook pasó
+semanas roto sin que el tablero lo notara. Ahora `_pasos_permisos(canal, token)`
+agrega **un paso por capacidad** (`CAPACIDADES_SCOPES`): ver publicaciones, leer
+comentarios, responder/ocultar, DMs. Los scopes se leen con
+`scopes_del_token()` → `debug_token` de Graph, que necesita el **App Token**
+(`app_id|app_secret`): `/me/permissions` solo sirve para tokens de USUARIO y
+sobre un Page Token devuelve `(#100) nonexisting field (permissions)`.
+El `resumen` distingue ahora el caso intermedio ("Conecta, pero hay N función(es)
+bloqueada(s): …"); `ok` sigue significando solo "la sesión conecta", para no
+degradar el estado de una sesión sana por un permiso faltante.
+
+Mapa de scope → capacidad (Facebook):
+`pages_read_engagement` = ver las publicaciones **propias** de la página ·
+`pages_read_user_content` = leer los comentarios **de terceros** ·
+`pages_manage_engagement` = responder/ocultar · `pages_messaging` = DMs.
+El error clásico es asumir que `pages_read_engagement` alcanza para comentarios:
+no alcanza, y Graph solo lo dice al pedir el edge `/comments`.
 
 ## Limitaciones conocidas
 

@@ -419,6 +419,33 @@ vista Abiertas no exporta). La lógica está en
 Mismo patrón que `autenticacion.funciones_usuario.exportar_usuarios_excel`
 (openpyxl + `HttpResponse` con `Content-Disposition`) y deja traza con `log()`.
 
+**Reactivar en finalizadas de Messenger/Instagram (fix 2026-07-28).** Reporte:
+"en `/facebook/conversaciones-finalizadas/` no tenemos opción de revivir
+conversaciones". Eran dos problemas encadenados en `listado_expirado.html`:
+- El aviso `#bloqueo-reactivar-aviso` y todo el footer vivían dentro de
+  `if (r.es_meta === true)`, o sea **solo WhatsApp Cloud**. Messenger e Instagram
+  caían al `else`, que hace `$('#chat-footer').hide()`. Como el botón
+  `#reactivar-btn` ya se oculta cuando `reactivar_bloqueada`, la pantalla
+  quedaba **muda**: ni botón ni explicación. Ahora hay una rama
+  `else if (proveedor === 'messenger' || 'instagram')` que muestra el footer con
+  el aviso y esconde `#footer-plantillas-row` (las plantillas son de WhatsApp;
+  Messenger/IG no tienen forma de reabrir fuera de ventana). El backend expone
+  `proveedor` en la respuesta de `ver_mensajes`.
+  **Ojo con el DOM:** `#bloqueo-reactivar-aviso` está DENTRO de `#chat-footer` —
+  para mostrar el aviso hay que mostrar el footer, no ocultarlo.
+- `_bloqueo_reactivar()` medía la ventana desde `fecha_registro` (creación de la
+  conversación) en vez del **último mensaje entrante**, al revés que
+  `_bloqueo_ventana_meta()`. Una conversación abierta hace 5 días con el cliente
+  escribiendo hace 10 minutos quedaba bloqueada para siempre. Ahora usa el último
+  entrante con fallback a `fecha_registro`. Medido al aplicarlo: **0 de 949
+  finalizadas cambiaron de estado**, así que es correctitud a futuro, no un
+  desbloqueo masivo.
+
+Lo que el fix **no** hace: revivir conversaciones fuera de ventana. Si el cliente
+escribió hace más de `HORAS_VENTANA_REACTIVAR` (23h), Meta rechaza el envío y no
+hay plantilla de reapertura para Messenger/IG — la única salida es que el cliente
+escriba de nuevo. El fix hace que la UI lo diga en vez de no mostrar nada.
+
 **Alerta "por caducar" del panel** (`/panel/`): `seguridad/view_index.py` publica
 `alertas_por_caducar` / `total_por_caducar` a partir de
 `funcionesWhatsappConversacion.conversaciones_por_caducar_por_sesion(usuario, sesiones)`.

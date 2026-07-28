@@ -228,14 +228,35 @@ def reactivar_conversacion(conversacion):
 
 
 def _bloqueo_reactivar(conversacion):
-    """Permite reactivar/enviar solo dentro de las primeras N horas desde fecha_registro.
+    """Permite reactivar/enviar solo dentro de las N horas desde el **último
+    mensaje entrante del cliente**.
 
-    Retorna (bloqueada, vence_en). `bloqueada=True` cuando la conversación tiene
-    más de N horas — fuera de la ventana de gracia ya no se puede revivir.
+    Retorna (bloqueada, vence_en). `bloqueada=True` cuando la ventana ya venció.
+
+    Antes se medía desde `fecha_registro` (creación de la conversación), lo que
+    era incorrecto en todos los canales: una conversación abierta hace 5 días
+    pero con el cliente escribiendo hace 10 minutos quedaba bloqueada para
+    siempre, aunque Meta sí permitiera responder. La ventana de reengagement de
+    Meta —WhatsApp, Messenger e Instagram— siempre corre desde el último mensaje
+    del usuario, igual que `_bloqueo_ventana_meta`. Sin mensaje entrante se cae a
+    `fecha_registro` como referencia.
     """
-    if not conversacion.fecha_registro:
+    from .models import MensajeWhatsApp
+    sesion = getattr(conversacion, 'sesion', None)
+    referencia = conversacion.fecha_registro
+    if sesion:
+        ultimo_entrante = (
+            MensajeWhatsApp.objects
+            .filter(conversacion=conversacion)
+            .exclude(remitente=sesion.numero)
+            .order_by('-fecha')
+            .first()
+        )
+        if ultimo_entrante:
+            referencia = ultimo_entrante.fecha
+    if not referencia:
         return False, None
-    vence_en = conversacion.fecha_registro + timedelta(hours=HORAS_VENTANA_REACTIVAR)
+    vence_en = referencia + timedelta(hours=HORAS_VENTANA_REACTIVAR)
     return timezone.now() > vence_en, vence_en
 
 

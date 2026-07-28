@@ -661,6 +661,26 @@ $(document).ready(function() {
                         $('#plantillas-btn').addClass('visible');
                         mostrarPlantillasSiMeta(true, r.conversacion_id);
                     }
+                } else if (r.proveedor === 'messenger' || r.proveedor === 'instagram') {
+                    mostrarPlantillasSiMeta(false, null);
+                    $('#footer-plantillas-row').hide();
+                    if (_bloqueada) {
+                        const _red = r.proveedor === 'instagram' ? 'Instagram' : 'Messenger';
+                        const _venc = r.reactivar_vence_en ? new Date(r.reactivar_vence_en) : null;
+                        $('#bloqueo-reactivar-msg').text(
+                            'La ventana de ' + (r.reactivar_horas_ventana || 23) +
+                            'h de ' + _red + ' para retomar esta conversación ya venció' +
+                            (_venc ? ' (' + _venc.toLocaleString() + ')' : '') +
+                            '. Meta solo permite escribir dentro de esa ventana contada desde el ' +
+                            'último mensaje del cliente, y no hay plantillas para reabrir como en ' +
+                            'WhatsApp: hay que esperar a que el cliente escriba de nuevo.'
+                        );
+                        $('#bloqueo-reactivar-aviso').show();
+                        $('#chat-footer').removeClass('d-none').show();
+                    } else {
+                        $('#bloqueo-reactivar-aviso').hide();
+                        $('#chat-footer').addClass('d-none').hide();
+                    }
                 } else {
                     $('#chat-footer').addClass('d-none').hide();
                     mostrarPlantillasSiMeta(false, null);

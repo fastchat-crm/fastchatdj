@@ -140,6 +140,7 @@ def conversacionesFinalizadasView(request, canal_fijo=None):
                     'reactivar_bloqueada': bloqueada,
                     'reactivar_vence_en': vence_en.isoformat() if vence_en else None,
                     'reactivar_horas_ventana': HORAS_VENTANA_REACTIVAR,
+                    'proveedor': getattr(conversacion.sesion, 'proveedor', '') or '',
                     'clasificacion_id': conversacion.clasificacion,
                     'clasificacion_label': conversacion.get_clasificacion_display(),
                     'clasificacion_color': conversacion.get_estado_color_clasificacion(),

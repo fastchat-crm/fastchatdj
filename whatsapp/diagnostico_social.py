@@ -56,6 +56,81 @@ def _causa_graph(error):
             'Verificá la conectividad del servidor y que la API sea accesible desde aquí.')
 
 
+CAPACIDADES_SCOPES = {
+    'messenger': [
+        ('Ver publicaciones de la página', ('pages_read_engagement',)),
+        ('Leer comentarios de la gente', ('pages_read_user_content',)),
+        ('Responder / ocultar comentarios', ('pages_manage_engagement',)),
+        ('Enviar y recibir mensajes (DM)', ('pages_messaging',)),
+    ],
+    'instagram': [
+        ('Ver publicaciones de la cuenta', ('instagram_basic',)),
+        ('Leer y responder comentarios', ('instagram_manage_comments',)),
+        ('Enviar y recibir mensajes (DM)', ('instagram_manage_messages',)),
+    ],
+}
+
+
+def scopes_del_token(access_token):
+    """Scopes concedidos al Page Access Token, vía `debug_token` de Graph.
+
+    Devuelve `(scopes, error)`. Necesita el App Token (`app_id|app_secret`):
+    `/me/permissions` no sirve porque solo aplica a tokens de USUARIO, y sobre un
+    token de PÁGINA devuelve "(#100) nonexisting field (permissions)".
+    """
+    import requests
+
+    from meta.credenciales import get_meta_app_credentials
+    from meta.urls import GRAPH_API_VERSION
+
+    if not (access_token or '').strip():
+        return [], 'No hay token de acceso para inspeccionar.'
+    app_id, app_secret = get_meta_app_credentials()
+    if not (app_id and app_secret):
+        return [], 'Faltan App ID / App Secret de la Meta App para inspeccionar el token.'
+    try:
+        r = requests.get(
+            f'https://graph.facebook.com/{GRAPH_API_VERSION}/debug_token',
+            params={'input_token': access_token, 'access_token': f'{app_id}|{app_secret}'},
+            timeout=20,
+        )
+        data = (r.json() or {}).get('data') or {}
+    except Exception as ex:
+        return [], f'No se pudo consultar los permisos del token: {ex}'
+    if not data:
+        return [], 'Meta no devolvió información del token (¿es de otra app?).'
+    return list(data.get('scopes') or []), ''
+
+
+def _pasos_permisos(canal, access_token):
+    """Un paso por capacidad del canal, diciendo qué scope falta para cada una.
+
+    Sin esto el diagnóstico daba "Conexión correcta" con un token que lee el
+    perfil pero no los comentarios: `pages_read_engagement` alcanza para ver las
+    publicaciones propias, y Graph solo responde `(#200) Missing Permissions`
+    recién al pedir el edge `/comments`.
+    """
+    capacidades = CAPACIDADES_SCOPES.get(canal) or []
+    if not capacidades:
+        return []
+    scopes, error = scopes_del_token(access_token)
+    if error:
+        return [_paso('Permisos del token', False, error,
+                      'Revisá las credenciales de la Meta App en Seguridad → Credencial Meta.')]
+    pasos = []
+    for etiqueta, requeridos in capacidades:
+        faltantes = [s for s in requeridos if s not in scopes]
+        pasos.append(_paso(
+            etiqueta, not faltantes,
+            'Permiso concedido.' if not faltantes else f"Falta el permiso {', '.join(faltantes)}.",
+            '' if not faltantes else
+            f"Agregá {', '.join(faltantes)} a la app en Meta y volvé a autorizar la "
+            f"página/cuenta: el Page Access Token se emite con los permisos que "
+            f"tenía al momento de autorizar, no se actualiza solo.",
+        ))
+    return pasos
+
+
 def _diag_meta(sesion, canal):
     """Diagnóstico para Instagram (canal='instagram') y Messenger (canal='messenger')."""
     from meta.instagram import InstagramService, MessengerService
@@ -100,6 +175,9 @@ def _diag_meta(sesion, canal):
                            'No se probó: falta token o identificador.',
                            'Completá los pasos anteriores.'))
 
+    if api_ok:
+        pasos.extend(_pasos_permisos(canal, config.access_token))
+
     verif = bool(getattr(config, 'webhook_verificado_en', None))
     pasos.append(_paso('Webhook verificado', verif,
                        'El webhook está verificado.' if verif else 'El webhook aún no fue verificado por Meta.',
@@ -113,8 +191,19 @@ def _diag_meta(sesion, canal):
         sesion.estado = 'conectado'
         sesion.save(update_fields=['estado'])
 
+    # `ok` sigue significando "la sesión conecta" (es lo que promueve el estado y
+    # lo que mira el tablero). El resumen sí distingue el caso intermedio: token
+    # válido pero con capacidades bloqueadas — antes decía "Conexión correcta"
+    # con pasos en rojo debajo, que fue justo cómo los comentarios de Facebook
+    # pasaron semanas rotos sin que el tablero lo notara.
     ok = api_ok
-    resumen = 'Conexión correcta' if ok else 'La sesión no puede conectar — revisá los pasos marcados.'
+    bloqueadas = [p['label'] for p in pasos if not p['ok']] if api_ok else []
+    if not api_ok:
+        resumen = 'La sesión no puede conectar — revisá los pasos marcados.'
+    elif bloqueadas:
+        resumen = f"Conecta, pero hay {len(bloqueadas)} función(es) bloqueada(s): {', '.join(bloqueadas)}."
+    else:
+        resumen = 'Conexión correcta'
     return {'ok': ok, 'resumen': resumen, 'pasos': pasos}
 
 
