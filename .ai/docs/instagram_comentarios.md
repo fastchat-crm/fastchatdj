@@ -66,9 +66,64 @@ y el asesor puede:
    resetea todo el catálogo, recrea las secciones — incluidas Instagram y TikTok con sus
    `comentarios/` — y re-vincula los roles por URL).
 
+## Diagnóstico de producción (2026-07-28)
+
+Revisión del estado real en el servidor. Guardado acá porque el código estaba
+correcto pero la extracción llevaba semanas sin capturar nada:
+
+- **`ComentarioSocial` estaba vacío** (0 filas) pese a tener sesiones conectadas
+  (`messenger` id 42 y `instagram` id 43).
+- **Webhook de Facebook caído desde el 16/Jul.** Recibió 223 eventos ese día
+  (11:10–14:18) y nada más: **216 rechazados con 401 "Firma HMAC inválida"**
+  (el caso de dos Meta Apps que documenta `meta/README.md` → `app_secrets_extra`)
+  y 7 procesados. El 17/Jul nginx registró 62 × 500 y Meta deshabilitó la
+  suscripción. Auditoría en `EventoMetaRecibido` (`tipo_evento='messenger:page'`).
+- **Webhook de Instagram: cero eventos históricos.** Ni un `instagram:*` en
+  `EventoMetaRecibido`, ni un POST a `/instagram/webhook/` en nginx.
+- **Faltan scopes para leer comentarios de Facebook.** `debug_token` sobre el
+  Page Access Token de la sesión 42 devuelve `pages_read_engagement`,
+  `pages_show_list`, `pages_messaging`, `instagram_manage_comments`… pero **no**
+  `pages_read_user_content` ni `pages_manage_engagement`. Por eso
+  `GET /{post_id}/comments` responde `(#200) Missing Permissions` aunque el post
+  reporte `comments_count: 3`. `pages_read_engagement` habilita leer el
+  contenido **propio** de la página, NO los comentarios de terceros. Se corrige
+  en el panel de Meta (agregar los scopes + reautorizar la página para emitir un
+  token nuevo), no desde el código.
+- Instagram sí tiene `instagram_manage_comments`: su lectura de comentarios
+  responde OK.
+
 ## Limitaciones conocidas
 
-- `fecha_comentario` se estampa con `timezone.now()` al recibir el webhook (el value de Meta no trae timestamp del comentario).
+- **Reacciones: no se extraen.** Lo único que existe es el contador agregado que
+  se lee al pintar la grilla (`reactions.summary(true).limit(0)` en Facebook,
+  `like_count` en Instagram). No hay ingesta de eventos de reacción, no se
+  guarda quién reaccionó ni con qué emoji, y el webhook de Messenger descarta
+  explícitamente los eventos `reaction` (`meta_social_webhook_view.py`). Un
+  inbox de reacciones equivalente al de comentarios está sin construir.
+- `fecha_comentario` se estampa con `timezone.now()` al recibir el webhook de
+  **Instagram** (el value de Meta no trae timestamp del comentario). El webhook
+  de Facebook y el sync desde la grilla sí traen fecha real — ver nota de
+  timezone abajo.
+- **Fechas y `USE_TZ=False` (fix 2026-07-28).** El proyecto guarda datetimes
+  naive en hora local, pero Graph entrega siempre UTC (epoch en el webhook de
+  Facebook, `...+0000` en el sync). Guardar ese aware tal cual dejaba
+  `fecha_comentario` **5 horas adelantada**. Ahora ambos caminos pasan por
+  `funciones_comentarios._fecha_convencion_proyecto()`, que convierte a naive
+  local con `timezone.make_naive()` cuando `USE_TZ=False` y deja el aware intacto
+  cuando es `True`. Al tocar ingesta de fechas de Meta, usar ese helper.
+- **Respuestas anidadas de Instagram (fix 2026-07-28).** El edge
+  `/{media_id}/comments` de IG solo devuelve comentarios de primer nivel, pero el
+  `comments_count` del media SÍ cuenta las respuestas — la grilla decía "8
+  comentarios" y el modal mostraba 5. `InstagramService.listar_comentarios_publicacion`
+  ahora pide la arista `replies{...}` y aplana padre + respuestas en una sola
+  lista, poniendo `parent_id` del padre en cada respuesta. Es el equivalente al
+  `filter=stream` que `MessengerService` ya usaba para páginas de Facebook.
+- **El fallo de sync ya no es mudo (fix 2026-07-28).**
+  `sincronizar_comentarios_publicacion` devuelve `(creados, error)` en vez de
+  solo el conteo; el error sale traducido por `diagnostico_social._causa_graph()`
+  y `view_publicaciones_social` lo pasa al partial `_comentarios_post.html`
+  (rama `{% elif error_sync %}`) de ambos canales. Antes, un token sin permisos
+  dejaba el modal vacío con el mismo copy que "no hay comentarios".
 - El DM privado saliente no se persiste como `MensajeWhatsApp` (no existe conversación aún); la conversación nace cuando el autor responde.
 - `ConfigInstagram` se crea manualmente (admin) — no hay UI de conexión IG todavía.
 

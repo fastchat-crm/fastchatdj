@@ -31,7 +31,12 @@ def _causa_graph(error):
         if code in (10, 200, 803, 3) or sub in (33,):
             return ('Falta un permiso o la app no tiene acceso',
                     'La app de Meta necesita los permisos aprobados (pages_messaging, '
-                    'instagram_manage_messages, pages_show_list) y la página vinculada a la cuenta.')
+                    'instagram_manage_messages, pages_show_list) y la página vinculada a la cuenta. '
+                    'Para leer y moderar comentarios de una página de Facebook hacen falta además '
+                    'pages_read_user_content (leerlos) y pages_manage_engagement (responder/ocultar): '
+                    'pages_read_engagement por sí solo NO alcanza y Graph responde '
+                    '"(#200) Missing Permissions". Agregalos en la app y volvé a autorizar la página '
+                    'para que el nuevo Page Access Token los incluya.')
         if code == 100:
             return ('Identificador (Page ID / IG user ID) incorrecto',
                     'Volvé a autodetectar desde el token para recuperar el ID correcto.')

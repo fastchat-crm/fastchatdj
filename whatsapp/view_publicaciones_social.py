@@ -78,8 +78,11 @@ def publicacionesSocialView(request, canal):
         cuenta_id = (request.GET.get('cuenta') or '').strip()
         cuenta_sync = cuentas.filter(id=int(cuenta_id)).first() if cuenta_id.isdigit() else cuentas.first()
         sincronizados = 0
+        error_sync = ''
         if cuenta_sync:
-            sincronizados = sincronizar_comentarios_publicacion(cuenta_sync, canal, media_id)
+            sincronizados, error_sync = sincronizar_comentarios_publicacion(
+                cuenta_sync, canal, media_id,
+            )
         comentarios = list(
             ComentarioSocial.objects.filter(
                 status=True, media_id=media_id, sesion__in=cuentas
@@ -88,9 +91,11 @@ def publicacionesSocialView(request, canal):
         )
         data['comentarios_post'] = comentarios
         data['media_id'] = media_id
+        data['error_sync'] = error_sync
         template = get_template(conf['partial'])
         return JsonResponse({'result': True, 'data': template.render(data),
-                             'total': len(comentarios), 'sincronizados': sincronizados})
+                             'total': len(comentarios), 'sincronizados': sincronizados,
+                             'error_sync': error_sync})
 
     cuenta = None
     cuenta_id = (request.GET.get('cuenta') or '').strip()

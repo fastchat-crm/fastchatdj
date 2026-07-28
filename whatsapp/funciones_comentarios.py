@@ -8,14 +8,33 @@ import logging
 import unicodedata
 from datetime import datetime, timezone as dt_timezone
 
+from django.conf import settings
 from django.db.models import F
 from django.utils import timezone
 
 from meta.instagram import InstagramService, MessengerService
 
+from .diagnostico_social import _causa_graph
 from .models import ComentarioSocial, Contacto, ReglaComentario
 
 logger = logging.getLogger(__name__)
+
+
+def _fecha_convencion_proyecto(valor):
+    """Normaliza un datetime de Graph API a la convención de fechas del proyecto.
+
+    El proyecto corre con `USE_TZ=False`, así que todos los `DateTimeField`
+    guardan datetimes **naive en hora local**. Graph API entrega siempre UTC
+    (epoch en el webhook de Facebook, `...+0000` en el sync), y guardar ese
+    datetime aware tal cual dejaba `fecha_comentario` 5 horas adelantada
+    respecto del resto del sistema. Con `USE_TZ=True` el aware ya es correcto y
+    se devuelve intacto.
+    """
+    if valor is None:
+        return timezone.now()
+    if settings.USE_TZ or not timezone.is_aware(valor):
+        return valor
+    return timezone.make_naive(valor, timezone.get_current_timezone())
 
 
 _SERVICIOS_COMENTARIO = {
@@ -96,7 +115,9 @@ def guardar_comentario_facebook(sesion, config, value):
     created = value.get('created_time')
     if created:
         try:
-            fecha = datetime.fromtimestamp(int(created), tz=dt_timezone.utc)
+            fecha = _fecha_convencion_proyecto(
+                datetime.fromtimestamp(int(created), tz=dt_timezone.utc)
+            )
         except (TypeError, ValueError, OSError):
             pass
     return _persistir_comentario(sesion, 'facebook', value.get('comment_id'), {
@@ -114,19 +135,27 @@ def sincronizar_comentarios_publicacion(sesion, canal, media_id):
     """Importa a ComentarioSocial los comentarios EN VIVO de una publicación que
     aún no están en BD (llegaron antes de suscribir el webhook `feed`/`comments`
     o sus eventos fueron rechazados). Se llama al abrir el modal de comentarios
-    de la grilla de publicaciones. Best-effort (nunca lanza): devuelve cuántos
-    creó. No corre el motor de reglas comentario→DM (son históricos)."""
+    de la grilla de publicaciones. Best-effort (nunca lanza). No corre el motor
+    de reglas comentario→DM (son históricos).
+
+    Devuelve `(creados, error)`: `error` es un texto accionable en español
+    cuando Graph rechaza la lectura. Antes solo devolvía el conteo y el fallo
+    quedaba mudo en el log — con el token sin `pages_read_user_content` el post
+    decía "3 comentarios" y el modal salía vacío sin explicar por qué.
+    """
     service = service_por_canal(canal)
     if not service:
-        return 0
+        return 0, f'El canal {canal} aún no soporta lectura de comentarios.'
     try:
         res = service.listar_comentarios_publicacion(sesion.session_id, media_id)
     except Exception:
         logger.exception('Sync de comentarios falló (%s, media %s)', canal, media_id)
-        return 0
+        return 0, 'No se pudo contactar la API de Meta. Reintentá en unos minutos.'
     if not res.get('success'):
-        logger.warning('Sync de comentarios %s media %s: %s', canal, media_id, res.get('error'))
-        return 0
+        error_crudo = res.get('error')
+        logger.warning('Sync de comentarios %s media %s: %s', canal, media_id, error_crudo)
+        causa, solucion = _causa_graph(error_crudo)
+        return 0, f'{causa}. {solucion}'
     if canal == 'facebook':
         propio = str(getattr(getattr(sesion, 'config_messenger', None), 'page_id', '') or '')
     else:
@@ -138,9 +167,12 @@ def sincronizar_comentarios_publicacion(sesion, canal, media_id):
         fecha = timezone.now()
         if c.get('fecha'):
             try:
-                fecha = datetime.strptime(c['fecha'], '%Y-%m-%dT%H:%M:%S%z')
+                fecha = _fecha_convencion_proyecto(
+                    datetime.strptime(c['fecha'], '%Y-%m-%dT%H:%M:%S%z')
+                )
             except (ValueError, TypeError):
-                pass
+                logger.warning('Fecha de comentario %s no parseable: %r',
+                               c.get('id'), c.get('fecha'))
         comentario = _persistir_comentario(sesion, canal, c.get('id'), {
             'parent_id': c.get('parent_id') or '',
             'media_id': str(media_id),
@@ -152,7 +184,7 @@ def sincronizar_comentarios_publicacion(sesion, canal, media_id):
         }, correr_reglas=False)
         if comentario:
             creados += 1
-    return creados
+    return creados, ''
 
 
 def _normalizar(texto):

@@ -132,29 +132,45 @@ class InstagramService(ServicioCanalBase):
         res['publicaciones'] = data.get('data', []) if res['success'] else []
         return res
 
+    _CAMPOS_COMENTARIO_IG = 'id,text,username,from,timestamp,parent_id,hidden'
+
+    @staticmethod
+    def _normalizar_comentario_ig(c, parent_id=''):
+        autor = c.get('from') or {}
+        return {
+            'id':           c.get('id'),
+            'texto':        c.get('text') or '',
+            'autor_id':     str(autor.get('id') or ''),
+            'autor_nombre': c.get('username') or autor.get('username') or '',
+            'fecha':        c.get('timestamp') or '',
+            'parent_id':    str(c.get('parent_id') or parent_id or ''),
+        }
+
     def listar_comentarios_publicacion(self, session_id, media_id):
         """GET /{media_id}/comments — comentarios en vivo de una publicación,
-        normalizados a {id, texto, autor_id, autor_nombre, fecha, parent_id}."""
+        normalizados a {id, texto, autor_id, autor_nombre, fecha, parent_id}.
+
+        Incluye las **respuestas anidadas** pidiendo la arista `replies`: el edge
+        `/comments` de Instagram solo devuelve comentarios de primer nivel, pero
+        el `comments_count` del media SÍ cuenta las respuestas — sin esto la
+        grilla decía "8 comentarios" y el modal mostraba 5. Es el equivalente al
+        `filter=stream` que ya usa `MessengerService` para páginas de Facebook.
+        """
         config = self._config(session_id)
         if not config:
             return {'success': False, 'error': self._ERROR_CONFIG}
+        campos = self._CAMPOS_COMENTARIO_IG
         res = self._graph_request('get', f'{media_id}/comments', config, timeout=20, params={
-            'fields': 'id,text,username,from,timestamp,parent_id,hidden',
+            'fields': f'{campos},replies{{{campos}}}',
             'limit': 100,
         })
         data = res.pop('data')
         comentarios = []
         if res['success']:
             for c in data.get('data', []):
-                autor = c.get('from') or {}
-                comentarios.append({
-                    'id':           c.get('id'),
-                    'texto':        c.get('text') or '',
-                    'autor_id':     str(autor.get('id') or ''),
-                    'autor_nombre': c.get('username') or autor.get('username') or '',
-                    'fecha':        c.get('timestamp') or '',
-                    'parent_id':    str(c.get('parent_id') or ''),
-                })
+                comentarios.append(self._normalizar_comentario_ig(c))
+                for r in ((c.get('replies') or {}).get('data') or []):
+                    comentarios.append(self._normalizar_comentario_ig(r, parent_id=c.get('id')))
         res['comentarios'] = comentarios
         return res
 
