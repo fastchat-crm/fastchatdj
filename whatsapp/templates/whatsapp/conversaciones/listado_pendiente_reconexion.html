@@ -339,7 +339,8 @@ $(document).ready(function() {
     }
 
     function conectarWebSocket(id) {
-        if (chatSocket) chatSocket.close();
+        if (chatSocket) { chatSocket.close(); chatSocket = null; }
+        if (!id || isNaN(parseInt(id, 10))) return;
         chatSocket = new ReconnectingWebSocket(
             `${wsProtocol}//${window.location.host}/ws/chat/${id}/`,
             null, {reconnectInterval: 1500}

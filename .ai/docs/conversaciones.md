@@ -385,6 +385,31 @@ Instagram/Messenger/TikTok no tienen ventana de 24h). Ruta registrada en
 `whatsapp/urls.py` (`sub_urls`) — staff no-superuser necesita el módulo
 `/whatsapp/conversaciones-caducadas/` en Seguridad (como finalizadas/pendientes).
 
+**Exportar Caducadas a Excel (2026-07-28):** chip `#btn-exportar-caducadas`
+("Exportar Excel", clase `cs-chip-export`) al final de `#filtros-rapidos` en
+`listado.html`, renderizado solo con `vista_actual == 'caducadas'`. El JS arma
+`{{ ruta }}?exportar_excel=true` agregando `sesion`, `criterio` y `filtroActivo`
+— mismos parámetros que `cargarConversaciones`, así el archivo respeta lo que el
+asesor ve en pantalla. Server-side el branch vive en `conversacionesView` justo
+antes de `load_conversations` y solo dispara con `filtro_caducada` activo (la
+vista Abiertas no exporta). La lógica está en
+`whatsapp/funciones_conversaciones_excel.py`:
+- `queryset_caducadas_export(filtros)` — parte del **manager base** (igual que el
+  listado, no `sin_expirar`), acota a `proveedor='meta'` +
+  `fecha_ultimo_entrante <= ahora - 24h`, y resuelve por `Subquery` el último
+  mensaje **entrante** (`exclude(remitente=sesion.numero)`) y el último
+  **saliente** (`remitente=sesion.numero`) con su fecha y tipo — sin N+1.
+- `exportar_caducadas_excel(qs)` — Workbook openpyxl (hoja `Caducadas`, header
+  bold + `freeze_panes`). Columnas: Cod · Contacto · Número · **WhatsApp**
+  (celda con `hyperlink` a `https://wa.me/<solo dígitos>`, estilo `Hyperlink`,
+  texto "Abrir chat") · Sesión · **Asesor asignado** (`asignado_a` con fallback a
+  `primer_agente`, "Sin asesor" si no hay) · **Última respuesta del asesor** +
+  fecha · **Último mensaje del cliente** + fecha · Ventana Meta venció.
+  Los adjuntos sin cuerpo salen etiquetados (`[Imagen]`, `[Audio]`, …) vía
+  `ETIQUETA_POR_TIPO`; los textos se cortan a 1000 chars.
+Mismo patrón que `autenticacion.funciones_usuario.exportar_usuarios_excel`
+(openpyxl + `HttpResponse` con `Content-Disposition`) y deja traza con `log()`.
+
 **Alerta "por caducar" del panel** (`/panel/`): `seguridad/view_index.py` publica
 `alertas_por_caducar` / `total_por_caducar` a partir de
 `funcionesWhatsappConversacion.conversaciones_por_caducar_por_sesion(usuario, sesiones)`.

@@ -1608,6 +1608,24 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                 (a['nombre'] for a in data["asesores_filtro"] if a['id'] == asesor_sel), ''
             )
 
+    # Exportación a Excel del listado de caducadas. Usa el mismo `filtros` que
+    # arma el listado, así el archivo respeta sesión, criterio y chips activos.
+    if request.GET.get('exportar_excel') and filtro_caducada:
+        from django.http import HttpResponse
+        from .funciones_conversaciones_excel import (
+            queryset_caducadas_export, exportar_caducadas_excel,
+        )
+        qs_export = list(queryset_caducadas_export(filtros))
+        wb = exportar_caducadas_excel(qs_export)
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        nombre_archivo = f"conversaciones_caducadas_{timezone.localdate()}.xlsx"
+        response['Content-Disposition'] = f'attachment; filename="{nombre_archivo}"'
+        wb.save(response)
+        log(f"Exportó conversaciones caducadas a Excel ({len(qs_export)} filas)", request, "view")
+        return response
+
     # Si es una solicitud AJAX para cargar conversaciones
     if request.GET.get('load_conversations'):
         from django.db import models as django_models

@@ -149,6 +149,11 @@
                     </ul>
                 </div>
                 {% endif %}
+                {% if vista_actual == 'caducadas' %}
+                <a href="#" class="cs-chip cs-chip-export" id="btn-exportar-caducadas" title="Descargar el listado de caducadas en Excel">
+                    <i class="fa fa-file-excel"></i><span>Exportar Excel</span>
+                </a>
+                {% endif %}
             </div>
 
             <div class="cs-search-wrap">
@@ -1477,6 +1482,10 @@
         let filtroActivo = '{{ filtros_activos_qs }}';
 
         function conectarWebSocket(conversacionId) {
+            if (!conversacionId || isNaN(parseInt(conversacionId, 10))) {
+                if (chatSocket) { chatSocket.close(); chatSocket = null; }
+                return;
+            }
             const wsUrl = `${wsProtocol}//${window.location.host}/ws/chat/${conversacionId}/`;
             if (chatSocket){
                 chatSocket.close();
@@ -2708,6 +2717,17 @@
         $('#footer-file-remove').on('click', function() {
             $('#archivo').val('');
             $('#footer-file-preview').addClass('d-none');
+        });
+
+        $(document).on('click', '#btn-exportar-caducadas', function(e) {
+            e.preventDefault();
+            let url = '{{ ruta }}?exportar_excel=true';
+            const sesionId = $('#sesion-selector').val();
+            const query = $('#search-conversacion').val();
+            if (sesionId) url += '&sesion=' + sesionId;
+            if (query)    url += '&criterio=' + encodeURIComponent(query);
+            if (filtroActivo) url += '&' + filtroActivo;
+            window.location.href = url;
         });
 
         // Función para cargar conversaciones

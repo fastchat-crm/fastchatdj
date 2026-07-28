@@ -16,7 +16,7 @@ from core.crypto import EncryptedTextField
 from core.custom_models import ModeloBase
 from autenticacion.models import Usuario
 from core.funciones import default_expira_10_min, get_encrypt
-from core.funciones_adicionales import remover_espacios_de_mas
+from core.funciones_adicionales import remover_espacios_de_mas, foto_inicial_gris
 from fastchatdj.settings import MEDIA_ROOT
 from whatsapp.models_querysetmanagers import ContactoManager, ConversacionWhatsAppManager
 
@@ -353,10 +353,7 @@ class Contacto(ModeloBase):
     def get_foto_gris(self):
         try:
             if not self.contacto_foto:
-                inicial = self.contacto_nombre[0].upper() if self.contacto_nombre else ''
-                if inicial and inicial.isalpha():
-                    return f"/static/images/initials/gris/{inicial}.png"
-                return "/static/foto_defaultd.png"
+                return foto_inicial_gris(self.contacto_nombre)
             return self.contacto_foto
         except Exception:
             return "/static/foto_defaultd.png"
@@ -735,10 +732,7 @@ class ConversacionWhatsApp(ModeloBase):
     def get_foto_gris(self):
         try:
             if not self.contacto.contacto_foto:
-                inicial = self.contacto.contacto_nombre[0].upper() if self.contacto.contacto_nombre else ''
-                if inicial and inicial.isalpha():
-                    return f"/static/images/initials/gris/{inicial}.png"
-                return "/static/foto_defaultd.png"
+                return foto_inicial_gris(self.contacto.contacto_nombre)
             return self.contacto.contacto_foto
         except Exception:
             return "/static/foto_defaultd.png"

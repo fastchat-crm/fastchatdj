@@ -86,7 +86,10 @@ def api_cotizar(request):
     else:
         data = request.GET
 
-    empresa_id = data.get("empresa_id") or _empresa_default_id()
+    empresa_id = data.get("empresa_id")
+    if str(empresa_id).strip().lower() in ('', 'none', 'null', 'undefined'):
+        empresa_id = None
+    empresa_id = empresa_id or _empresa_default_id()
     if not empresa_id:
         return JsonResponse({"error": "No hay planes cargados."}, status=404)
 
@@ -98,8 +101,8 @@ def api_cotizar(request):
         integrantes = [{"edad": int(edad), "genero": (data.get("genero") or "M")}]
 
     try:
-        empresa = PerfilNegocioIA.objects.get(id=empresa_id)
-    except PerfilNegocioIA.DoesNotExist:
+        empresa = PerfilNegocioIA.objects.get(id=int(empresa_id))
+    except (PerfilNegocioIA.DoesNotExist, TypeError, ValueError):
         return JsonResponse({"error": "Empresa no encontrada."}, status=404)
 
     planes_out = []

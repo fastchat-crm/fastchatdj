@@ -479,6 +479,19 @@
     color: #DC2626;
 }
 
+.cs-chip-export {
+    background: #ECFDF5;
+    border-color: #A7F3D0;
+    color: #047857;
+    text-decoration: none;
+}
+
+.cs-chip-export:hover {
+    background: #D1FAE5;
+    border-color: #6EE7B7;
+    color: #065F46;
+}
+
 .cs-search-wrap {
     padding: 6px 12px 10px;
     position: relative;
