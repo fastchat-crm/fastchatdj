@@ -73,13 +73,31 @@ correcto pero la extracción llevaba semanas sin capturar nada:
 
 - **`ComentarioSocial` estaba vacío** (0 filas) pese a tener sesiones conectadas
   (`messenger` id 42 y `instagram` id 43).
-- **Webhook de Facebook caído desde el 16/Jul.** Recibió 223 eventos ese día
-  (11:10–14:18) y nada más: **216 rechazados con 401 "Firma HMAC inválida"**
-  (el caso de dos Meta Apps que documenta `meta/README.md` → `app_secrets_extra`)
-  y 7 procesados. El 17/Jul nginx registró 62 × 500 y Meta deshabilitó la
-  suscripción. Auditoría en `EventoMetaRecibido` (`tipo_evento='messenger:page'`).
-- **Webhook de Instagram: cero eventos históricos.** Ni un `instagram:*` en
-  `EventoMetaRecibido`, ni un POST a `/instagram/webhook/` en nginx.
+- **Webhook de Facebook: la suscripción SIEMPRE estuvo activa.** Recibió 223
+  eventos el 16/Jul (11:10–14:18) y nada más: **216 rechazados con 401 "Firma
+  HMAC inválida"** (el caso de dos Meta Apps que documenta `meta/README.md` →
+  `app_secrets_extra`) y 7 procesados; el 17/Jul nginx registró 62 × 500.
+  Auditoría en `EventoMetaRecibido` (`tipo_evento='messenger:page'`).
+  **Corrección (verificado por API el 2026-07-28):** en una primera lectura se
+  concluyó que "Meta deshabilitó la suscripción tras los fallos". **Es falso.**
+  `GET /{app_id}/subscriptions` devuelve `object=page, active=True`, callback
+  `…/facebook/webhook/` y campos `feed,messages,messaging_postbacks`; y
+  `GET /{page_id}/subscribed_apps` confirma la página suscrita. El silencio desde
+  el 17/Jul se explica simplemente por **falta de actividad** en una página de
+  prueba (`fan_count: 1`). Antes de culpar al webhook, confirmar con estos dos
+  endpoints — el 401/500 en los logs no implica que Meta haya dado de baja nada.
+- **Webhook de Instagram: faltaba la suscripción del objeto en la app (resuelto
+  2026-07-28).** Cero eventos históricos, y la causa era concreta:
+  `GET /{app_id}/subscriptions` **no listaba ningún objeto `instagram`** (solo
+  `whatsapp_business_account`, `page` y `user`). Se creó por API con
+  `POST /{app_id}/subscriptions` (`object=instagram`,
+  `fields=comments,messages,messaging_postbacks`, callback
+  `…/instagram/webhook/`, `verify_token` = `ConfigInstagram.webhook_verify_token`).
+  Meta hizo el handshake al instante (GET desde `facebookplatform/1.0` → 200) y
+  `webhook_verificado_en` quedó sellado. **La suscripción del webhook se puede
+  crear por API, no hace falta el panel.** Instagram no necesita
+  `POST /{ig_user_id}/subscribed_apps`: ese campo no existe en la versión actual,
+  los eventos de IG viajan por la suscripción de la página vinculada.
 - **Faltan scopes para leer comentarios de Facebook.** `debug_token` sobre el
   Page Access Token de la sesión 42 devuelve `pages_read_engagement`,
   `pages_show_list`, `pages_messaging`, `instagram_manage_comments`… pero **no**
@@ -90,8 +108,9 @@ correcto pero la extracción llevaba semanas sin capturar nada:
   en el panel de Meta (agregar los scopes + reautorizar la página para emitir un
   token nuevo), no desde el código.
 - Instagram sí tiene `instagram_manage_comments`: su lectura de comentarios
-  responde OK. Su bloqueo es otro: **el webhook nunca fue verificado**
-  (`config.webhook_verificado_en` vacío) — por eso no llegó ni un evento.
+  responde OK. Su bloqueo era la suscripción faltante del objeto `instagram`
+  (ver arriba), ya resuelta — el diagnóstico de la sesión 43 da **todo verde**.
+  El único pendiente real quedó del lado de Facebook: los dos permisos.
 
 **Chequeo de permisos en el diagnóstico (2026-07-28).** `diagnostico_social.py`
 solo probaba `obtener_perfil()`, así que daba **"Conexión correcta"** con un
