@@ -50,6 +50,37 @@ no necesitan el servidor corriendo, solo el virtualenv y la BD accesibles.
 0 3 * * *    cd /ruta/fastchatdj && /ruta/venv/bin/python cron_jobs/aprender_conversaciones.py
 ```
 
+### Estado real en el servidor de producción (2026-07-28)
+
+Auditoría del servidor: de los 9 crons de esta carpeta **solo 2 estaban
+conectados**, y con la cadencia cambiada. `ejecutar_campanas.py` no estaba
+programado en ningún lado — una campaña creada se habría quedado en `enviando`
+para siempre. Se instalaron los 7 faltantes ese día, con el backlog en cero
+(0 campañas, 0 programados pendientes, 0 secuencias, 0 turnos por recordar), que
+era el momento de menor riesgo para encenderlos sin ráfaga de envíos.
+
+Cómo quedó:
+
+- **crontab de root** — los 8 scripts de la tabla de arriba con sus frecuencias
+  documentadas, cada uno con `cd /home/fastchat/fastchatdj` y redirigiendo a
+  `/var/log/fastchat_crons.log` (rotación semanal × 4 en
+  `/etc/logrotate.d/fastchat_crons`; sin eso el log del cron de 1 minuto crece
+  sin techo).
+- **`enviar_mensaje_despedida.py` NO va en el crontab**: corre por systemd
+  (`enviar_mensaje_despedida.timer` → `.service`, unidades versionadas en la raíz
+  del repo). Estaba en `OnUnitActiveSec=30s` — 20× más seguido de lo necesario —
+  y se bajó a `10min`, la frecuencia documentada.
+- `enviar_mensajes_programados.py` corría cada 10 min vía
+  `/home/crons/mensajes_programados.sh`; pasó a cada 1 min como dice la tabla
+  (con 10 min perdía la precisión de minuto de la hora agendada). El `.sh` quedó
+  fuera del crontab, reemplazado por la línea directa.
+
+**Ojo al encender `aprender_conversaciones.py` por primera vez:** procesa un
+batch de `limite=200` conversaciones por corrida y consume tokens de IA. Al
+instalarlo había **942 conversaciones finalizadas sin procesar**, así que las
+primeras ~5 noches trabajan el backlog acumulado. Genera `FaqAgente` en estado
+`pendiente` (revisión humana), no publica nada solo.
+
 **Windows (Task Scheduler):** una tarea básica por script — Acción: iniciar programa
 `C:\ruta\venv\Scripts\python.exe`, Argumentos: `cron_jobs\<script>.py`, Iniciar en:
 `C:\DESARROLLO_PROYECTOS\fastchat\fastchatdj`, con el disparador repitiendo cada N
