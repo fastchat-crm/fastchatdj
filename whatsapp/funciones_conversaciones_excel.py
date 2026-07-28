@@ -36,9 +36,14 @@ def _texto_mensaje(texto, tipo):
 
 
 def _fecha(valor):
+    """El proyecto corre con USE_TZ=False (settings.py), así que los datetimes
+    llegan naive y `localtime()` reventaría. Solo se convierte cuando el valor
+    trae tzinfo."""
     if not valor:
         return ''
-    return timezone.localtime(valor).strftime('%d/%m/%Y %H:%M')
+    if timezone.is_aware(valor):
+        valor = timezone.localtime(valor)
+    return valor.strftime('%d/%m/%Y %H:%M')
 
 
 def _walink(numero):
@@ -99,7 +104,7 @@ def exportar_caducadas_excel(qs):
     ws.title = 'Caducadas'
     encabezados = [
         'Cod', 'Contacto', 'Número', 'WhatsApp', 'Sesión', 'Asesor asignado',
-        'Última respuesta del asesor', 'Fecha última respuesta',
+        'Última respuesta enviada', 'Fecha última respuesta',
         'Último mensaje del cliente', 'Fecha último mensaje del cliente',
         'Ventana Meta venció',
     ]

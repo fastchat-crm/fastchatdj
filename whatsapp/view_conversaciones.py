@@ -1620,7 +1620,7 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        nombre_archivo = f"conversaciones_caducadas_{timezone.localdate()}.xlsx"
+        nombre_archivo = f"conversaciones_caducadas_{timezone.now().date()}.xlsx"
         response['Content-Disposition'] = f'attachment; filename="{nombre_archivo}"'
         wb.save(response)
         log(f"Exportó conversaciones caducadas a Excel ({len(qs_export)} filas)", request, "view")

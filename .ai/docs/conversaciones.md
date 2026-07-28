@@ -403,10 +403,19 @@ vista Abiertas no exporta). La lógica está en
   bold + `freeze_panes`). Columnas: Cod · Contacto · Número · **WhatsApp**
   (celda con `hyperlink` a `https://wa.me/<solo dígitos>`, estilo `Hyperlink`,
   texto "Abrir chat") · Sesión · **Asesor asignado** (`asignado_a` con fallback a
-  `primer_agente`, "Sin asesor" si no hay) · **Última respuesta del asesor** +
+  `primer_agente`, "Sin asesor" si no hay) · **Última respuesta enviada** +
   fecha · **Último mensaje del cliente** + fecha · Ventana Meta venció.
   Los adjuntos sin cuerpo salen etiquetados (`[Imagen]`, `[Audio]`, …) vía
   `ETIQUETA_POR_TIPO`; los textos se cortan a 1000 chars.
+  Ojo: "última respuesta enviada" es el último saliente **sea del asesor o del
+  bot** (se filtra por `remitente == sesion.numero`, que no distingue origen).
+  Para separar humano de automático habría que sumar subqueries sobre
+  `MensajeWhatsApp.es_automatico` / `ia_generado` / `agente`.
+- **USE_TZ=False** (está comentado en `settings.py`): los datetimes del proyecto
+  son naive. Por eso `_fecha()` solo aplica `timezone.localtime()` si el valor
+  es aware, y el nombre del archivo usa `timezone.now().date()` y NO
+  `timezone.localdate()` — esa función revienta con naive datetimes
+  (`ValueError: localtime() cannot be applied to a naive datetime`).
 Mismo patrón que `autenticacion.funciones_usuario.exportar_usuarios_excel`
 (openpyxl + `HttpResponse` con `Content-Disposition`) y deja traza con `log()`.
 
