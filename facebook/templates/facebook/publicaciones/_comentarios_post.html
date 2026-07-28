@@ -58,6 +58,16 @@
     <div class="alert alert-warning mb-0">
         <b><i class="fa fa-triangle-exclamation me-1"></i>No se pudieron traer los comentarios de Facebook</b>
         <div class="small mt-1">{{ error_sync }}</div>
+        {% if url_permisos_meta %}
+            <div class="mt-2 d-flex flex-wrap gap-2">
+                <a href="{{ url_permisos_meta }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">
+                    <i class="fa fa-up-right-from-square me-1"></i>Abrir "Permisos y funciones" en Meta
+                </a>
+                <a href="/facebook/sesiones/" class="btn btn-sm btn-outline-secondary">
+                    <i class="fa fa-rotate me-1"></i>Reconectar la página
+                </a>
+            </div>
+        {% endif %}
     </div>
 {% else %}
     <div class="alert alert-light text-center text-muted mb-0">

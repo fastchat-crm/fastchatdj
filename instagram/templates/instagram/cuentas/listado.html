@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block head %}
-    <link rel="stylesheet" href="/static/stylenew/sesiones.css?v2.2">
+    <link rel="stylesheet" href="/static/stylenew/sesiones.css?v2.3">
     <link rel="stylesheet" href="/static/css/instagram/cuentas_listado.css?v1.3">
 {% endblock %}
 
@@ -506,6 +506,7 @@
                     let cuerpo = '<div class="diag-label">' + escHtml(p.label) + '</div>';
                     if (p.detalle) cuerpo += '<div class="diag-detalle">' + escHtml(p.detalle) + '</div>';
                     if (p.solucion && !p.ok) cuerpo += '<div class="diag-sol"><i class="fa fa-lightbulb"></i> ' + escHtml(p.solucion) + '</div>';
+                    if (p.enlace && !p.ok) cuerpo += '<div class="diag-enlace"><a href="' + escHtml(p.enlace) + '" target="_blank" rel="noopener"><i class="fa fa-up-right-from-square me-1"></i>' + escHtml(p.enlace_texto || 'Abrir en Meta') + '</a></div>';
                     html += '<li class="diag-step ' + cls + '"><span class="diag-ico"><i class="fa ' + ico + '"></i></span><div class="diag-body">' + cuerpo + '</div></li>';
                 });
                 html += '</ul></div>';

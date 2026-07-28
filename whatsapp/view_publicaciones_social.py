@@ -92,6 +92,9 @@ def publicacionesSocialView(request, canal):
         data['comentarios_post'] = comentarios
         data['media_id'] = media_id
         data['error_sync'] = error_sync
+        if error_sync:
+            from .diagnostico_social import url_permisos_meta
+            data['url_permisos_meta'] = url_permisos_meta()
         template = get_template(conf['partial'])
         return JsonResponse({'result': True, 'data': template.render(data),
                              'total': len(comentarios), 'sincronizados': sincronizados,

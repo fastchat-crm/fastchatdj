@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% block head %}
-    <link rel="stylesheet" href="/static/stylenew/sesiones.css?v2.2">
+    <link rel="stylesheet" href="/static/stylenew/sesiones.css?v2.3">
     <link rel="stylesheet" href="/static/css/facebook/cuentas_listado.css?v1.0">
 {% endblock %}
 
@@ -33,12 +33,24 @@
                     <strong><i class="fab fa-facebook"></i> ¿Cómo conectar una página?</strong>
                     <ol class="small mt-2">
                         <li>Necesitas ser administrador de la <b>página de Facebook</b>.</li>
-                        <li>Genera un <b>Page Access Token</b> de larga duración con los permisos
-                            <code>pages_messaging</code>, <code>pages_show_list</code>,
-                            <code>pages_manage_metadata</code> y <code>pages_manage_engagement</code>.</li>
+                        <li>Activá los permisos en <b>developers.facebook.com → tu app → Revisión de la app →
+                            Permisos y funciones</b>. Para páginas que vos administrás alcanza el
+                            <b>Acceso estándar</b>; el Acceso avanzado solo hace falta para páginas de terceros.</li>
+                        <li>Genera un <b>Page Access Token</b> de larga duración con
+                            <code>pages_messaging</code> (mensajes),
+                            <code>pages_show_list</code> y <code>pages_manage_metadata</code> (webhook),
+                            <code>pages_read_engagement</code> (ver tus publicaciones),
+                            <code>pages_read_user_content</code> (<b>leer los comentarios de la gente</b>) y
+                            <code>pages_manage_engagement</code> (<b>responder y ocultar comentarios</b>).
+                            <span class="text-danger">Sin los dos últimos, Graph responde
+                            <code>(#200) Missing Permissions</code> y los comentarios llegan vacíos aunque la
+                            publicación muestre que tiene.</span></li>
                         <li>Pulsa <b>Nueva conexión</b>, pega el token y usa <b>Detectar automáticamente</b>.</li>
                         <li>Configura el webhook en tu App de Meta con la URL y el verify token de la tarjeta,
                             suscribiendo los campos <code>messages</code> y <code>feed</code>.</li>
+                        <li><b>Si cambiás permisos después:</b> volvé a generar el token y reconectá la página —
+                            el Page Access Token conserva los permisos que tenía al autorizarse y no se
+                            actualiza solo.</li>
                     </ol>
                 </div>
                 <div class="col-md-4">
@@ -500,6 +512,7 @@
                     let cuerpo = '<div class="diag-label">' + escHtml(p.label) + '</div>';
                     if (p.detalle) cuerpo += '<div class="diag-detalle">' + escHtml(p.detalle) + '</div>';
                     if (p.solucion && !p.ok) cuerpo += '<div class="diag-sol"><i class="fa fa-lightbulb"></i> ' + escHtml(p.solucion) + '</div>';
+                    if (p.enlace && !p.ok) cuerpo += '<div class="diag-enlace"><a href="' + escHtml(p.enlace) + '" target="_blank" rel="noopener"><i class="fa fa-up-right-from-square me-1"></i>' + escHtml(p.enlace_texto || 'Abrir en Meta') + '</a></div>';
                     html += '<li class="diag-step ' + cls + '"><span class="diag-ico"><i class="fa ' + ico + '"></i></span><div class="diag-body">' + cuerpo + '</div></li>';
                 });
                 html += '</ul></div>';

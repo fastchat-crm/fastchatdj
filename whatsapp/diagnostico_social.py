@@ -4,8 +4,15 @@ On-demand (no persiste nada nuevo salvo `SesionWhatsApp.estado`): corre chequeos
 secuenciales y devuelve una lista de pasos con causa concreta y solución accionable,
 para que el operador entienda POR QUÉ una sesión no conecta y cómo resolverlo.
 
-Devuelve: {'ok': bool, 'resumen': str, 'pasos': [{'label','ok','detalle','solucion'}]}
+Devuelve: {'ok': bool, 'resumen': str,
+           'pasos': [{'label','ok','detalle','solucion','enlace','enlace_texto'}]}
 Cada red arma su propia card/menú; esta lógica de backend es compartida.
+
+Los pasos que fallan por permisos traen `enlace` al panel de Meta donde se
+activan — el administrador de la plataforma no tiene por qué saber de memoria en
+qué pantalla de developers.facebook.com vive cada scope. El front escapa los
+textos con `escHtml`, así que el enlace va como campo aparte y NO embebido en el
+HTML de `solucion`.
 """
 import logging
 
@@ -14,8 +21,37 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
-def _paso(label, ok, detalle='', solucion=''):
-    return {'label': label, 'ok': bool(ok), 'detalle': detalle, 'solucion': solucion}
+def _paso(label, ok, detalle='', solucion='', enlace='', enlace_texto=''):
+    return {'label': label, 'ok': bool(ok), 'detalle': detalle, 'solucion': solucion,
+            'enlace': enlace, 'enlace_texto': enlace_texto}
+
+
+def url_permisos_meta():
+    """URL de la pantalla donde se activan los permisos de la Meta App.
+
+    Con App ID conocido apunta directo a la app; si no, al listado de apps.
+    """
+    try:
+        from meta.credenciales import get_meta_app_credentials
+        app_id, _ = get_meta_app_credentials()
+    except Exception:
+        app_id = None
+    if app_id:
+        return f'https://developers.facebook.com/apps/{app_id}/app-review/permissions/'
+    return 'https://developers.facebook.com/apps/'
+
+
+# Dónde se activa cada permiso y para qué sirve, en criollo. Se muestra en el
+# diagnóstico y en el modal de comentarios para que el admin sepa qué pedir.
+COMO_ACTIVAR_PERMISOS = (
+    'Activalos en developers.facebook.com → tu app → "Revisión de la app" → '
+    '"Permisos y funciones": buscá cada permiso y pedí al menos Acceso estándar '
+    '(alcanza para páginas que vos administrás; el Acceso avanzado solo hace '
+    'falta para páginas de terceros y requiere App Review). '
+    'Después volvé a conectar la página desde /facebook/sesiones/ (o /instagram/sesiones/): '
+    'el Page Access Token se emite con los permisos que había al momento de '
+    'autorizar y NO se actualiza solo — sin reautorizar, el token viejo sigue sin el permiso.'
+)
 
 
 def _causa_graph(error):
@@ -30,13 +66,12 @@ def _causa_graph(error):
                     'Reconectá la cuenta y pegá un Page Access Token de larga duración vigente.')
         if code in (10, 200, 803, 3) or sub in (33,):
             return ('Falta un permiso o la app no tiene acceso',
-                    'La app de Meta necesita los permisos aprobados (pages_messaging, '
-                    'instagram_manage_messages, pages_show_list) y la página vinculada a la cuenta. '
-                    'Para leer y moderar comentarios de una página de Facebook hacen falta además '
-                    'pages_read_user_content (leerlos) y pages_manage_engagement (responder/ocultar): '
-                    'pages_read_engagement por sí solo NO alcanza y Graph responde '
-                    '"(#200) Missing Permissions". Agregalos en la app y volvé a autorizar la página '
-                    'para que el nuevo Page Access Token los incluya.')
+                    'Para leer y moderar comentarios de una página de Facebook hacen falta '
+                    'pages_read_user_content (leerlos) y pages_manage_engagement '
+                    '(responder/ocultar): pages_read_engagement por sí solo NO alcanza —  '
+                    'solo cubre el contenido propio de la página— y Graph responde '
+                    '"(#200) Missing Permissions". '
+                    + COMO_ACTIVAR_PERMISOS)
         if code == 100:
             return ('Identificador (Page ID / IG user ID) incorrecto',
                     'Volvé a autodetectar desde el token para recuperar el ID correcto.')
@@ -116,7 +151,9 @@ def _pasos_permisos(canal, access_token):
     scopes, error = scopes_del_token(access_token)
     if error:
         return [_paso('Permisos del token', False, error,
-                      'Revisá las credenciales de la Meta App en Seguridad → Credencial Meta.')]
+                      'Revisá las credenciales de la Meta App en Seguridad → Credencial Meta.',
+                      enlace='/seguridad/credencial-meta/',
+                      enlace_texto='Abrir credenciales Meta')]
     pasos = []
     for etiqueta, requeridos in capacidades:
         faltantes = [s for s in requeridos if s not in scopes]
@@ -124,9 +161,9 @@ def _pasos_permisos(canal, access_token):
             etiqueta, not faltantes,
             'Permiso concedido.' if not faltantes else f"Falta el permiso {', '.join(faltantes)}.",
             '' if not faltantes else
-            f"Agregá {', '.join(faltantes)} a la app en Meta y volvé a autorizar la "
-            f"página/cuenta: el Page Access Token se emite con los permisos que "
-            f"tenía al momento de autorizar, no se actualiza solo.",
+            f"Falta {', '.join(faltantes)}. {COMO_ACTIVAR_PERMISOS}",
+            enlace='' if not faltantes else url_permisos_meta(),
+            enlace_texto='' if not faltantes else 'Abrir "Permisos y funciones" en Meta',
         ))
     return pasos
 

@@ -113,6 +113,30 @@ Mapa de scope → capacidad (Facebook):
 El error clásico es asumir que `pages_read_engagement` alcanza para comentarios:
 no alcanza, y Graph solo lo dice al pedir el edge `/comments`.
 
+**Dónde activar los permisos, dentro del producto (2026-07-28).** Un alert que
+dice "falta X" sin decir dónde activarlo no le sirve al administrador. Ahora:
+- `url_permisos_meta()` arma el deep-link a
+  `developers.facebook.com/apps/<app_id>/app-review/permissions/` usando el App ID
+  real de `get_meta_app_credentials()` (cae al listado de apps si no hay App ID).
+- `COMO_ACTIVAR_PERMISOS` es el texto único con el camino (Revisión de la app →
+  Permisos y funciones), la aclaración Acceso estándar vs avanzado (estándar
+  alcanza para páginas propias) y el recordatorio de **reautorizar**: el Page
+  Access Token conserva los permisos que tenía al emitirse.
+- `_paso()` lleva `enlace` + `enlace_texto` como **campos aparte**: el JS de las
+  pantallas de cuentas escapa todo con `escHtml`, así que un `<a>` embebido en
+  `solucion` saldría como texto plano. Se renderiza en `.diag-enlace`
+  (`static/stylenew/sesiones.css`, bump a `?v2.3` en ambos listados).
+- El modal de comentarios muestra los mismos dos botones ("Permisos y funciones"
+  y "Reconectar la página/cuenta") vía `data['url_permisos_meta']`.
+
+**La guía de conexión de Facebook pedía permisos incompletos** — causa raíz de
+todo esto. `facebook/cuentas/listado.html` listaba `pages_messaging`,
+`pages_show_list`, `pages_manage_metadata` y `pages_manage_engagement`, **sin**
+`pages_read_engagement` ni `pages_read_user_content`. Quien siguiera la guía
+generaba un token que nunca podía leer comentarios. Ahora enumera los 6 con para
+qué sirve cada uno, avisa del `(#200)` y agrega el paso de reautorizar al cambiar
+permisos. La guía de Instagram ya estaba completa.
+
 ## Limitaciones conocidas
 
 - **Reacciones: no se extraen.** Lo único que existe es el contador agregado que
