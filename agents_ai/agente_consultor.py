@@ -62,7 +62,8 @@ _MAX_STATIC_CHARS  = 1_200  # máx chars del contexto estático en Modo B (suple
 _HISTORY_TURNS     = 5      # turnos de historial (5 turnos = 10 mensajes) — suficiente para continuidad típica
 _USER_SNIPPET      = 150    # chars por mensaje de usuario en historial
 _AI_SNIPPET        = 400    # chars por respuesta IA en historial
-_MAX_OUTPUT_TOKENS = 3000   # tokens de salida — suficiente para menús completos con pizzas/precios
+_MAX_OUTPUT_TOKENS = 3000   # tokens de salida — techo para consultas amplias (menús completos con precios)
+_MAX_OUTPUT_TOKENS_CORTO = 1200  # techo para consultas específicas — mensajes de WhatsApp cortos, evita sobre-generación
 _TOPIC_ANCHOR_CHARS = 180   # chars del primer mensaje sustantivo como ancla de tema
 _UMBRAL_DISTANCIA  = 1.4    # distancia L2² máx de un chunk relevante (embeddings normalizados: ≈ coseno 0.3)
 _TEMPERATURE_TOOLS = 0.2    # temperatura máx durante tool-calling — argumentos deterministas
@@ -138,6 +139,7 @@ class AgenteConsultor:
         self.cfg_user_snippet      = _cfg('cfg_user_snippet', _USER_SNIPPET)
         self.cfg_ai_snippet        = _cfg('cfg_ai_snippet', _AI_SNIPPET)
         self.cfg_max_output_tokens = _cfg('cfg_max_output_tokens', _MAX_OUTPUT_TOKENS)
+        self.cfg_max_output_tokens_corto = _cfg('cfg_max_output_tokens_corto', _MAX_OUTPUT_TOKENS_CORTO)
         self.cfg_topic_anchor_chars = _cfg('cfg_topic_anchor_chars', _TOPIC_ANCHOR_CHARS)
         self.cfg_umbral_distancia  = _cfg('cfg_umbral_distancia', _UMBRAL_DISTANCIA)
         self.cfg_max_static_amplia = _cfg('cfg_max_static_amplia', _MAX_STATIC_AMPLIA)
@@ -367,6 +369,30 @@ class AgenteConsultor:
             apikey=self.apikey,
             model_name=self.model_name,
             max_output_tokens=self.cfg_max_output_tokens,
+            temperature=self.cfg_temperature,
+            base_url=self.base_url,
+        )
+
+    def _llm_para_pregunta(self, pregunta: str):
+        # Cap de salida por tipo de consulta: las amplias (menú/catálogo) pueden
+        # ser largas y conservan el techo alto; las específicas usan un techo
+        # menor porque una respuesta de WhatsApp no necesita 3000 tokens. Evita
+        # sobre-generación (costo de salida) y baja la latencia. get_llm_cached
+        # cachea por config, así que solo se crean dos clientes por agente.
+        try:
+            amplia = _es_consulta_amplia(pregunta or '')
+        except Exception:
+            amplia = False
+        if amplia:
+            return self.llm
+        max_corto = min(self.cfg_max_output_tokens, self.cfg_max_output_tokens_corto)
+        if max_corto >= self.cfg_max_output_tokens:
+            return self.llm
+        return get_llm_cached(
+            self._provider_obj,
+            apikey=self.apikey,
+            model_name=self.model_name,
+            max_output_tokens=max_corto,
             temperature=self.cfg_temperature,
             base_url=self.base_url,
         )
@@ -1168,7 +1194,7 @@ class AgenteConsultor:
         self.desglose_prompt['chars_prompt_total'] = len(prompt_final)
 
         try:
-            ai_message = self.llm.invoke(prompt_final)
+            ai_message = self._llm_para_pregunta(pregunta).invoke(prompt_final)
             respuesta = self._extraer_texto(ai_message)
         except Exception as exc:
             logger.error("Error invocando LLM: %s", exc)

@@ -2,7 +2,7 @@
 {% load static %}
 
 {% block head %}
-    <link rel="stylesheet" href="{% static 'stylenew/entrenamiento.css' %}">
+    <link rel="stylesheet" href="/static/stylenew/entrenamiento.css?v1.1">
     <link rel="stylesheet" href="{% static 'stylenew/agentesia_form.css' %}">
     <style>
         /* ── Agent cards ─────────────────────────────────────────────── */
@@ -571,15 +571,8 @@
 
                                                 {# Action buttons #}
                                                 <div class="agent-actions">
-                                                    <a href="javascript:void(0)" class="btn-ag proc"
-                                                       onclick="procesarAgente({{ l.pk }}, '{{ l.nombre|escapejs }}', this)"
-                                                       title="Extraer texto de archivos y preparar contexto estático">
-                                                        <i class="fas fa-cogs"></i> Procesar
-                                                    </a>
-                                                    <a href="javascript:void(0)" class="btn-ag view"
-                                                       onclick="verContexto({{ l.pk }}, '{{ l.nombre|escapejs }}')"
-                                                       title="Ver contexto, prompt completo y fuentes">
-                                                        <i class="fas fa-eye"></i> Ver contexto
+                                                    <a href="?action=procedimiento&id={{ l.pk }}" class="btn-ag edit">
+                                                        <i class="fas fa-edit"></i> Editar
                                                     </a>
                                                     {% if l.chat_url %}
                                                     <a href="{{ l.chat_url }}" class="btn-ag chat" target="_blank"
@@ -587,34 +580,58 @@
                                                         <i class="fas fa-comments"></i> Probar
                                                     </a>
                                                     {% endif %}
-                                                    <a href="?action=procedimiento&id={{ l.pk }}" class="btn-ag edit">
-                                                        <i class="fas fa-edit"></i> Editar
-                                                    </a>
-                                                    <a href="javascript:void(0)" class="btn-ag"
-                                                       onclick="inspeccionarRag({{ l.pk }})"
-                                                       title="Ver el conocimiento indexado del agente (RAG)">
-                                                        <i class="fas fa-database"></i>
-                                                    </a>
-                                                    <a href="javascript:void(0)" class="btn-ag"
-                                                       onclick="duplicarAgente({{ l.pk }}, '{{ l.nombre }}')"
-                                                       title="Duplicar agente con toda su configuración y conocimiento">
-                                                        <i class="fas fa-clone"></i>
-                                                    </a>
-                                                    <a href="javascript:void(0)" class="btn-ag"
-                                                       onclick="reprocesarRag({{ l.pk }}, '{{ l.nombre }}')"
-                                                       title="Reprocesar el conocimiento: extracción, embeddings, verificación y resumen del negocio">
-                                                        <i class="fas fa-sync-alt"></i>
-                                                    </a>
-                                                    <a href="javascript:void(0)" class="btn-ag"
-                                                       onclick="evaluarAgente({{ l.pk }}, '{{ l.nombre }}')"
-                                                       title="Evaluar el agente: preguntas de prueba con veredicto y score">
-                                                        <i class="fas fa-vial"></i>
-                                                    </a>
-                                                    <a href="javascript:void(0)" class="btn-ag del"
-                                                       onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'deleteagente')"
-                                                       title="Eliminar agente">
-                                                        <i class="fas fa-trash"></i>
-                                                    </a>
+                                                    <div class="dropdown">
+                                                        <button type="button" class="btn-ag more"
+                                                                data-bs-toggle="dropdown" data-bs-strategy="fixed"
+                                                                aria-expanded="false" title="Más acciones">
+                                                            <i class="fas fa-ellipsis-h"></i>
+                                                        </button>
+                                                        <ul class="dropdown-menu dropdown-menu-end">
+                                                            <li>
+                                                                <a class="dropdown-item" href="javascript:void(0)"
+                                                                   onclick="procesarAgente({{ l.pk }}, '{{ l.nombre|escapejs }}', this)">
+                                                                    <i class="fas fa-cogs me-2 text-warning"></i> Procesar
+                                                                </a>
+                                                            </li>
+                                                            <li>
+                                                                <a class="dropdown-item" href="javascript:void(0)"
+                                                                   onclick="verContexto({{ l.pk }}, '{{ l.nombre|escapejs }}')">
+                                                                    <i class="fas fa-eye me-2 text-primary"></i> Ver contexto
+                                                                </a>
+                                                            </li>
+                                                            <li>
+                                                                <a class="dropdown-item" href="javascript:void(0)"
+                                                                   onclick="inspeccionarRag({{ l.pk }})">
+                                                                    <i class="fas fa-database me-2 text-info"></i> Inspeccionar RAG
+                                                                </a>
+                                                            </li>
+                                                            <li>
+                                                                <a class="dropdown-item" href="javascript:void(0)"
+                                                                   onclick="duplicarAgente({{ l.pk }}, '{{ l.nombre }}')">
+                                                                    <i class="fas fa-clone me-2 text-secondary"></i> Duplicar
+                                                                </a>
+                                                            </li>
+                                                            <li>
+                                                                <a class="dropdown-item" href="javascript:void(0)"
+                                                                   onclick="reprocesarRag({{ l.pk }}, '{{ l.nombre }}')">
+                                                                    <i class="fas fa-sync-alt me-2 text-secondary"></i> Reprocesar RAG
+                                                                </a>
+                                                            </li>
+                                                            <li>
+                                                                <a class="dropdown-item" href="javascript:void(0)"
+                                                                   onclick="evaluarAgente({{ l.pk }}, '{{ l.nombre }}')">
+                                                                    <i class="fas fa-vial me-2 text-success"></i> Evaluar
+                                                                </a>
+                                                            </li>
+                                                            <li><hr class="dropdown-divider"></li>
+                                                            <li>
+                                                                <a class="dropdown-item item-danger" href="javascript:void(0)"
+                                                                   onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'deleteagente')">
+                                                                    <i class="fas fa-trash me-2"></i> Eliminar
+                                                                </a>
+                                                            </li>
+                                                        </ul>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -651,12 +668,12 @@
                         </p>
                     </div>
                     <div class="d-flex gap-2 flex-wrap">
-                        <a href="javascript:void(0)" class="btn btn-sm btn-outline-primary"
+                        <a href="javascript:void(0)" class="btn btn-sm btn-secondary"
                            data-bs-toggle="modal" data-bs-target="#modalGuiaTokens"
                            title="Tour para obtener API Keys de proveedores LLM">
                             <i class="fas fa-route me-1"></i> Guía tokens
                         </a>
-                        <a href="javascript:void(0)" class="btn btn-sm btn-outline-success" id="btnTestAllKeys"
+                        <a href="javascript:void(0)" class="btn btn-sm btn-success" id="btnTestAllKeys"
                            onclick="testAllApiKeys(this)"
                            title="Probar todas las API Keys y ver cuales estan activas">
                             <i class="fas fa-vials me-1"></i> Probar todas
@@ -734,45 +751,60 @@
                                                     title="Probar conectividad con el proveedor">
                                                 <i class="fas fa-vial"></i> Probar
                                             </button>
-                                            <button type="button" class="btn-apk consumo"
-                                                    onclick="verConsumo({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display|escapejs }}')"
-                                                    title="Ver consumo de tokens">
-                                                <i class="fas fa-chart-bar"></i> Consumo
-                                            </button>
-                                            <button type="button"
-                                                    class="btn-apk {% if l.alerta_consumo and l.alerta_consumo.umbral_diario or l.alerta_consumo and l.alerta_consumo.umbral_mensual %}alertas-on{% else %}alertas{% endif %}"
-                                                    onclick="verAlerta({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display|escapejs }}')"
-                                                    title="Configurar alertas de consumo">
-                                                <i class="fas fa-bell"></i>
-                                                {% if l.alerta_consumo and l.alerta_consumo.umbral_diario or l.alerta_consumo and l.alerta_consumo.umbral_mensual %}Alertas ON{% else %}Alertas{% endif %}
-                                            </button>
-                                            <button type="button" class="btn-apk test"
-                                                    onclick="verDocsWebService('{{ l.webservice_token|default:''|escapejs }}', '{{ l.get_proveedor_display|escapejs }}', '{{ l.modelo|default:''|escapejs }}', {{ l.pk }})"
-                                                    title="Documentacion del WebService IA">
-                                                <i class="fas fa-code"></i> WebService
-                                            </button>
-                                            <button type="button" class="btn-apk edit"
-                                                    onclick="abrirGenerarAgenteIA({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display|escapejs }}')"
-                                                    title="Crear agente con IA asignado a esta API Key">
-                                                <i class="fas fa-wand-magic-sparkles"></i> Crear agente IA
-                                            </button>
                                             <button type="button" class="btn-apk edit"
                                                     onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'changeapikey')"
                                                     title="Editar">
                                                 <i class="fas fa-edit"></i> Editar
                                             </button>
-                                            {% if not l.estado %}
-                                            <button type="button" class="btn-apk reactivar"
-                                                    onclick="reactivarApiKey({{ l.pk }})"
-                                                    title="Reactivar">
-                                                <i class="fas fa-redo"></i>
-                                            </button>
-                                            {% endif %}
-                                            <button type="button" class="btn-apk del"
-                                                    onclick="eliminarajax({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display }}', 'deleteapikey')"
-                                                    title="Eliminar">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
+                                            <div class="dropdown">
+                                                <button type="button" class="btn-apk more"
+                                                        data-bs-toggle="dropdown" data-bs-strategy="fixed"
+                                                        aria-expanded="false" title="Más acciones">
+                                                    <i class="fas fa-ellipsis-h"></i>
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-end">
+                                                    <li>
+                                                        <a class="dropdown-item" href="javascript:void(0)"
+                                                           onclick="verConsumo({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display|escapejs }}')">
+                                                            <i class="fas fa-chart-bar me-2 text-info"></i> Consumo
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="javascript:void(0)"
+                                                           onclick="verAlerta({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display|escapejs }}')">
+                                                            <i class="fas fa-bell me-2 {% if l.alerta_consumo and l.alerta_consumo.umbral_diario or l.alerta_consumo and l.alerta_consumo.umbral_mensual %}text-danger{% else %}text-secondary{% endif %}"></i>
+                                                            {% if l.alerta_consumo and l.alerta_consumo.umbral_diario or l.alerta_consumo and l.alerta_consumo.umbral_mensual %}Alertas ON{% else %}Alertas{% endif %}
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="javascript:void(0)"
+                                                           onclick="verDocsWebService('{{ l.webservice_token|default:''|escapejs }}', '{{ l.get_proveedor_display|escapejs }}', '{{ l.modelo|default:''|escapejs }}', {{ l.pk }})">
+                                                            <i class="fas fa-code me-2 text-secondary"></i> WebService
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="javascript:void(0)"
+                                                           onclick="abrirGenerarAgenteIA({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display|escapejs }}')">
+                                                            <i class="fas fa-wand-magic-sparkles me-2 text-primary"></i> Crear agente IA
+                                                        </a>
+                                                    </li>
+                                                    {% if not l.estado %}
+                                                    <li>
+                                                        <a class="dropdown-item" href="javascript:void(0)"
+                                                           onclick="reactivarApiKey({{ l.pk }})">
+                                                            <i class="fas fa-redo me-2 text-success"></i> Reactivar
+                                                        </a>
+                                                    </li>
+                                                    {% endif %}
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li>
+                                                        <a class="dropdown-item item-danger" href="javascript:void(0)"
+                                                           onclick="eliminarajax({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display }}', 'deleteapikey')">
+                                                            <i class="fas fa-trash me-2"></i> Eliminar
+                                                        </a>
+                                                    </li>
+                                                </ul>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

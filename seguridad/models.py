@@ -601,3 +601,87 @@ class DetailTaskMarketingMail(ModeloBase):
     class Meta:
         verbose_name = u"Mail Send Task Detail"
         verbose_name_plural = u"Mail Send Task Details"
+
+
+class ParametroSistema(ModeloBase):
+    GRUPO_CHOICES = (
+        ('comportamiento_ia', 'Comportamiento IA'),
+        ('limites', 'Límites y gasto'),
+        ('general', 'General'),
+    )
+    TIPO_CHOICES = (
+        ('entero', 'Entero'),
+        ('decimal', 'Decimal'),
+        ('texto', 'Texto'),
+        ('booleano', 'Booleano'),
+    )
+
+    clave = models.CharField(max_length=100, unique=True, verbose_name='Clave')
+    etiqueta = models.CharField(max_length=150, verbose_name='Etiqueta')
+    descripcion = models.TextField(blank=True, null=True, verbose_name='Descripción')
+    grupo = models.CharField(max_length=30, choices=GRUPO_CHOICES, default='general', verbose_name='Grupo')
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default='texto', verbose_name='Tipo')
+    valor = models.TextField(blank=True, null=True, verbose_name='Valor')
+    valor_default = models.TextField(blank=True, null=True, verbose_name='Valor por defecto')
+    unidad = models.CharField(max_length=30, blank=True, null=True, verbose_name='Unidad')
+    orden = models.IntegerField(default=0, verbose_name='Orden')
+    editable = models.BooleanField(default=True, verbose_name='Editable')
+
+    _CACHE_PREFIX = 'parametro_ia__'
+    _CACHE_TTL = 60
+    _CACHE_NONE = '__none__'
+
+    def _castear(self, raw):
+        if raw is None or raw == '':
+            return None
+        if self.tipo == 'entero':
+            try:
+                return int(str(raw).strip())
+            except (TypeError, ValueError):
+                return None
+        if self.tipo == 'decimal':
+            try:
+                return float(str(raw).replace(',', '.').strip())
+            except (TypeError, ValueError):
+                return None
+        if self.tipo == 'booleano':
+            return str(raw).strip().lower() in ('1', 'true', 't', 'si', 'sí', 'yes', 'on')
+        return str(raw)
+
+    def valor_actual(self):
+        crudo = self.valor if self.valor not in (None, '') else self.valor_default
+        return self._castear(crudo)
+
+    @classmethod
+    def valor_de(cls, clave, default=None):
+        from django.core.cache import cache
+        ck = cls._CACHE_PREFIX + clave
+        cacheado = cache.get(ck)
+        if cacheado is not None:
+            return default if cacheado == cls._CACHE_NONE else cacheado
+        try:
+            fila = cls.objects.filter(clave=clave, status=True).first()
+        except Exception:
+            return default
+        if not fila:
+            cache.set(ck, cls._CACHE_NONE, cls._CACHE_TTL)
+            return default
+        valor = fila.valor_actual()
+        cache.set(ck, cls._CACHE_NONE if valor is None else valor, cls._CACHE_TTL)
+        return default if valor is None else valor
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        try:
+            from django.core.cache import cache
+            cache.delete(self._CACHE_PREFIX + self.clave)
+        except Exception:
+            pass
+
+    def __str__(self):
+        return '{} = {}'.format(self.clave, self.valor)
+
+    class Meta:
+        verbose_name = 'Parámetro IA'
+        verbose_name_plural = 'Parámetros IA'
+        ordering = ['grupo', 'orden', 'clave']

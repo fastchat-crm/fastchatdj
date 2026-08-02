@@ -85,13 +85,32 @@ def parametros_efectivos(agente=None, perfil_id=None):
         if valor is None and config is not None:
             valor = getattr(config, campo, None)
 
-        # Nivel 3 — default de código
+        # Nivel 3 — parámetro global editable en /crm/parametros-ia/
+        # (ParametroSistema), con el default de código como último recurso.
         if valor is None:
-            valor = PARAMETROS_IA_DEFAULT.get(campo)
+            valor = _valor_plataforma(campo)
 
         valores[campo] = valor
 
     return valores
+
+
+def _valor_plataforma(campo):
+    """Valor a nivel plataforma de un parámetro IA.
+
+    Primero la tabla editable en runtime `ParametroSistema` (página
+    `/crm/parametros-ia/`, cacheada 60 s); como último recurso, el default de
+    código en `PARAMETROS_IA_DEFAULT`. Así un agente que no sobreescribe un
+    campo — y cuyo perfil tampoco — toma el valor de los Parámetros IA.
+    """
+    from crm.models import PARAMETROS_IA_DEFAULT
+    default_codigo = PARAMETROS_IA_DEFAULT.get(campo)
+    try:
+        from seguridad.models import ParametroSistema
+        return ParametroSistema.valor_de(campo, default_codigo)
+    except Exception as exc:
+        logger.debug('ParametroSistema no disponible para %s: %s', campo, exc)
+        return default_codigo
 
 
 def parametro(nombre, agente=None, perfil_id=None):

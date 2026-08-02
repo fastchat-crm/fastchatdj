@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+
+{% block head %}
+    <link rel="stylesheet" href="/static/css/crm/parametros_ia.css?v1.0">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid parametros-ia py-3">
+
+    <div class="row align-items-center mb-4">
+        <div class="col-md-8">
+            <h4 class="mb-1"><i class="fas fa-sliders-h me-2 text-primary"></i>Parámetros IA</h4>
+            <p class="text-muted mb-0">
+                Configuración global del motor de IA. Cada agente toma estos valores cuando no define uno propio.
+                Los cambios aplican en runtime (cache de 60 s).
+            </p>
+        </div>
+        <div class="col-md-4 text-md-end mt-3 mt-md-0">
+            <button type="button" class="btn btn-primary" id="btn-guardar-parametros">
+                <i class="fas fa-save me-1"></i> Guardar cambios
+            </button>
+        </div>
+    </div>
+
+    {% if sin_parametros %}
+        <div class="parametros-vacio text-center">
+            <i class="fas fa-sliders-h"></i>
+            <h5>No hay parámetros cargados</h5>
+            <p class="text-muted mb-0">Ejecuta <code>python manage.py seed_parametros_ia</code> para sembrarlos.</p>
+        </div>
+    {% else %}
+        <form id="form-parametros-ia">
+            {% csrf_token %}
+            {% for grupo in grupos_parametros %}
+            <div class="card shadow-sm mb-4 parametros-grupo">
+                <div class="card-header bg-white">
+                    <h6 class="mb-0 text-primary">{{ grupo.etiqueta }}</h6>
+                </div>
+                <div class="card-body">
+                    {% for fila in grupo.filas %}
+                    {% with cur=fila.valor|default:fila.valor_default %}
+                    <div class="row align-items-center parametro-fila">
+                        <div class="col-lg-6 col-md-5">
+                            <label class="parametro-label" for="param_{{ fila.pk }}">{{ fila.etiqueta }}</label>
+                            {% if fila.descripcion %}
+                                <div class="parametro-desc">{{ fila.descripcion }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-lg-4 col-md-4">
+                            <div class="input-group input-group-sm">
+                                {% if fila.tipo == 'booleano' %}
+                                    <select class="form-select" id="param_{{ fila.pk }}" name="param_{{ fila.pk }}">
+                                        <option value="true" {% if cur == 'true' %}selected{% endif %}>Sí</option>
+                                        <option value="false" {% if cur != 'true' %}selected{% endif %}>No</option>
+                                    </select>
+                                {% elif fila.tipo == 'entero' %}
+                                    <input type="number" step="1" class="form-control" id="param_{{ fila.pk }}"
+                                           name="param_{{ fila.pk }}" value="{{ cur }}">
+                                {% elif fila.tipo == 'decimal' %}
+                                    <input type="number" step="any" class="form-control" id="param_{{ fila.pk }}"
+                                           name="param_{{ fila.pk }}" value="{{ cur }}">
+                                {% else %}
+                                    <input type="text" class="form-control" id="param_{{ fila.pk }}"
+                                           name="param_{{ fila.pk }}" value="{{ cur }}">
+                                {% endif %}
+                                {% if fila.unidad %}
+                                    <span class="input-group-text">{{ fila.unidad }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-lg-2 col-md-3 text-md-end">
+                            <span class="parametro-default" title="Valor por defecto">
+                                <i class="fas fa-undo-alt me-1"></i>{{ fila.valor_default }}
+                            </span>
+                        </div>
+                    </div>
+                    {% endwith %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </form>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block jscript %}
+    <script src="/static/js/crm/parametros_ia.js"></script>
+{% endblock %}
