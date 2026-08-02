@@ -24,6 +24,41 @@ class WhatsAppService(ServicioCanalBase):
             'X-API-Key': settings.NODE_SECRET_KEY
         }
 
+    @staticmethod
+    def _error_del_gateway(response, prefijo):
+        """Convierte una respuesta de error del gateway Node en un dict legible.
+
+        El gateway responde `{"error": "...", "codigo": "...", "bloqueadoPorAntiban": bool}`
+        con mensajes ya redactados en español. Volcar `response.text` crudo dejaba
+        al usuario leyendo el JSON entero — incluido el caso más frecuente, que es
+        el anti-baneo rechazando un envío con una explicación perfectamente clara.
+
+        `codigo` distingue el motivo (número inexistente, cuota diaria, sesión
+        bloqueada…) para que la UI pueda reaccionar distinto según el caso.
+        """
+        detalle, codigo, antiban = '', None, False
+        try:
+            cuerpo = response.json()
+            if isinstance(cuerpo, dict):
+                detalle = (cuerpo.get('error') or cuerpo.get('message') or '').strip()
+                codigo = cuerpo.get('codigo')
+                antiban = bool(cuerpo.get('bloqueadoPorAntiban'))
+        except ValueError:
+            pass
+
+        if not detalle:
+            detalle = (response.text or '').strip()[:300] or f'HTTP {response.status_code}'
+            return {'success': False, 'error': f'{prefijo}: {detalle}'}
+
+        # Con un motivo concreto del gateway se muestra tal cual: agregarle
+        # "Error al enviar mensaje: 400 - " adelante solo agrega ruido.
+        return {
+            'success': False,
+            'error': detalle,
+            'codigo': codigo,
+            'bloqueado_por_antiban': antiban,
+        }
+
     def create_session(self, session, webhook_url):
         """
         Crea una nueva sesión de WhatsApp en el servidor Node.js
@@ -239,11 +274,7 @@ class WhatsAppService(ServicioCanalBase):
                     'success': True,
                     'message_id': response.json().get('messageId')
                 }
-            else:
-                return {
-                    'success': False,
-                    'error': f"Error al enviar mensaje: {response.status_code} - {response.text}"
-                }
+            return self._error_del_gateway(response, 'Error al enviar mensaje')
         except Exception as e:
             return {
                 'success': False,
@@ -319,11 +350,7 @@ class WhatsAppService(ServicioCanalBase):
                 return {
                     'success': True
                 }
-            else:
-                return {
-                    'success': False,
-                    'error': f"Error al enviar mensaje: {response.status_code} - {response.text}"
-                }
+            return self._error_del_gateway(response, 'Error al actualizar el indicador de escritura')
         except Exception as e:
             return {
                 'success': False,
@@ -358,11 +385,7 @@ class WhatsAppService(ServicioCanalBase):
                 return {
                     'success': True
                 }
-            else:
-                return {
-                    'success': False,
-                    'error': f"Error al enviar mensaje: {response.status_code} - {response.text}"
-                }
+            return self._error_del_gateway(response, 'Error al actualizar el indicador de escritura')
         except Exception as e:
             return {
                 'success': False,
@@ -555,11 +578,7 @@ class WhatsAppService(ServicioCanalBase):
                     'success': True,
                     'message_id': response.json().get('messageId')
                 }
-            else:
-                return {
-                    'success': False,
-                    'error': f"Error al enviar archivo: {response.status_code} - {response.text}"
-                }
+            return self._error_del_gateway(response, 'Error al enviar archivo')
         except Exception as e:
             return {
                 'success': False,
