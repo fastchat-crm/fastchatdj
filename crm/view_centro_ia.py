@@ -91,10 +91,18 @@ def _config_editable(perfil):
 
 
 def _resumen_keys(perfil):
+    """Keys del perfil con las marcas que necesita la UI.
+
+    `puede_embeddings` mira solo el proveedor —sirve para explicar por qué una
+    key de Ollama nunca podrá vectorizar—, pero **no alcanza para ofrecerla**:
+    una key desactivada por error de cuota o credencial inválida tampoco puede.
+    Para eso está `usable_para_vectorizar`, que es lo que filtra el selector.
+    """
     keys = list(ApiKeyIA.objects.filter(perfil=perfil, status=True).order_by('proveedor', '-id'))
     embed = resolver_key_embeddings(perfil.id)
     for k in keys:
         k.puede_embeddings = k.proveedor in PROVEEDORES_CON_EMBEDDINGS
+        k.usable_para_vectorizar = k.puede_embeddings and k.estado
         k.es_la_de_embeddings = bool(embed and embed.id == k.id)
     return keys, embed
 
@@ -456,6 +464,16 @@ def _revectorizar(request, perfil):
             return JsonResponse({
                 'error': True,
                 'message': f'{key.get_proveedor_display()} no ofrece embeddings. Elegí una key de Gemini u OpenAI.',
+            })
+        # Una key desactivada (cuota agotada, credencial invalida) falla seguro:
+        # mejor cortar acá con el motivo que dejar que reviente por cada agente.
+        if not key.estado:
+            motivo = (key.msgerror or '').strip()
+            return JsonResponse({
+                'error': True,
+                'message': (f'La key de {key.get_proveedor_display()} está desactivada'
+                            + (f': {motivo[:200]}' if motivo else '.')
+                            + ' Probala desde «Claves y tokens» antes de vectorizar.'),
             })
         api_key = key.descripcion
     elif not resolver_key_embeddings(perfil.id):

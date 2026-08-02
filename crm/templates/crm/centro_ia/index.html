@@ -97,7 +97,7 @@
                                                         data-nombre="{{ k.get_proveedor_display }}" title="Eliminar">
                                                     <i class="fa fa-trash"></i>
                                                 </button>
-                                                {% if k.puede_embeddings and not k.es_la_de_embeddings %}
+                                                {% if k.usable_para_vectorizar and not k.es_la_de_embeddings %}
                                                     <button type="button" class="btn btn-sm btn-outline-success cia-marcar"
                                                             data-accion="marcar_embeddings" data-pk="{{ k.id }}">Vectorizar con esta</button>
                                                 {% endif %}
@@ -310,7 +310,7 @@
                                         {% endif %}
                                     </option>
                                     {% for k in keys %}
-                                        {% if k.puede_embeddings %}
+                                        {% if k.usable_para_vectorizar %}
                                             <option value="{{ k.id }}">{{ k.get_proveedor_display }}{% if k.alias %} — {{ k.alias }}{% endif %}</option>
                                         {% endif %}
                                     {% endfor %}
