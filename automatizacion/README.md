@@ -33,15 +33,34 @@ el mismo paso.
 
 ## Eventos y su contexto
 
+Los ocho eventos declarados emiten. Cuatro se disparan a mano desde su punto de
+origen y cuatro por señal — la diferencia está explicada abajo.
+
 | Evento | Contexto que trae | Emitido desde |
 |---|---|---|
-| `contacto_creado` | `contacto_id`, `contacto_nombre`, `numero`, `canal`, `sesion_id`, `sesion` | `whatsapp/procesar_mensaje.py` |
-| `conversacion_finalizada` | `conversacion_id`, `contacto_id`, `contacto_nombre`, `numero`, `sesion_id`, `clasificacion`, `estado_atencion` | `ConversacionWhatsApp.cerrar()` |
-| `cita_cumplida` | `turno_id`, `contacto_id`, `servicio`, `recurso`, `estado_anterior` | `agenda/view_citas.py` |
-| `conversacion_iniciada`, `etiqueta_agregada`, `cita_creada`, `oportunidad_ganada`, `registro_creado` | — | **Declarados pero sin emisor todavía** |
+| `contacto_creado` | `contacto_id`, `contacto_nombre`, `numero`, `canal`, `sesion_id`, `sesion` | `whatsapp/procesar_mensaje.py` (explícito) |
+| `conversacion_finalizada` | `conversacion_id`, `contacto_id`, `contacto_nombre`, `numero`, `sesion_id`, `clasificacion`, `estado_atencion` | `ConversacionWhatsApp.cerrar()` (explícito) |
+| `cita_cumplida` | `turno_id`, `contacto_id`, `servicio`, `recurso`, `estado_anterior` | `agenda/view_citas.py` (explícito) |
+| `oportunidad_ganada` | `card_id`, `conversacion_id`, `contacto_id`, `etapa`, `etapa_anterior`, `pipeline`, `valor`, `moneda` | `whatsapp/view_pipeline.py` → `mover_card` a una etapa con `es_ganado` (explícito) |
+| `etiqueta_agregada` | `contacto_id`, `contacto_nombre`, `numero`, `canal`, `etiqueta`, `etiqueta_id` | `signals.py` — `m2m_changed` sobre `Contacto.etiquetas` |
+| `conversacion_iniciada` | `conversacion_id`, `contacto_id`, `contacto_nombre`, `numero`, `canal`, `sesion_id` | `signals.py` — `post_save` de `ConversacionWhatsApp` |
+| `cita_creada` | `turno_id`, `contacto_id`, `servicio`, `recurso`, `inicio`, `origen`, `reagendado` | `signals.py` — `post_save` de `Turno` |
+| `registro_creado` | `registro_id`, `objeto`, `objeto_slug`, `titulo`, `datos` | `signals.py` — `post_save` de `RegistroPersonalizado` |
 
-Para emitir un evento nuevo basta con llamar a `motor.disparar(evento, contexto)`
-desde el código de dominio.
+**Por qué unos por señal y otros a mano.** Los cuatro de señal se originan en
+varios sitios: cinco lugares distintos hacen `contacto.etiquetas.add(...)` y tres
+construyen un `Turno`. Engancharlos uno por uno sería frágil — cualquier sitio
+nuevo quedaría sin emitir y nadie lo notaría hasta que una automatización no
+corriera. Los cuatro explícitos tienen un único origen y **contexto que la señal
+no vería**: desde qué etapa venía la oportunidad, si el cierre fue manual o por
+cron, con qué clasificación terminó la conversación.
+
+Para emitir un evento nuevo desde un punto único basta con llamar a
+`motor.disparar(evento, contexto)`; si el origen es múltiple, agregar un receptor
+en `signals.py`.
+
+Los valores de un objeto personalizado viajan planos en el contexto, así que una
+condición puede leerlos con notación de punto: `datos.precio`, `datos.titulo`.
 
 ## Acciones disponibles
 
@@ -85,4 +104,3 @@ automatizaciones con `esperar` nunca terminan.
   modelo las guarda, pero el formulario todavía no las carga.
 - Reordenar los pasos desde la UI (hoy se agregan al final).
 - Acciones sobre objetos personalizados: crear y actualizar registros.
-- Emisores para los cinco eventos declarados que aún no dispara nadie.

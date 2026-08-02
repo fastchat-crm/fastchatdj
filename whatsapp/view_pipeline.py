@@ -165,6 +165,19 @@ def pipelineView(request):
                             )
                         except Exception:
                             pass
+
+                        from automatizacion.motor import disparar
+                        from automatizacion.models import EVENTO_OPORTUNIDAD_GANADA
+                        disparar(EVENTO_OPORTUNIDAD_GANADA, {
+                            'card_id': card.id,
+                            'conversacion_id': card.conversacion_id,
+                            'contacto_id': getattr(card.conversacion, 'contacto_id', None),
+                            'etapa': nueva.nombre,
+                            'etapa_anterior': getattr(etapa_anterior, 'nombre', ''),
+                            'pipeline': nueva.pipeline.nombre,
+                            'valor': float(card.valor_estimado or 0),
+                            'moneda': card.moneda or 'USD',
+                        })
                     return JsonResponse({'error': False})
 
                 if action == 'agregar_card':
