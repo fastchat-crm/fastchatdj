@@ -96,6 +96,28 @@ def reglasComentariosView(request, canal='instagram'):
                     regla.save()
                     return JsonResponse({'error': False, 'activa': regla.activa})
 
+                if action == 'cargar_base':
+                    sesion = SesionWhatsApp.objects.filter(
+                        pk=int(request.POST['sesion_id']), usuario=request.user, status=True,
+                    ).first()
+                    if not sesion:
+                        return JsonResponse({'error': True, 'message': 'Sesión no encontrada.'})
+
+                    from .reglas_comentarios_base import crear_reglas_base
+                    creadas, salteadas = crear_reglas_base(sesion, canal, request)
+                    log(f'Reglas base de comentarios cargadas en {sesion.nombre}',
+                        request, 'add', obj=sesion.id)
+
+                    if creadas and salteadas:
+                        mensaje = (f'{creadas} regla(s) creada(s). Las otras {salteadas} ya '
+                                   f'existían y se dejaron como estaban.')
+                    elif creadas:
+                        mensaje = (f'{creadas} reglas listas. Editá los textos para que suenen '
+                                   f'a tu negocio.')
+                    else:
+                        mensaje = 'Esta sesión ya tiene todas las reglas base cargadas.'
+                    return JsonResponse({'error': False, 'message': mensaje, 'reload': True})
+
         except ReglaComentario.DoesNotExist:
             return JsonResponse({'error': True, 'message': 'Regla no encontrada.'})
         except Exception as ex:

@@ -50,7 +50,8 @@ y el asesor puede:
 | `whatsapp/models.py` → `ComentarioSocial` (final del archivo) | Modelo. `canal` (`instagram`/`tiktok`), `comment_id` unique, `estado` (`nuevo`/`respondido`/`oculto`), `dm_enviado`, FK opcional a `ConversacionWhatsApp`, `payload_json` crudo. |
 | `whatsapp/funciones_comentarios.py` | Helpers: `guardar_comentario_instagram` (webhook), `responder_comentario`, `ocultar_comentario`, `enviar_dm_comentario`, `_vincular_conversacion`. Desde 2026-07-14 incluye el motor de reglas: `procesar_reglas_comentario(comentario)` se dispara al final de `guardar_comentario_instagram` — evalúa las `ReglaComentario` activas de la sesión (orden asc, primera que matchea gana; keywords sin tildes/mayúsculas, vacías = todo; `media_id` opcional acota a una publicación) y ejecuta respuesta pública, DM automático y/o etiqueta (si el autor ya es Contacto por `external_id`). |
 | `whatsapp/models.py` → `ReglaComentario` | Regla comentario→DM: sesión, canal, keywords, media_id, respuesta_publica, mensaje_dm, etiqueta FK, activa, orden, usos/ultimo_uso. |
-| `whatsapp/view_reglas_comentarios.py` + `instagram/view_reglas.py` | CRUD de reglas (vista genérica por canal + wrapper IG). UI en `/instagram/reglas-comentarios/`, template `whatsapp/reglas_comentarios/listado.html` + `static/js/whatsapp/reglas_comentarios.js`. Valida que la regla tenga al menos una acción. |
+| `whatsapp/view_reglas_comentarios.py` + `instagram/view_reglas.py` | CRUD de reglas (vista genérica por canal + wrapper IG). UI en `/instagram/reglas-comentarios/`, template `whatsapp/reglas_comentarios/listado.html` + `static/js/whatsapp/reglas_comentarios.js`. Valida que la regla tenga al menos una acción. Acción `cargar_base` (botón «Cargar reglas base», con dropdown de sesión) siembra el juego inicial. |
+| `whatsapp/reglas_comentarios_base.py` | **Juego base de 9 reglas listas para editar** (precio, agendar, comprar, información, disponibilidad, envíos, ubicación/horarios, reclamo, cortesía) + las etiquetas que usan (`Interesado`, `Agenda`, `Soporte`). `crear_reglas_base(sesion, canal, request)` es **idempotente**: saltea por nombre, así se puede repulsar el botón sin duplicar ni pisar textos ya editados. **El orden del catálogo es lógica, no cosmética** — ver abajo. |
 | `whatsapp/view_comentarios.py` | Vista función `comentariosView`: GET listado con filtros (criterio/estado/sesión) + POST acciones (`responder`, `ocultar`, `mostrar`, `enviar_dm`). Visibilidad por `sesiones_vista_completa`. |
 | `meta/instagram.py` | Métodos nuevos de `InstagramService`: `responder_comentario`, `ocultar_comentario`, `enviar_dm_desde_comentario`. |
 | `whatsapp/meta_social_webhook_view.py` | `_procesar_post_social` ahora recorre `entry[].changes[]` y con `field == 'comments'` llama `guardar_comentario_instagram(sesion, config, value)`. Ignora ecos (autor = `ig_user_id`) y duplicados. Desde 2026-07-19 las vistas `instagram_webhook`/`messenger_webhook` se excluyen del `ATOMIC_REQUESTS` global (`transaction.non_atomic_requests`), cada entry se procesa en su propio `transaction.atomic()` y la auditoría `EventoMetaRecibido` usa `crear_evento_log`/`guardar_evento_log` (transacción propia, tolerante a fallos): un query fallido ya no envenena la transacción de PostgreSQL ("current transaction is aborted") ni tumba la respuesta 200 a Meta. Los modelos `ConfigInstagram`/`ConfigMessenger`/`ConfigTikTok`/`EventoMetaRecibido`/`ComentarioSocial` requieren migraciones pendientes de generar/aplicar en producción. |
@@ -155,6 +156,31 @@ todo esto. `facebook/cuentas/listado.html` listaba `pages_messaging`,
 generaba un token que nunca podía leer comentarios. Ahora enumera los 6 con para
 qué sirve cada uno, avisa del `(#200)` y agrega el paso de reautorizar al cambiar
 permisos. La guía de Instagram ya estaba completa.
+
+## El orden de las reglas base es lógica, no cosmética
+
+`procesar_reglas_comentario` aplica **la primera regla que matchea**, así que el
+campo `orden` decide qué intención gana. Dos trampas que ya se cayeron al armar
+el catálogo de `reglas_comentarios_base.py`:
+
+- **La regla sin keywords matchea TODO.** «Cortesía» va en orden 90, la última.
+  Si subiera de posición taparía a las ocho anteriores y ningún comentario
+  llegaría nunca a la regla de precio.
+
+- **Lo específico va antes que lo genérico.** «Quiere agendar» (20) corre antes
+  que «Quiere comprar» (30) porque *"quiero sacar turno"* es intención de agenda,
+  no de compra. En la primera versión comprar tenía la keyword suelta `quiero` y
+  se comía *"quiero sacar turno"*, *"quiero info"* y *"quiero saber el precio"*;
+  se quitó y quedaron solo las formas explícitas (`lo quiero`, `quiero comprar`,
+  `comprar`, `me interesa`…). Verificado con 15 comentarios reales.
+
+- **El reclamo no responde en público a propósito** (`respuesta_publica` vacía).
+  Contestar un reclamo en el hilo lo deja expuesto y suele escalar; se atiende
+  solo por DM.
+
+Al agregar una regla nueva al catálogo, ubicarla por especificidad y comprobar
+que sus keywords no sean subcadenas de intenciones más precisas que vengan
+después.
 
 ## Limitaciones conocidas
 

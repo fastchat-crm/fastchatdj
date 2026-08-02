@@ -58,9 +58,29 @@
                     · Comentario con keyword → respuesta + DM + etiqueta
                 </small>
             </div>
+            <div class="d-flex gap-2">
+            {% if sesiones %}
+                <div class="dropdown">
+                    <button class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="fa fa-wand-magic-sparkles me-1"></i> Cargar reglas base
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><h6 class="dropdown-header">¿En qué cuenta?</h6></li>
+                        {% for s in sesiones %}
+                            <li>
+                                <button class="dropdown-item btn-cargar-base" type="button"
+                                        data-sesion="{{ s.id }}" data-nombre="{{ s.nombre }}">
+                                    {{ s.nombre }}
+                                </button>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
             <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalRegla">
                 <i class="fa fa-plus"></i> Nueva regla
             </button>
+            </div>
         </div>
 
         <div class="card">
@@ -223,5 +243,5 @@
 {% endblock %}
 
 {% block jscript %}
-    <script src="/static/js/whatsapp/reglas_comentarios.js?v1.0"></script>
+    <script src="/static/js/whatsapp/reglas_comentarios.js?v1.1"></script>
 {% endblock %}

@@ -65,4 +65,19 @@
         const j = await r.json();
         if (!j.error) location.reload(); else alert(j.message || 'Error');
     }));
+
+    document.querySelectorAll('.btn-cargar-base').forEach(btn => btn.addEventListener('click', async () => {
+        if (!confirm(`Se crean 9 reglas listas para editar en "${btn.dataset.nombre}".\n\nLas que ya existan con el mismo nombre no se tocan. ¿Continuar?`)) return;
+        btn.disabled = true;
+        const fd = new FormData();
+        fd.append('action', 'cargar_base');
+        fd.append('sesion_id', btn.dataset.sesion);
+        fd.append('csrfmiddlewaretoken', csrf);
+        const r = await fetch('', {method: 'POST', body: fd});
+        const j = await r.json();
+        btn.disabled = false;
+        if (j.error) { alert(j.message || 'Error'); return; }
+        alert(j.message);
+        location.reload();
+    }));
 })();
