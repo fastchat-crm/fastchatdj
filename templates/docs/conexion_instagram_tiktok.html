@@ -126,7 +126,7 @@
                 <h5>3. Convertir el token a larga duración</h5>
                 <p>El token del Explorer dura ~1 hora. Intercámbialo por uno de larga duración (60 días) con el
                     App ID y App Secret de tu App:</p>
-                <pre><code>GET https://graph.facebook.com/v21.0/oauth/access_token
+                <pre><code>GET https://graph.facebook.com/v22.0/oauth/access_token
     ?grant_type=fb_exchange_token
     &client_id={app_id}
     &client_secret={app_secret}
@@ -135,7 +135,7 @@
                     <b>Page Access Token</b> que devuelve <b>no expira</b> mientras no cambies la contraseña ni
                     revoques permisos. Ese es el que se guarda en la plataforma.</p>
                 <h5>4. Obtener el ig_user_id</h5>
-                <pre><code>GET https://graph.facebook.com/v21.0/{page_id}
+                <pre><code>GET https://graph.facebook.com/v22.0/{page_id}
     ?fields=instagram_business_account
     &access_token={page_access_token}</code></pre>
                 <p>El campo <code>instagram_business_account.id</code> es el <b>ig_user_id</b> (empieza con 17...).</p>
@@ -143,22 +143,67 @@
 
             <section class="docs-section">
                 <h2>Instagram — configurar el webhook</h2>
+                <div class="alert alert-danger small">
+                    <b>El error que deja Instagram en cero eventos.</b> No alcanza con suscribir la página:
+                    la App necesita además una suscripción propia del <b>objeto <code>instagram</code></b>.
+                    Verificalo con <code>GET /{app_id}/subscriptions</code> — si en la respuesta solo aparecen
+                    <code>page</code>, <code>user</code> y <code>whatsapp_business_account</code>, los DMs y
+                    comentarios de Instagram <b>nunca van a llegar</b>, aunque el token sea válido y el
+                    diagnóstico de la cuenta dé verde en todo lo demás. Fue exactamente la causa de que el canal
+                    estuviera mudo hasta el 28/07/2026.
+                </div>
                 <ol>
-                    <li>En la App de Meta: <b>Webhooks → Instagram → Suscribirse</b>.</li>
-                    <li>Callback URL: <code>https://tu-dominio/instagram/webhook/</code>.</li>
-                    <li>Verify token: el mismo valor guardado en <code>webhook_verify_token</code> de la configuración de la cuenta. Meta hace un GET de verificación; si el token coincide, queda verificado.</li>
-                    <li>Suscribir los campos: <code>messages</code>, <code>messaging_postbacks</code> y <b><code>comments</code></b> (este último es el que alimenta el inbox de comentarios).</li>
-                    <li>Suscribir la App a la página:
-                        <pre><code>POST https://graph.facebook.com/v21.0/{page_id}/subscribed_apps
+                    <li>Crear la suscripción del objeto <code>instagram</code>. <b>Se puede hacer por API, no hace
+                        falta el panel:</b>
+                        <pre><code>POST https://graph.facebook.com/v22.0/{app_id}/subscriptions
+    ?object=instagram
+    &callback_url=https://tu-dominio/instagram/webhook/
+    &fields=comments,messages,messaging_postbacks
+    &verify_token={webhook_verify_token}
+    &access_token={app_id}|{app_secret}</code></pre>
+                        Meta hace el handshake de verificación en el acto (un GET desde
+                        <code>facebookplatform/1.0</code>); si el verify token coincide, la plataforma sella
+                        <code>webhook_verificado_en</code> y el paso «Webhook verificado» del diagnóstico pasa a verde.
+                    </li>
+                    <li>El <code>verify_token</code> es el valor que la plataforma generó en
+                        <code>webhook_verify_token</code> de la configuración de la cuenta — se ve en la tarjeta de la
+                        sesión. No lo inventes: tiene que ser ese.</li>
+                    <li>Suscribir también la <b>página vinculada</b>, porque los eventos de Instagram viajan por ella:
+                        <pre><code>POST https://graph.facebook.com/v22.0/{page_id}/subscribed_apps
     ?subscribed_fields=messages,messaging_postbacks,feed
     &access_token={page_access_token}</code></pre>
                     </li>
                 </ol>
+                <div class="alert alert-secondary small">
+                    <b>No busques <code>POST /{ig_user_id}/subscribed_apps</code>:</b> ese edge no existe en la versión
+                    actual de la Graph API. Instagram no se suscribe por su propio ID — la suscripción del objeto
+                    <code>instagram</code> a nivel de App más la de la página vinculada es todo lo que hace falta.
+                </div>
                 <div class="alert alert-warning small">
                     Los eventos llegan firmados con el <b>App Secret</b> (header <code>X-Hub-Signature-256</code>).
                     El App ID y App Secret de la App de Meta se registran una sola vez en la configuración global de
-                    credenciales Meta de la plataforma; sin eso la firma se rechaza.
+                    credenciales Meta de la plataforma; sin eso la firma se rechaza con 401.
                 </div>
+            </section>
+
+            <section class="docs-section">
+                <h2>La trampa de los tokens: activar un permiso no basta</h2>
+                <div class="alert alert-danger small">
+                    <b>Un Page Access Token se emite con los permisos que había en el momento de autorizar, y no se
+                    actualiza solo.</b> Si activás un permiso nuevo en la App de Meta pero seguís usando el token
+                    viejo, ese permiso <b>no aplica</b>: Graph va a seguir respondiendo
+                    <code>(#200) Missing Permissions</code> como si nada hubiera cambiado.
+                </div>
+                <p>Por eso el orden correcto siempre es:</p>
+                <ol>
+                    <li>Activar el permiso en <b>developers.facebook.com → tu app → Revisión de la app → Permisos y
+                        funciones</b>. Alcanza con <b>Acceso estándar</b> para páginas que vos administrás; el
+                        <b>Acceso avanzado</b> solo hace falta para páginas de terceros y requiere App Review.</li>
+                    <li><b>Volver a generar el token</b> y <b>reconectar la cuenta</b> desde
+                        <a href="/instagram/sesiones/">Instagram → Sesiones</a> o
+                        <a href="/facebook/sesiones/">Facebook → Sesiones</a>, pegando el token nuevo.</li>
+                </ol>
+                <p>Saltarse el paso 2 es la causa más frecuente de «activé el permiso y sigue sin funcionar».</p>
             </section>
 
             <section class="docs-section">
@@ -199,8 +244,19 @@
                     <li><code>pages_messaging</code> — enviar y recibir mensajes de Messenger.</li>
                     <li><code>pages_show_list</code> — listar tus páginas (detección automática).</li>
                     <li><code>pages_manage_metadata</code> — suscripciones del webhook.</li>
+                    <li><code>pages_read_engagement</code> — ver las publicaciones de la página.</li>
+                    <li><code>pages_read_user_content</code> — <b>leer los comentarios de la gente</b>.</li>
                     <li><code>pages_manage_engagement</code> — responder y ocultar comentarios del feed.</li>
                 </ul>
+                <div class="alert alert-warning small">
+                    <b><code>pages_read_engagement</code> por sí solo NO alcanza para los comentarios.</b> Ese permiso
+                    cubre únicamente el contenido propio de la página; para leer lo que escribe la gente hace falta
+                    <code>pages_read_user_content</code>, y para responder u ocultar
+                    <code>pages_manage_engagement</code>. Sin ellos el perfil de la página se lee bien y todo parece
+                    conectado, pero Graph responde <code>(#200) Missing Permissions</code> recién al pedir el edge
+                    <code>/comments</code> — así estuvieron rotos los comentarios de Facebook durante semanas sin que
+                    el tablero lo notara. El diagnóstico de la sesión ahora lo detecta permiso por permiso.
+                </div>
                 <h5>Registro y webhook</h5>
                 <ol>
                     <li>Entra a <a href="/facebook/sesiones/">Facebook → Sesiones</a>, pulsa <b>Nueva conexión</b>,
@@ -238,12 +294,86 @@
                     <li><b>Fase 1 — DMs:</b> conversaciones TikTok en el mismo inbox, con IA y asignación de asesores.</li>
                     <li><b>Fase 2 — Comentarios:</b> los comentarios de videos entran al mismo inbox de comentarios: responder, ocultar y pasar a DM.</li>
                 </ul>
+                <h5>Qué pide el pre-registro</h5>
+                <p>En <a href="/tiktok/sesiones/">TikTok → Sesiones</a> solo <b>Nombre</b> y <b>@username</b> son
+                    obligatorios: alcanza para dejar la sesión creada con sus asesores, IA y horarios. Los demás
+                    campos (<code>business_id</code>, <code>access_token</code>, <code>refresh_token</code>,
+                    <code>client_secret</code>) se completan cuando llegue la aprobación.</p>
+                <p>A diferencia de Instagram y Facebook, <b>guardar la cuenta no prueba la conexión</b>: la API está
+                    en beta y no hay endpoint de perfil contra el cual validar, así que la sesión queda en
+                    <code>pendiente</code> hasta que el canal se active de verdad.</p>
+                <h5>Qué revisa el diagnóstico de TikTok</h5>
+                <ul>
+                    <li>Credenciales cargadas y token OAuth presente.</li>
+                    <li><b>Vigencia del token</b> — si <code>token_expira_en</code> ya pasó, hay que refrescarlo o reconectar.</li>
+                    <li>Identificador del negocio (<code>business_id</code> u <code>open_id</code>).</li>
+                    <li>Último error registrado en la configuración, si lo hay.</li>
+                    <li>Webhook verificado y <b>firma del webhook</b>: sin <code>client_secret</code> cargado el
+                        webhook <b>no valida la firma</b> de los eventos entrantes. Es tolerable durante la beta,
+                        pero cargalo apenas TikTok lo entregue.</li>
+                </ul>
                 <div class="alert alert-info small">
                     La plataforma ya tiene todo pre-construido: el webhook
                     <code>/tiktok/webhook/</code> está activo, el servicio de envío está listo y en
                     <a href="/tiktok/sesiones/">TikTok → Sesiones</a> puedes pre-registrar tus cuentas Business con
                     asesores e IA configurados. Al llegar la aprobación de TikTok solo se cargan los tokens OAuth
                     y el canal queda operativo.
+                </div>
+            </section>
+
+            <section class="docs-section">
+                <h2>Si algo no conecta: el diagnóstico de la sesión</h2>
+                <p>Cada sesión de Instagram, Facebook y TikTok tiene un botón <b>Diagnóstico</b> en su tarjeta. No
+                    devuelve un «falló» genérico: corre los chequeos en orden y para cada uno dice <b>qué pasó</b> y
+                    <b>cómo se arregla</b>, con enlace directo a la pantalla de Meta donde se resuelve.</p>
+                <table class="table table-sm small mb-3">
+                    <thead><tr><th style="width:230px;">Paso</th><th>Qué verifica</th></tr></thead>
+                    <tbody>
+                        <tr><td>Configuración de la cuenta</td><td>Que la sesión tenga credenciales cargadas.</td></tr>
+                        <tr><td>Token de acceso</td><td>Que haya un Page Access Token guardado.</td></tr>
+                        <tr><td>IG User ID / Page ID</td><td>Que el identificador esté presente.</td></tr>
+                        <tr><td>Respuesta de la API</td><td>Llamada real a Graph pidiendo el perfil. Si falla, traduce el error de Meta a causa y solución.</td></tr>
+                        <tr><td>Permisos, uno por capacidad</td><td>Inspecciona los scopes reales del token con <code>debug_token</code> y muestra una línea por función: ver publicaciones, leer comentarios, responder/ocultar, enviar DMs.</td></tr>
+                        <tr><td>Webhook verificado</td><td>Si Meta ya completó el handshake contra la URL del canal.</td></tr>
+                    </tbody>
+                </table>
+                <div class="alert alert-info small">
+                    <b>Leé el resumen con atención.</b> «Conexión correcta» y «Conecta, pero hay N función(es)
+                    bloqueada(s)» no son lo mismo: el segundo significa que el token es válido y la sesión aparece
+                    conectada, pero alguna capacidad concreta (casi siempre los comentarios) está sin permiso. Ese
+                    estado intermedio es el que antes pasaba desapercibido.
+                </div>
+
+                <h5>Qué significa cada error de Meta</h5>
+                <table class="table table-sm small mb-3">
+                    <thead><tr><th style="width:130px;">Código</th><th>Causa</th><th>Solución</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>190</code></td><td>Token inválido o expirado.</td><td>Reconectá la cuenta con un Page Access Token de larga duración vigente.</td></tr>
+                        <tr><td><code>200</code> / <code>10</code> / <code>3</code> / <code>803</code></td><td>Falta un permiso o la app no tiene acceso.</td><td>Activá el permiso y <b>volvé a generar el token</b> (ver la trampa de los tokens, más arriba).</td></tr>
+                        <tr><td><code>100</code></td><td>Page ID o IG User ID incorrecto.</td><td>Volvé a autodetectar desde el token para recuperar el ID correcto.</td></tr>
+                        <tr><td><code>4</code> / <code>17</code> / <code>32</code> / <code>613</code></td><td>Límite de solicitudes alcanzado.</td><td>Esperá unos minutos y reintentá.</td></tr>
+                        <tr><td><code>368</code></td><td>Cuenta o página restringida por Meta.</td><td>Revisá el estado de la página en Meta Business Manager (bloqueo por políticas).</td></tr>
+                    </tbody>
+                </table>
+
+                <h5>Antes de culpar al webhook</h5>
+                <p>Que en los logs haya 401 o 500 <b>no significa</b> que Meta haya dado de baja la suscripción.
+                    Confirmalo con estos dos endpoints antes de rehacer nada:</p>
+                <pre><code>GET https://graph.facebook.com/v22.0/{app_id}/subscriptions
+    ?access_token={app_id}|{app_secret}
+
+GET https://graph.facebook.com/v22.0/{page_id}/subscribed_apps
+    ?access_token={page_access_token}</code></pre>
+                <p>Si el objeto figura con <code>active: true</code>, el callback es el correcto y la página aparece
+                    suscrita, el webhook está bien y el silencio tiene otra explicación — la más común es
+                    simplemente <b>que no hubo actividad</b> en una página o cuenta de prueba. También podés revisar
+                    los eventos realmente recibidos en <a href="/facebook/monitoreo/">Facebook → Monitoreo</a> y
+                    <a href="/instagram/monitoreo/">Instagram → Monitoreo</a>, que auditan cada llamada entrante con
+                    su payload, firma y resultado.</p>
+                <div class="alert alert-warning small">
+                    <b>401 «Firma HMAC inválida» en masa</b> suele ser el caso de <b>dos Meta Apps distintas</b>: los
+                    eventos vienen firmados con el App Secret de una app que no es la registrada. Se resuelve con
+                    <code>app_secrets_extra</code> (ver <code>meta/README.md</code>).
                 </div>
             </section>
 
@@ -305,12 +435,17 @@
                     <li><b>Módulos y permisos</b>: Seguridad → Módulos del sistema → "extraer URLs" para que
                         aparezcan los bloques <code>/instagram/...</code>, <code>/facebook/...</code> y
                         <code>/tiktok/...</code>; asignarlos a un grupo del sidebar y a los roles que corresponda.</li>
-                    <li><b>Webhook de Instagram</b>: en la App de Meta suscribir los campos
-                        <code>messages</code> y <code>comments</code> apuntando a
-                        <code>/instagram/webhook/</code>.</li>
+                    <li><b>Webhook de Instagram</b>: crear la suscripción del <b>objeto <code>instagram</code></b> a
+                        nivel de App (<code>POST /{app_id}/subscriptions</code>) con los campos
+                        <code>comments</code>, <code>messages</code> y <code>messaging_postbacks</code> apuntando a
+                        <code>/instagram/webhook/</code>, <b>más</b> la suscripción de la página vinculada. Sin la
+                        primera, Instagram no recibe nada.</li>
                     <li><b>Webhook de Facebook</b>: en la App de Meta (producto Webhooks → Page) suscribir
                         <code>messages</code> y <code>feed</code> apuntando a
                         <code>/facebook/webhook/</code>.</li>
+                    <li><b>Verificar con el diagnóstico</b>: entrar a cada sesión y pulsar <b>Diagnóstico</b>. Si el
+                        resumen dice «Conecta, pero hay N función(es) bloqueada(s)», falta un permiso — activalo y
+                        <b>regenerá el token</b>, porque el viejo no lo hereda.</li>
                     <li><b>TikTok</b>: aplicar a la Business Messaging API (beta) en
                         business-api.tiktok.com/portal — es el único bloqueante externo del canal.</li>
                 </ol>

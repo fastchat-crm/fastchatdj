@@ -1601,7 +1601,10 @@ def entrenamiento_ia_view(request):
                         prompt_tpl = filtro.prompt_template or ''
 
                         # ── FAQs aprobadas (top-N se inyectan al prompt) ──
-                        top_n = int(filtro.faqs_en_prompt or 0)
+                        # Cascada del Centro de IA: NULL en el agente = heredar.
+                        from crm.ia_config import parametros_efectivos
+                        _params_ia = parametros_efectivos(agente=filtro)
+                        top_n = int(_params_ia.get('faqs_en_prompt') or 0)
                         faqs_aprob_qs = filtro.faqs.filter(status=True, estado='aprobada').order_by('-prioridad', '-fecha_registro')
                         faqs_aprob_total = faqs_aprob_qs.count()
                         faqs_top = list(faqs_aprob_qs[:top_n].values(
@@ -1691,10 +1694,12 @@ def entrenamiento_ia_view(request):
                             "herramientas_total": len(herramientas_data),
                             # ── Enlaces API externas ─────────────────────
                             "num_enlaces_api": filtro.detalleagentesai_set.filter(status=True, tipo=1, enlace__isnull=False).count(),
-                            # ── Config del agente (para el flujo de lectura) ──
-                            "cfg_history_turns": filtro.cfg_history_turns,
-                            "cfg_max_context_chars": filtro.cfg_max_context_chars,
-                            "cfg_faiss_k": filtro.cfg_faiss_k,
+                            # ── Config efectiva del agente (para el flujo de lectura) ──
+                            # Valores ya resueltos por la cascada del Centro de IA,
+                            # no los crudos: un NULL significa heredar, no cero.
+                            "cfg_history_turns": _params_ia.get('cfg_history_turns'),
+                            "cfg_max_context_chars": _params_ia.get('cfg_max_context_chars'),
+                            "cfg_faiss_k": _params_ia.get('cfg_faiss_k'),
                         })
                     except Exception as ex:
                         return JsonResponse({"result": False, 'message': str(ex)})

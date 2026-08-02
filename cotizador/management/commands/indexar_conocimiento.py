@@ -105,13 +105,16 @@ class Command(BaseCommand):
                 raise CommandError(
                     f"El perfil {empresa.id} no tiene agentes activos para indexar.")
 
-        # Key Gemini para embeddings
+        # Key de embeddings: la explícita del comando o la que resuelva el Centro de IA
         if opts.get('gemini_key_id'):
             gem = ApiKeyIA.objects.filter(id=opts['gemini_key_id']).first()
         else:
-            gem = ApiKeyIA.objects.filter(perfil=empresa, proveedor=2, estado=True).first()
+            from crm.ia_config import resolver_key_embeddings
+            gem = resolver_key_embeddings(empresa.id)
         if not gem:
-            raise CommandError('No hay ApiKeyIA Gemini para embeddings. Pasa --gemini-key-id.')
+            raise CommandError(
+                'No hay una API key para embeddings en este perfil. Marcá una en el Centro de IA '
+                'o pasá --gemini-key-id.')
 
         docs = []
         if opts.get('cuestionario'):

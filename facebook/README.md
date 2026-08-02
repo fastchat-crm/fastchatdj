@@ -72,3 +72,29 @@ Acción POST `diagnostico` en `view_cuentas` → `whatsapp.diagnostico_social.di
 - **Reconexión tras eliminar:** el alta reactiva la sesión soft-borrada (mismo `session_id`) en vez de bloquear para siempre; `delete` también apaga `activo`.
 - **Editar sin re-pegar token:** el Access Token es obligatorio solo al conectar; en edición se conserva el actual si se deja vacío.
 - **Monitoreo con scoping:** `/facebook/monitoreo/` (`view_monitoreo_social`) acota los eventos por pertenencia (id destino del payload vs. sesiones visibles); no-superusuarios ya no ven DMs de otros tenants.
+
+## Conectar una página — escollos conocidos
+
+Guía completa para el usuario final: **Documentación → Instagram, Facebook y TikTok**
+(`/seguridad/documentacion/?pagina=conectar-instagram-tiktok`,
+template `templates/docs/conexion_instagram_tiktok.html`). Lo que hay que saber al tocar este código:
+
+- **`pages_read_engagement` NO alcanza para los comentarios.** Solo cubre el contenido propio de la
+  página. Para leer lo que escribe la gente hace falta `pages_read_user_content`, y para responder u
+  ocultar `pages_manage_engagement`. Sin ellos el perfil de la página se lee bien y todo *parece*
+  conectado, pero Graph responde `(#200) Missing Permissions` recién al pedir el edge `/comments` —
+  así estuvieron rotos los comentarios durante semanas sin que el tablero lo notara.
+  El set completo del token es: `pages_messaging`, `pages_show_list`, `pages_manage_metadata`,
+  `pages_read_engagement`, `pages_read_user_content`, `pages_manage_engagement`.
+- **Un permiso activado no aplica al token ya emitido.** El Page Access Token congela los scopes del
+  momento de autorizar; hay que regenerarlo y reconectar la página
+  (ver `COMO_ACTIVAR_PERMISOS` en `whatsapp/diagnostico_social.py`). Alcanza **Acceso estándar** para
+  páginas propias; el **Acceso avanzado** solo hace falta para páginas de terceros y exige App Review.
+- **Antes de culpar al webhook**, confirmar con `GET /{app_id}/subscriptions` (¿`object=page` con
+  `active=true` y el callback correcto?) y `GET /{page_id}/subscribed_apps`. Verificado el 2026-07-28:
+  la suscripción llevaba meses activa y el silencio era **falta de actividad** en una página de prueba
+  con 1 seguidor — no una baja de Meta, como se había concluido en una revisión anterior.
+- **401 «Firma HMAC inválida» en masa** = eventos firmados por una Meta App distinta de la registrada.
+  Se resuelve con `app_secrets_extra` (ver `meta/README.md`), no reconectando la página.
+- El botón **Diagnóstico** (`whatsapp/diagnostico_social.py` → `_diag_meta`) inspecciona los scopes
+  reales con `debug_token` y da una línea por capacidad, con enlace a la pantalla de Meta donde se activa.

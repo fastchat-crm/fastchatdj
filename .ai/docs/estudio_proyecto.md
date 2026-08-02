@@ -29,7 +29,7 @@ Veredicto: **excelente producto single-tenant / self-hosted**; requiere capa de 
 | BD | PostgreSQL 15 | `ATOMIC_REQUESTS` |
 | Cache/colas | Redis | channel layer + cache |
 | Media | filesystem local (`MEDIA_ROOT/whatsapp_media/`) | sin TTL ni particionado |
-| Email | SendGrid SMTP | API key en claro |
+| Email | SMTP configurable | host/puerto/credenciales en `credenciales.json` |
 | Cifrado | Fernet (`core/crypto.py`, `EncryptedTextField`) | tokens Meta/Baileys |
 | PWA | service worker + WebPush | notificaciones browser |
 | Cron | scripts en `cron_jobs/` por SO/scheduler | no distribuido |
@@ -159,7 +159,7 @@ Esqueleto: `LlamadaVoz`, `MensajeVoz` (Twilio/Jambonz/WebRTC). STT/TTS **no impl
 
 | Riesgo | Ubicación | Impacto |
 |---|---|---|
-| Secretos en `credenciales.json` + SendGrid key en claro | `settings.py` | seguridad producción |
+| Secretos en `credenciales.json` (sin vault ni variables de entorno) | raíz del repo | seguridad producción |
 | Email de debug hardcodeado | `crm/funciones_chatbot.py` (`COTIZADOR_DEBUG_EMAIL`) | fuga/ruido en prod |
 | Casi sin tests | `**/tests.py` | regresiones |
 | Posibles N+1 en listados | consultas sin `select_related` | rendimiento |

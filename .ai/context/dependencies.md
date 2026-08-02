@@ -160,9 +160,9 @@ Wrapper Python: `pdfkit`.
 
 ## Email
 
-### SendGrid
-- `SENDGRID_API_KEY` en credenciales
-- SMTP: `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`
+### SMTP (proveedor configurable)
+- Toda la config vive en `credenciales.json`: `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_SSL`, `EMAIL_USE_TLS`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL`
+- Nada de host, puerto ni credenciales hardcodeado en `settings.py`
 - Templates HTML
 - Threaded delivery
 
@@ -239,8 +239,10 @@ Todo via `credenciales.json` (gitignored). Sin variables de entorno.
   "USE_SSL": false, "DOMINIO_GENERAL": "...",
   "WINDOWS": true, "REDIS_HOST": "...", "REDIS_PORT": 6379,
   "WHATSAPP_API_URL": "...", "NODE_SECRET_KEY": "...",
+  "EMAIL_HOST": "...", "EMAIL_PORT": 587,
+  "EMAIL_USE_SSL": false, "EMAIL_USE_TLS": true,
   "EMAIL_HOST_USER": "...", "EMAIL_HOST_PASSWORD": "...",
-  "SENDGRID_API_KEY": "...", "WKHTMLTOPDF_CMD": "C:/.../wkhtmltopdf.exe",
+  "DEFAULT_FROM_EMAIL": "...", "WKHTMLTOPDF_CMD": "C:/.../wkhtmltopdf.exe",
   "ID_GRUPO_CLIENTE": 1, "CACHES_REDIS": true
 }
 ```

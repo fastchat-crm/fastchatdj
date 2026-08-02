@@ -266,9 +266,34 @@ class AgentesIAForm(ModelFormBase):
                             default = None
                     if default is not None:
                         f.initial = default
+        # Parámetros heredados del Centro de IA: se muestran como placeholder en
+        # los campos vacíos, para que el usuario vea qué valor va a regir si no
+        # escribe nada. Dejar el campo en blanco = heredar.
+        from crm.ia_config import CAMPOS_HEREDABLES, parametros_efectivos
+        try:
+            _heredados = parametros_efectivos(
+                agente=self.instance if (self.instance and self.instance.pk) else None,
+                perfil_id=getattr(self.instance, 'perfil_id', None),
+            )
+        except Exception:
+            _heredados = {}
+
+        # memoria_rag_activa es nullable en el modelo (NULL = heredar), pero el
+        # switch de la UI es binario. Se le da el valor efectivo como initial:
+        # guardar desde este form fija un valor explícito para ese agente.
+        if 'memoria_rag_activa' in self.fields and _heredados.get('memoria_rag_activa') is not None:
+            self.fields['memoria_rag_activa'].required = False
+            if self.fields['memoria_rag_activa'].initial is None:
+                self.fields['memoria_rag_activa'].initial = _heredados['memoria_rag_activa']
+
         for k, v in self.fields.items():
             self.fields[k].widget.attrs['class'] = 'form-control'
             self.fields[k].widget.attrs['col'] = '12'
+            if k in CAMPOS_HEREDABLES and k not in _SWITCH_FIELDS:
+                self.fields[k].required = False
+                heredado = _heredados.get(k)
+                if heredado is not None:
+                    self.fields[k].widget.attrs['placeholder'] = f'Hereda: {heredado}'
             if k in ('apikey', 'tono'):
                 self.fields[k].widget.attrs['class'] = 'select2'
             if k in _SWITCH_FIELDS:

@@ -41,3 +41,28 @@
 - **XSS en comentarios de posts:** el caption del modal usa `textContent` en vez de `innerHTML` (`publicaciones/listado.html`).
 - **Reglas comentario→DM:** `view_reglas_comentarios` valida `sesion__usuario` en change/delete/toggle (antes IDOR).
 - **Race de comentarios:** `funciones_comentarios._persistir_comentario` usa `get_or_create` atómico sobre `comment_id`.
+
+## Conectar una cuenta — escollos conocidos
+
+Guía completa para el usuario final: **Documentación → Instagram, Facebook y TikTok**
+(`/seguridad/documentacion/?pagina=conectar-instagram-tiktok`,
+template `templates/docs/conexion_instagram_tiktok.html`). Lo que hay que saber al tocar este código:
+
+- **La suscripción del objeto `instagram` es aparte y es obligatoria.** Hasta el 2026-07-28 el canal
+  recibió **cero** eventos porque `GET /{app_id}/subscriptions` no listaba el objeto `instagram` (solo
+  `page`, `user`, `whatsapp_business_account`). Se crea por API con `POST /{app_id}/subscriptions`
+  (`object=instagram`, `fields=comments,messages,messaging_postbacks`, callback `…/instagram/webhook/`,
+  `verify_token` = `ConfigInstagram.webhook_verify_token`) — **no hace falta el panel**. Meta hace el
+  handshake al instante y sella `webhook_verificado_en`.
+- **`POST /{ig_user_id}/subscribed_apps` no existe** en la versión actual de Graph. Los eventos de IG
+  viajan por la suscripción de la página vinculada.
+- **Un permiso activado no aplica al token ya emitido.** El Page Access Token congela los scopes del
+  momento de autorizar; hay que regenerarlo y reconectar la cuenta. Es la causa más común de
+  "activé el permiso y sigue sin andar" (ver `COMO_ACTIVAR_PERMISOS` en `whatsapp/diagnostico_social.py`).
+- **Antes de culpar al webhook**, confirmar con `GET /{app_id}/subscriptions` y
+  `GET /{page_id}/subscribed_apps`. Un 401/500 en los logs no implica que Meta haya dado de baja nada;
+  el silencio suele ser falta de actividad real en la cuenta.
+- El botón **Diagnóstico** de cada sesión (`whatsapp/diagnostico_social.py` → `_diag_meta`) inspecciona
+  los scopes reales del token con `debug_token` y devuelve una línea por capacidad. Distingue
+  "Conexión correcta" de "Conecta, pero hay N función(es) bloqueada(s)" — este último es el estado que
+  antes pasaba desapercibido.

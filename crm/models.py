@@ -197,9 +197,9 @@ class AgentesIA(ModeloBase):
         help_text="Si se activa, el agente guardará las listas de productos/servicios en la memoria"
     )
     faqs_en_prompt = models.PositiveSmallIntegerField(
-        default=5, verbose_name='Cantidad de FAQs en prompt',
+        blank=True, null=True, default=None, verbose_name='Cantidad de FAQs en prompt',
         help_text='Top N FAQs aprobadas (por prioridad) inyectadas literal en el prompt. '
-                  'Las demás quedan disponibles vía RAG.'
+                  'Las demás quedan disponibles vía RAG. Vacío = hereda del Centro de IA.'
     )
     vectorstore_enlaces_path = models.CharField(
         max_length=1000, blank=True, null=True, verbose_name="Ruta del vector store de Apis y Enlaces"
@@ -213,56 +213,67 @@ class AgentesIA(ModeloBase):
     )
 
     # ── Configuración avanzada de comportamiento IA (override por agente) ────
+    # Todos NULL por default: el agente hereda el valor del Centro de IA
+    # (ConfiguracionIA del perfil, o la fila global de plataforma). Solo se
+    # guarda valor propio cuando el usuario lo sobreescribe a mano.
+    # Resolver siempre con crm.ia_config.parametros_efectivos(agente).
     cfg_faiss_k = models.PositiveSmallIntegerField(
-        default=5, verbose_name='Fragmentos relevantes por respuesta',
+        blank=True, null=True, default=None, verbose_name='Fragmentos relevantes por respuesta',
         help_text='Cuántos pedacitos del entrenamiento (PDF/CSV/etc.) le pasamos al bot por cada pregunta. '
-                  'Más = más contexto pero respuestas más lentas y caras. Rango: 3–10. Default: 5.'
+                  'Más = más contexto pero respuestas más lentas y caras. Rango: 3–10. '
+                  'Vacío = hereda del Centro de IA.'
     )
     cfg_faiss_fetch_k = models.PositiveSmallIntegerField(
-        default=20, verbose_name='Candidatos antes de elegir',
+        blank=True, null=True, default=None, verbose_name='Candidatos antes de elegir',
         help_text='Cuántos fragmentos consideramos antes de quedarnos con los mejores. '
-                  'Mayor = selección de mejor calidad pero un poco más lenta. Rango: 10–40. Default: 20.'
+                  'Mayor = selección de mejor calidad pero un poco más lenta. Rango: 10–40. '
+                  'Vacío = hereda del Centro de IA.'
     )
     cfg_max_context_chars = models.PositiveIntegerField(
-        default=4000, verbose_name='Máx caracteres de contexto del entrenamiento',
+        blank=True, null=True, default=None, verbose_name='Máx caracteres de contexto del entrenamiento',
         help_text='Tope total de información del entrenamiento que cabe en una respuesta. '
-                  'Si el bot da respuestas cortadas/incompletas, subilo. Rango: 2000–8000. Default: 4000.'
+                  'Si el bot da respuestas cortadas/incompletas, subilo. Rango: 2000–8000. '
+                  'Vacío = hereda del Centro de IA.'
     )
     cfg_max_static_chars = models.PositiveIntegerField(
-        default=1200, verbose_name='Máx caracteres del texto fijo (cuando complementa)',
+        blank=True, null=True, default=None, verbose_name='Máx caracteres del texto fijo (cuando complementa)',
         help_text='Cuando hay entrenamiento Y texto fijo (FAQ/menú), cuánto texto fijo se incluye. '
-                  'Rango: 800–5000. Default: 1200.'
+                  'Rango: 800–5000. Vacío = hereda del Centro de IA.'
     )
     cfg_history_turns = models.PositiveSmallIntegerField(
-        default=5, verbose_name='Mensajes previos que recuerda',
+        blank=True, null=True, default=None, verbose_name='Mensajes previos que recuerda',
         help_text='Cuántos turnos de conversación recuerda el bot (1 turno = 1 mensaje del cliente + 1 respuesta). '
-                  'Subilo si el bot olvida pedidos en conversaciones largas. Rango: 3–20. Default: 5.'
+                  'Subilo si el bot olvida pedidos en conversaciones largas. Rango: 3–20. '
+                  'Vacío = hereda del Centro de IA.'
     )
     cfg_user_snippet = models.PositiveSmallIntegerField(
-        default=150, verbose_name='Máx caracteres por mensaje del cliente recordado',
+        blank=True, null=True, default=None, verbose_name='Máx caracteres por mensaje del cliente recordado',
         help_text='Si el cliente escribe un mensaje muy largo, lo truncamos a esta cantidad para no gastar tokens. '
-                  'Rango: 100–600. Default: 150.'
+                  'Rango: 100–600. Vacío = hereda del Centro de IA.'
     )
     cfg_ai_snippet = models.PositiveSmallIntegerField(
-        default=400, verbose_name='Máx caracteres por respuesta del bot recordada',
+        blank=True, null=True, default=None, verbose_name='Máx caracteres por respuesta del bot recordada',
         help_text='Crítico cuando el bot envía menús/listas largas. Si está muy bajo, el bot olvida lo que ya mostró '
-                  'y se contradice. Rango: 300–2000. Default: 400.'
+                  'y se contradice. Rango: 300–2000. Vacío = hereda del Centro de IA.'
     )
     cfg_max_output_tokens = models.PositiveIntegerField(
-        default=3000, verbose_name='Máx longitud de la respuesta del bot',
+        blank=True, null=True, default=None, verbose_name='Máx longitud de la respuesta del bot',
         help_text='Límite de tokens (≈palabras) que el bot puede generar en una sola respuesta. '
-                  'Si las respuestas se cortan a la mitad, subilo. Rango: 500–4000. Default: 3000.'
+                  'Si las respuestas se cortan a la mitad, subilo. Rango: 500–4000. '
+                  'Vacío = hereda del Centro de IA.'
     )
     cfg_topic_anchor_chars = models.PositiveSmallIntegerField(
-        default=180, verbose_name='Chars del tema inicial conservado',
+        blank=True, null=True, default=None, verbose_name='Chars del tema inicial conservado',
         help_text='Cuando la conversación se hace larga, se conserva el primer mensaje sustantivo del cliente '
-                  'como "ancla" para mantener el bot enfocado en el tema original. Rango: 100–400. Default: 180.'
+                  'como "ancla" para mantener el bot enfocado en el tema original. Rango: 100–400. '
+                  'Vacío = hereda del Centro de IA.'
     )
     memoria_rag_activa = models.BooleanField(
-        default=True, verbose_name='Memoria de conversaciones previas (RAG)',
+        blank=True, null=True, default=None, verbose_name='Memoria de conversaciones previas (RAG)',
         help_text='El agente indexa cada pregunta→respuesta válida en un FAISS de memoria propio y '
                   'reutiliza en consultas futuras lo ya respondido a otros clientes. Aprende y mejora '
-                  'entre conversaciones sin gastar tokens LLM (solo embeddings).'
+                  'entre conversaciones sin gastar tokens LLM (solo embeddings). '
+                  'Vacío = hereda del Centro de IA.'
     )
 
     # ── Persona del bot (humanización) ─────────────────────────────────────
@@ -958,6 +969,10 @@ class DetalleAgentesAI(ModeloBase):
         agente.save()
 
 
+# Proveedores que hoy exponen un modelo de embeddings utilizable para vectorizar.
+# Se usa para validar que la key marcada como `usar_para_embeddings` sirva.
+PROVEEDORES_CON_EMBEDDINGS = (2, 3)
+
 PROVEEDOR_CHOICES = (
     (2, 'GEMINI'),
     (3, 'OPEN IA'),
@@ -994,6 +1009,22 @@ class ApiKeyIA(ModeloBase):
         verbose_name='Token WebService',
         help_text='Token para autenticar llamadas al endpoint /api/ia/consultar/. Se genera automaticamente.',
     )
+    es_default = models.BooleanField(
+        default=False, verbose_name='Key por defecto del proveedor',
+        help_text='Los agentes que no tengan una key propia asignada usarán esta. '
+                  'Solo puede haber una por proveedor dentro del mismo perfil.'
+    )
+    usar_para_embeddings = models.BooleanField(
+        default=False, verbose_name='Usar esta key para vectorizar',
+        help_text='Esta es la key con la que se generan los embeddings al indexar el conocimiento '
+                  'de los agentes. Solo puede haber una por perfil. Si no marcás ninguna, se usa la '
+                  'key por defecto de un proveedor con embeddings.'
+    )
+    es_global = models.BooleanField(
+        default=False, verbose_name='Key global de la plataforma',
+        help_text='Key de la plataforma, disponible para los perfiles que no tengan una key propia. '
+                  'Solo la configura un superusuario y no se asocia a ningún perfil.'
+    )
 
     class Meta:
         verbose_name = 'Api Keys IA'
@@ -1003,16 +1034,151 @@ class ApiKeyIA(ModeloBase):
         prov = self.get_proveedor_display()
         return f"{prov} · {self.modelo}" if self.modelo else prov
 
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        errores = {}
+
+        if self.usar_para_embeddings and self.proveedor not in PROVEEDORES_CON_EMBEDDINGS:
+            errores['usar_para_embeddings'] = (
+                f'El proveedor {self.get_proveedor_display()} no ofrece un modelo de embeddings. '
+                f'Elegí una key de Gemini u OpenAI para vectorizar.'
+            )
+
+        if self.es_global and self.perfil_id:
+            errores['es_global'] = 'Una key global no puede estar asociada a un perfil de negocio.'
+
+        if not self.es_global and not self.perfil_id:
+            errores['perfil'] = 'Indicá el perfil de negocio o marcá la key como global de la plataforma.'
+
+        if errores:
+            raise ValidationError(errores)
+
     def save(self, *args, **kwargs):
         if not self.webservice_token:
             import secrets
             self.webservice_token = secrets.token_urlsafe(48)
         super().save(*args, **kwargs)
+        # Los flags son excluyentes dentro de su ámbito: al marcar esta key se
+        # desmarcan las demás en vez de rechazar el guardado. Va después del
+        # super().save() para que un alta nueva ya tenga pk y no se excluya mal.
+        self._desmarcar_otras()
+
+    def _desmarcar_otras(self):
+        hermanas = ApiKeyIA.objects.filter(perfil_id=self.perfil_id).exclude(pk=self.pk)
+        if self.es_default:
+            hermanas.filter(proveedor=self.proveedor, es_default=True).update(es_default=False)
+        if self.usar_para_embeddings:
+            hermanas.filter(usar_para_embeddings=True).update(usar_para_embeddings=False)
 
     def regenerar_webservice_token(self):
         import secrets
         self.webservice_token = secrets.token_urlsafe(48)
         self.save(update_fields=['webservice_token'])
+
+
+# Valores base de los parámetros de comportamiento IA. Son la última red de la
+# cascada agente → perfil → plataforma y coinciden con las constantes históricas
+# de agents_ai/agente_consultor.py.
+PARAMETROS_IA_DEFAULT = {
+    'faqs_en_prompt': 5,
+    'cfg_faiss_k': 5,
+    'cfg_faiss_fetch_k': 20,
+    'cfg_max_context_chars': 4000,
+    'cfg_max_static_chars': 1200,
+    'cfg_history_turns': 5,
+    'cfg_user_snippet': 150,
+    'cfg_ai_snippet': 400,
+    'cfg_max_output_tokens': 3000,
+    'cfg_topic_anchor_chars': 180,
+    'cfg_umbral_distancia': 1.4,
+    'cfg_max_static_amplia': 12000,
+    'memoria_rag_activa': True,
+}
+
+
+class ConfiguracionIA(ModeloBase):
+    """Parámetros generales de IA — el "centro de IA".
+
+    Existe una fila por perfil de negocio y, opcionalmente, una fila con
+    `perfil=None` que actúa como default de toda la plataforma. Los agentes
+    dejan sus campos en NULL para heredar de aquí; solo guardan valor propio
+    cuando el usuario los sobreescribe a mano.
+
+    La resolución de la cascada vive en `crm/ia_config.py` — no leer estos
+    campos directamente desde las vistas.
+    """
+    perfil = models.OneToOneField(
+        PerfilNegocioIA, on_delete=models.CASCADE, blank=True, null=True, unique=True,
+        related_name='configuracion_ia', verbose_name='Perfil Negocio IA',
+        help_text='Vacío = configuración por defecto de toda la plataforma.'
+    )
+
+    faqs_en_prompt = models.PositiveSmallIntegerField(
+        default=5, verbose_name='Cantidad de FAQs en prompt',
+        help_text='Top N FAQs aprobadas (por prioridad) inyectadas literal en el prompt. '
+                  'Las demás quedan disponibles vía RAG.'
+    )
+    cfg_faiss_k = models.PositiveSmallIntegerField(
+        default=5, verbose_name='Fragmentos relevantes por respuesta',
+        help_text='Cuántos pedacitos del entrenamiento le pasamos al bot por cada pregunta. '
+                  'Más = más contexto pero respuestas más lentas y caras. Rango: 3–10.'
+    )
+    cfg_faiss_fetch_k = models.PositiveSmallIntegerField(
+        default=20, verbose_name='Candidatos antes de elegir',
+        help_text='Cuántos fragmentos consideramos antes de quedarnos con los mejores. Rango: 10–40.'
+    )
+    cfg_max_context_chars = models.PositiveIntegerField(
+        default=4000, verbose_name='Máx caracteres de contexto del entrenamiento',
+        help_text='Tope total de información del entrenamiento que cabe en una respuesta. Rango: 2000–8000.'
+    )
+    cfg_max_static_chars = models.PositiveIntegerField(
+        default=1200, verbose_name='Máx caracteres del texto fijo (cuando complementa)',
+        help_text='Cuando hay entrenamiento Y texto fijo (FAQ/menú), cuánto texto fijo se incluye. Rango: 800–5000.'
+    )
+    cfg_history_turns = models.PositiveSmallIntegerField(
+        default=5, verbose_name='Mensajes previos que recuerda',
+        help_text='Cuántos turnos de conversación recuerda el bot (1 turno = cliente + respuesta). Rango: 3–20.'
+    )
+    cfg_user_snippet = models.PositiveSmallIntegerField(
+        default=150, verbose_name='Máx caracteres por mensaje del cliente recordado',
+        help_text='Trunca los mensajes largos del cliente para no gastar tokens. Rango: 100–600.'
+    )
+    cfg_ai_snippet = models.PositiveSmallIntegerField(
+        default=400, verbose_name='Máx caracteres por respuesta del bot recordada',
+        help_text='Crítico cuando el bot envía menús largos: si está muy bajo, olvida lo que ya mostró. Rango: 300–2000.'
+    )
+    cfg_max_output_tokens = models.PositiveIntegerField(
+        default=3000, verbose_name='Máx longitud de la respuesta del bot',
+        help_text='Límite de tokens que el bot puede generar en una sola respuesta. Rango: 500–4000.'
+    )
+    cfg_topic_anchor_chars = models.PositiveSmallIntegerField(
+        default=180, verbose_name='Chars del tema inicial conservado',
+        help_text='Ancla del primer mensaje sustantivo del cliente para mantener el foco. Rango: 100–400.'
+    )
+    cfg_umbral_distancia = models.FloatField(
+        default=1.4, verbose_name='Umbral de distancia de relevancia',
+        help_text='Distancia máxima para considerar relevante un fragmento recuperado. '
+                  'Más bajo = más estricto (descarta más). Rango: 0.8–2.0.'
+    )
+    cfg_max_static_amplia = models.PositiveIntegerField(
+        default=12000, verbose_name='Máx caracteres del texto fijo en consultas amplias',
+        help_text='Techo del contexto estático completo cuando la pregunta es general ("¿qué venden?"). '
+                  'Rango: 4000–20000.'
+    )
+    memoria_rag_activa = models.BooleanField(
+        default=True, verbose_name='Memoria de conversaciones previas (RAG)',
+        help_text='El agente indexa cada pregunta→respuesta válida y reutiliza lo ya respondido a '
+                  'otros clientes. Aprende entre conversaciones sin gastar tokens LLM.'
+    )
+
+    class Meta:
+        verbose_name = 'Configuración IA'
+        verbose_name_plural = 'Configuraciones IA'
+
+    def __str__(self):
+        if self.perfil_id:
+            return f'Configuración IA · {self.perfil}'
+        return 'Configuración IA · plataforma'
 
 
 class ConsumoTokenIA(models.Model):

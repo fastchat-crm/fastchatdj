@@ -4,6 +4,40 @@ Todo lo relacionado con IA vive aquí: providers LLM, RAG, memoria, prompts,
 consumo y acciones generativas. La configuración (agentes, API keys) vive en
 `crm/models.py`; este paquete es el motor.
 
+## Centro de IA — de dónde salen las keys y los parámetros
+
+**No leer `agente.cfg_*` ni filtrar `ApiKeyIA` por `proveedor=2` a mano.** Ambas
+cosas se resuelven en `crm/ia_config.py`, que aplica una cascada de tres niveles:
+
+```
+agente (valor propio)  →  perfil (ConfiguracionIA)  →  plataforma  →  default de código
+```
+
+| Necesitás | Usá |
+|---|---|
+| El valor real de un parámetro para un agente | `parametros_efectivos(agente)` / `parametro('cfg_faiss_k', agente=…)` |
+| Saber si el agente hereda o sobreescribe un campo | `origen_parametros(agente)` |
+| La key con la que se vectoriza | `resolver_key_embeddings(perfil_id)` (objeto) o `resolver_key_embeddings_str(perfil_id)` |
+| La key por defecto de un proveedor | `resolver_key_default(perfil_id, proveedor)` |
+
+**Los `cfg_*` de `AgentesIA` admiten NULL, y NULL significa "heredar", no "cero".**
+Ese es el error fácil de cometer: `getattr(agente, 'memoria_rag_activa', True)`
+devuelve `None` para un agente que hereda, y `None` es falsy — apagaría la
+memoria RAG sin que nadie lo pidiera. Lo mismo con `int(x or 0)` sobre
+`faqs_en_prompt`. Siempre pasar por el resolver.
+
+`resolver_key_embeddings` respeta, en orden: la key marcada `usar_para_embeddings`
+en el perfil → la `es_default` de un proveedor con embeddings → cualquier key
+activa de un proveedor con embeddings → la key `es_global` de la plataforma.
+Antes esto era el mismo bloque copiado en cinco archivos, todos con `proveedor=2`
+clavado y `order_by('-id').first()`.
+
+La UI que edita todo esto es **`/crm/centro-ia/`** (`crm/view_centro_ia.py`):
+marca qué key vectoriza, edita los parámetros generales del perfil y revectoriza
+agentes en lote. `indexador_conocimiento.reindexar_agente(agente, api_key='')`
+acepta una key explícita justamente para ese lote; vacío = la que resuelva el
+Centro de IA.
+
 ## Archivos raíz
 
 | Archivo | Para qué es |

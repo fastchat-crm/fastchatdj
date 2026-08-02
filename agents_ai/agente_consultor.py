@@ -108,12 +108,27 @@ class AgenteConsultor:
         self.perfil = perfil  # PerfilNegocioIA — usado por herramientas de tool-calling
         self.agente = agente  # AgentesIA — usado para cargar HerramientaAgente dinámicas
 
-        # Configuración avanzada — lee del agente si está seteado, sino usa el constante
+        # Configuración avanzada — cascada agente → perfil (Centro de IA) →
+        # plataforma → constante de este módulo. Un campo NULL en el agente
+        # significa "heredar", no "cero": la resolución vive en crm/ia_config.py.
+        _params = {}
+        try:
+            from crm.ia_config import parametros_efectivos
+            _params = parametros_efectivos(
+                agente=agente,
+                perfil_id=getattr(perfil, 'id', None) if agente is None else None,
+            )
+        except Exception as exc:
+            logger.debug('No se pudo resolver el Centro de IA, se usan constantes: %s', exc)
+
         def _cfg(field, default):
-            if agente is None:
-                return default
-            val = getattr(agente, field, None)
-            return val if val else default
+            # Los campos heredables salen resueltos del Centro de IA; el resto
+            # (ej. `temperature`) se sigue leyendo directo del agente.
+            if field in _params:
+                val = _params[field]
+            else:
+                val = getattr(agente, field, None) if agente is not None else None
+            return val if val is not None else default
 
         self.cfg_faiss_k           = _cfg('cfg_faiss_k', _FAISS_K)
         self.cfg_faiss_fetch_k     = _cfg('cfg_faiss_fetch_k', _FAISS_FETCH_K)
@@ -126,6 +141,8 @@ class AgenteConsultor:
         self.cfg_topic_anchor_chars = _cfg('cfg_topic_anchor_chars', _TOPIC_ANCHOR_CHARS)
         self.cfg_umbral_distancia  = _cfg('cfg_umbral_distancia', _UMBRAL_DISTANCIA)
         self.cfg_max_static_amplia = _cfg('cfg_max_static_amplia', _MAX_STATIC_AMPLIA)
+        self.cfg_faqs_en_prompt    = _cfg('faqs_en_prompt', 5)
+        self.cfg_memoria_rag_activa = _cfg('memoria_rag_activa', True)
         self.desglose_prompt = {}
 
         # Persona del bot — si el agente no tiene los campos (agentes viejos), defaults neutros.
@@ -161,11 +178,10 @@ class AgenteConsultor:
         except (TypeError, ValueError):
             self.cfg_temperature = 0.75
 
-        # Memoria RAG por agente — aprende de conversaciones previas (True salvo
-        # que el agente la desactive explícitamente).
-        self.cfg_memoria_activa = (
-            agente is not None and bool(getattr(agente, 'memoria_rag_activa', True))
-        )
+        # Memoria RAG por agente — aprende de conversaciones previas. El valor
+        # sale de la cascada: NULL en el agente significa heredar del Centro de
+        # IA, NO desactivar. Sigue exigiendo que haya un agente concreto.
+        self.cfg_memoria_activa = agente is not None and bool(self.cfg_memoria_rag_activa)
 
         self.embeddings = self._get_embeddings()
         self.llm = self._get_llm()
@@ -235,19 +251,13 @@ class AgenteConsultor:
                         getattr(self.agente, 'id', '?'), self.agente_tenant_id)
 
     def _resolver_embed_key(self) -> str:
-        """Busca una API key Gemini activa del perfil para generar embeddings del RAG.
-        Gemini se usa solo para embeddings; el LLM de respuesta puede ser cualquiera."""
+        """API key con la que se generan los embeddings del RAG.
+        La elige el Centro de IA (crm/ia_config.py); el LLM de respuesta puede
+        ser de otro proveedor."""
         if not self.empresa_id:
             return ''
-        try:
-            from crm.models import ApiKeyIA
-            ak = (ApiKeyIA.objects
-                  .filter(perfil_id=self.empresa_id, proveedor=2, estado=True, status=True)
-                  .order_by('-id').first())
-            return ak.descripcion if ak else ''
-        except Exception as exc:
-            logger.debug("No se pudo resolver embed_key Gemini: %s", exc)
-            return ''
+        from crm.ia_config import resolver_key_embeddings_str
+        return resolver_key_embeddings_str(self.empresa_id)
 
     def _detectar_weaviate(self) -> bool:
         if not (self.agente_tenant_id and self.embed_key):
@@ -640,9 +650,11 @@ class AgenteConsultor:
         if self.agente is None:
             return "", []
         try:
-            top_n = max(0, int(getattr(self.agente, 'faqs_en_prompt', 10) or 0))
+            # Resuelto en __init__ por la cascada del Centro de IA: NULL en el
+            # agente significa heredar, no "cero FAQs".
+            top_n = max(0, int(self.cfg_faqs_en_prompt or 0))
         except Exception:
-            top_n = 10
+            top_n = 5
         if top_n == 0:
             return "", []
         try:

@@ -478,6 +478,22 @@ def _accion_editar(request):
                 'form': [{'horas_aviso_por_caducar': 'Rango permitido: 1 a 23.'}],
             }], safe=False)
         sesion.horas_aviso_por_caducar = horas_aviso_val
+    horas_reactivar_raw = (request.POST.get('horas_reactivar_bot') or '').strip()
+    if horas_reactivar_raw:
+        if not horas_reactivar_raw.isdigit():
+            return JsonResponse([{
+                'error': True,
+                'message': 'La reactivación del bot debe ser un número entero de horas.',
+                'form': [{'horas_reactivar_bot': 'Valor inválido.'}],
+            }], safe=False)
+        horas_reactivar_val = int(horas_reactivar_raw)
+        if horas_reactivar_val > 720:
+            return JsonResponse([{
+                'error': True,
+                'message': 'La reactivación del bot no puede superar las 720 horas (30 días).',
+                'form': [{'horas_reactivar_bot': 'Rango permitido: 0 a 720.'}],
+            }], safe=False)
+        sesion.horas_reactivar_bot = horas_reactivar_val
     min_sesion_raw = (request.POST.get('min_sesion') or '').strip()
     if min_sesion_raw:
         if not min_sesion_raw.isdigit():

@@ -330,6 +330,38 @@ def process_incoming_message(session, event_data, channel_layer):
                     numero=from_number, nivel='info',
                     detalle={'accion': 'reabierta_por_cliente_tras_resuelta', 'bot_reactivado': True},
                 )
+            # El cliente reaparece tras un silencio largo con el bot apagado.
+            # El ai_activo=False lo dejó un asesor al atender, pero eso fue hace
+            # rato: la conversación ya caducó o se cerró y nadie está mirando.
+            # Sin esto el cliente que vuelve días después queda en silencio
+            # total, esperando a un asesor que ya dio el caso por terminado.
+            #
+            # Se mide contra el ÚLTIMO mensaje ya guardado (el entrante actual
+            # todavía no se creó, se crea más abajo). No sirve
+            # `contacto.fecha_ultimo_mensaje`: ya se actualizó a este mensaje.
+            if not conversation.ai_activo:
+                horas_reactivar = int(getattr(session, 'horas_reactivar_bot', None) or 0)
+                if horas_reactivar > 0:
+                    fecha_previa = (
+                        MensajeWhatsApp.objects
+                        .filter(conversacion=conversation)
+                        .order_by('-fecha')
+                        .values_list('fecha', flat=True)
+                        .first()
+                    )
+                    silencio = timezone.now() - fecha_previa if fecha_previa else None
+                    if silencio is not None and silencio >= timedelta(hours=horas_reactivar):
+                        conversation.ai_activo = True
+                        campos_conv.append('ai_activo')
+                        _traza(
+                            etapa='webhook_recibido', sesion=session, conversacion=conversation,
+                            numero=from_number, nivel='info',
+                            detalle={
+                                'accion': 'bot_reactivado_por_inactividad',
+                                'horas_silencio': round(silencio.total_seconds() / 3600, 1),
+                                'umbral_horas': horas_reactivar,
+                            },
+                        )
             conversation.save(update_fields=campos_conv)
 
         # Crear el mensaje

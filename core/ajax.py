@@ -122,7 +122,10 @@ class ConsultasAjax(View):
                 return HttpResponse(response.content)
 
             if accion == 'duplicado':
-                c = Usuario.objects.filter(username=request.GET['username'].lower()).count()
+                username = (request.GET.get('username') or '').strip()
+                if not username:
+                    return JsonResponse({'state': False, 'error': 'Falta el parámetro username.'}, status=400)
+                c = Usuario.objects.filter(username=username.lower()).count()
                 if c > 0:
                     respuesta = True
                 else:
@@ -131,7 +134,9 @@ class ConsultasAjax(View):
                 return HttpResponse(response.content)
 
             if accion == 'duplicado-mail':
-                email = request.GET['mail']
+                email = (request.GET.get('mail') or '').strip()
+                if not email:
+                    return JsonResponse({'state': False, 'error': 'Falta el parámetro mail.'}, status=400)
                 if request.user.is_authenticated:
                     model = Usuario.objects.filter(email=email, is_active=True).exclude(
                         email=request.user.email)
@@ -145,7 +150,9 @@ class ConsultasAjax(View):
                 return HttpResponse(response.content)
 
             if accion == 'duplicado-documento':
-                documento = request.GET['documento']
+                documento = (request.GET.get('documento') or '').strip()
+                if not documento:
+                    return JsonResponse({'state': False, 'error': 'Falta el parámetro documento.'}, status=400)
                 if request.user.is_authenticated:
                     model = Usuario.objects.filter(documento=documento, is_active=True).exclude(documento=request.user.documento)
                 else:

@@ -28,7 +28,7 @@
 > Antes de construir features nuevas, cerrar riesgos de producción.
 
 - [ ] **P0/S** Mover secretos de `credenciales.json` a variables de entorno / vault.
-- [ ] **P0/S** Sacar SendGrid API key del settings en claro.
+- [x] **P0/S** Sacar SendGrid API key del settings en claro. Toda la config SMTP (`EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_SSL/TLS`, usuario, password, remitente) se lee de `credenciales.json`; la clave filtrada fue eliminada por SendGrid y debe rotarse.
 - [ ] **P0/S** Eliminar email hardcodeado `COTIZADOR_DEBUG_EMAIL` → config en settings/BD.
 - [x] **P1/M** Health check endpoint (`/health/`). ~~Sentry~~ descartado por ahora (no se necesita a esa escala).
 - [ ] **P1/M** Auditar listados con `select_related`/`prefetch_related` (N+1 en conversaciones/contactos).

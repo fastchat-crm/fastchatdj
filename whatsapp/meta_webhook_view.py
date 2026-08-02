@@ -539,7 +539,6 @@ def _procesar_status_meta(status: dict, sesion: SesionWhatsApp, evento: EventoMe
 
     mid = status.get('id')
     estado = (status.get('status') or '').lower()
-    logger.info("Meta status: msg=%s estado=%s sesion=%s", mid, estado, sesion.id)
 
     mensaje = None
     if mid:
@@ -573,6 +572,19 @@ def _procesar_status_meta(status: dict, sesion: SesionWhatsApp, evento: EventoMe
                 or str(errors)[:500]
             )
             codigo_meta = err0.get('code')
+
+    # El log se emite recién acá, con el código y el detalle de Meta ya extraídos:
+    # un "estado=failed" pelado obligaba a ir a buscar `error_envio` a la base
+    # para saber si era un problema de facturación, de ventana de 24h o de
+    # plantilla. Los fallos van a WARNING para que no se pierdan entre los ACK.
+    if estado == 'failed':
+        logger.warning(
+            "Meta status: msg=%s estado=failed sesion=%s codigo=%s detalle=%s%s",
+            mid, sesion.id, codigo_meta, detalle_error or 'sin detalle',
+            '' if mensaje else ' (el mensaje no existe en la base: status huérfano)',
+        )
+    else:
+        logger.info("Meta status: msg=%s estado=%s sesion=%s", mid, estado, sesion.id)
 
     # Actualizar MensajeWhatsApp con el nuevo estado_envio.
     # Preservamos el orden monotonico: no bajamos de 'leido' a 'entregado' si

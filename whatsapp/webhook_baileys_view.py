@@ -257,6 +257,104 @@ def webhook_handler(request):
                 }
             )
 
+        elif event_type == 'banned':
+            # WhatsApp respondió 403: el número quedó bloqueado. El gateway ya
+            # dejó de reconectar; aquí sólo reflejamos el estado y avisamos.
+            motivo_ban = event_data.get('mensaje') or 'WhatsApp bloqueó este número.'
+            session.estado = 'desconectado'
+            session.save()
+
+            cb = _cb()
+            cb.desconectado_manualmente = True  # no reconectar automáticamente
+            cb.error_mensaje = motivo_ban
+            cb.save(update_fields=['desconectado_manualmente', 'error_mensaje'])
+            msgerror = motivo_ban
+
+            cache.set(f'wa_baneada_{session.id}', {'motivo': motivo_ban}, timeout=7 * 24 * 3600)
+
+            _traza(
+                etapa='node_banned', sesion=session, nivel='error',
+                detalle={
+                    'reason': event_data.get('reason'),
+                    'status_code': event_data.get('statusCode'),
+                    'mensaje': motivo_ban,
+                },
+            )
+
+            notificar_superusers_error(
+                titulo=f'WhatsApp bloqueó el número — sesión "{session.nombre or session.session_id}"',
+                cuerpo=(
+                    f'WhatsApp devolvió <strong>403 (forbidden)</strong> al conectar la sesión '
+                    f'<strong>{session.nombre or session.session_id}</strong>. La reconexión automática '
+                    f'quedó detenida para no agravar el bloqueo y todos los envíos están rechazados. '
+                    f'Revisa el volumen y el tipo de mensajes enviados, espera unas horas y vuelve a '
+                    f'vincular el número escaneando el QR desde el tablero.'
+                ),
+                url=f'/whatsapp/trazas/?sesion={encrypt_sesion_id(session.id)}',
+                cache_key=f'notif_banned_{session.id}',
+                cooldown_segundos=3600,
+            )
+
+            save_log_entry(f'HS: SESION {session_id} BANNED', request, event_type, obj=session)
+            logger.error("BANNED session=%s payload=%s", session_id, event_data)
+
+            async_to_sync(channel_layer.group_send)(
+                f"whatsapp_session_{session.id}",
+                {
+                    'type': 'whatsapp_event',
+                    'event': 'banned',
+                    'session_id': session.id,
+                    'msgerror': msgerror,
+                    'payload': event_data,
+                }
+            )
+
+        elif event_type == 'envio_bloqueado':
+            # El anti-ban del gateway rechazó un envío antes de que saliera.
+            # No es un error del sistema: es la protección funcionando.
+            codigo = event_data.get('codigo') or 'desconocido'
+            motivo_bloqueo = event_data.get('motivo') or 'Envío bloqueado por las protecciones anti-bloqueo.'
+
+            _traza(
+                etapa='node_envio_bloqueado', sesion=session, nivel='warning',
+                detalle={
+                    'codigo': codigo,
+                    'motivo': motivo_bloqueo,
+                    'destino': event_data.get('to'),
+                    'conversacion_id': conversacion_id,
+                },
+            )
+
+            # Las cuotas y el bloqueo de la sesión sí ameritan avisar; los
+            # rechazos puntuales (número inexistente) sólo quedan en la traza.
+            if codigo in ('cuota_diaria', 'cuota_contactos_frios', 'sesion_bloqueada'):
+                cache.set(f'wa_cuota_{session.id}', {'codigo': codigo, 'motivo': motivo_bloqueo}, timeout=3600)
+                notificar_superusers_error(
+                    titulo=f'Envíos detenidos por protección anti-bloqueo — sesión "{session.nombre or session.session_id}"',
+                    cuerpo=(
+                        f'La sesión <strong>{session.nombre or session.session_id}</strong> dejó de enviar: '
+                        f'{motivo_bloqueo}'
+                    ),
+                    url=f'/whatsapp/trazas/?sesion={encrypt_sesion_id(session.id)}',
+                    cache_key=f'notif_envio_bloqueado_{session.id}_{codigo}',
+                    cooldown_segundos=1800,
+                )
+
+            save_log_entry(f'HS: SESION {session_id} ENVIO_BLOQUEADO {codigo}'.upper(), request, event_type, obj=session)
+            logger.warning("ENVIO_BLOQUEADO session=%s codigo=%s destino=%s", session_id, codigo, event_data.get('to'))
+
+            async_to_sync(channel_layer.group_send)(
+                f"whatsapp_session_{session.id}",
+                {
+                    'type': 'whatsapp_event',
+                    'event': 'envio_bloqueado',
+                    'session_id': session.id,
+                    'codigo': codigo,
+                    'msgerror': motivo_bloqueo,
+                    'payload': event_data,
+                }
+            )
+
         elif event_type == 'rate_limited':
             try:
                 retry_after_ms = int(event_data.get('retryAfterMs') or 60000)

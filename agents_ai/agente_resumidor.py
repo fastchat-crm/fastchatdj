@@ -34,21 +34,14 @@ class AgenteResumidor:
         return self._provider_obj.default_model()
 
     def _resolver_gemini_key(self) -> str:
-        """API key Gemini (proveedor 2) activa del perfil, para embeddings cuando
-        el provider del agente (Claude/Ollama) no ofrece embeddings propios.
-        Replica _resolver_gemini_key de agents_ai/indexador_conocimiento.py."""
+        """API key de embeddings del perfil, para cuando el provider del agente
+        (Claude/Ollama) no ofrece embeddings propios. La elige el Centro de IA
+        (crm/ia_config.py)."""
         perfil_id = getattr(self.agente_obj, 'perfil_id', None) if self.agente_obj else None
         if not perfil_id:
             return ''
-        try:
-            from crm.models import ApiKeyIA
-            ak = (ApiKeyIA.objects
-                  .filter(perfil_id=perfil_id, proveedor=2, estado=True, status=True)
-                  .order_by('-id').first())
-            return ak.descripcion if ak else ''
-        except Exception as exc:
-            logger.debug("No se pudo resolver Gemini embed key: %s", exc)
-            return ''
+        from crm.ia_config import resolver_key_embeddings_str
+        return resolver_key_embeddings_str(perfil_id)
 
     def _get_embeddings(self):
         # Claude/Ollama no proveen embeddings propios (ver providers/claude.py,

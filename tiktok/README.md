@@ -53,3 +53,23 @@ Acción POST `diagnostico` en `view_cuentas` → `whatsapp.diagnostico_social.di
 - **Robustez:** `tipo_evento` truncado a 50, parseo seguro de `timestamp`, y `try` por-evento (un evento malo no aborta el lote).
 - **Reconexión / re-registro:** el alta reactiva la sesión soft-borrada en vez de bloquear por `session_id` único.
 - **Monitoreo con scoping:** `/tiktok/monitoreo/` acota los eventos por pertenencia (business_id/open_id del payload vs. sesiones visibles).
+
+## Pre-registrar una cuenta — qué aplica y qué no
+
+Guía completa para el usuario final: **Documentación → Instagram, Facebook y TikTok**
+(`/seguridad/documentacion/?pagina=conectar-instagram-tiktok`,
+template `templates/docs/conexion_instagram_tiktok.html`). Diferencias frente a los canales Meta:
+
+- **Solo `nombre` y `username` son obligatorios** (`funciones_cuentas.guardar_cuenta`). `business_id`,
+  `access_token`, `refresh_token` y `client_secret` quedan vacíos hasta que TikTok apruebe el acceso a
+  la Business Messaging API (beta).
+- **No hay `probar_conexion`.** A diferencia de `instagram/` y `facebook/`, guardar la cuenta no llama a
+  ninguna API: no existe endpoint de perfil contra el cual validar durante la beta. La sesión queda en
+  `pendiente` y ahí se queda hasta que el canal se active de verdad.
+- **El diagnóstico** (`whatsapp/diagnostico_social.py` → `_diag_tiktok`) valida credenciales, vigencia
+  del token (`token_expira_en`), identificador del negocio, último error registrado y el estado del
+  webhook — sin llamada en vivo.
+- **`client_secret` gobierna la firma del webhook.** Sin él y con `META_WEBHOOK_FAIL_CLOSED` (default
+  `True`), `webhook_view._procesar_post` **rechaza con 401** en vez de procesar sin validar. Es el campo
+  que hay que cargar apenas TikTok lo entregue.
+- La cuenta debe estar registrada **fuera** de EE. UU., EEE, Suiza y Reino Unido.

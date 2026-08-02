@@ -15,17 +15,6 @@ SESSION_SAVE_EVERY_REQUEST = True
 
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-# EMAIL_USE_TLS = True
-# EMAIL_HOST = 'smtp.gmail.com'
-
-# EMAIL_PORT = 587
-EMAIL_USE_SSL = True
-
-EMAIL_USE_TLS = False
-EMAIL_HOST = 'smtp.sendgrid.net'
-EMAIL_PORT = 465
-DEFAULT_FROM_EMAIL = 'notisimweb@gmail.com'
-EMAIL_HOST_PASSWORD = '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'
 
 # CREDENCIALES
 import json
@@ -42,10 +31,17 @@ with open(os.path.join(BASE_DIR, 'credenciales.json')) as json_file:
     BASE_URL_PRODUCCION = data['BASE_URL_PRODUCCION']
     # SECURITY WARNING: keep the secret key used in production secret!
     SECRET_KEY = data['SECRET_KEY']
+    # CORREO SALIENTE (proveedor SMTP configurable desde credenciales.json)
+    EMAIL_HOST = data.get('EMAIL_HOST', '')
+    EMAIL_PORT = int(data.get('EMAIL_PORT') or 587)
+    EMAIL_USE_SSL = bool(data.get('EMAIL_USE_SSL', False))
+    EMAIL_USE_TLS = False if EMAIL_USE_SSL else bool(data.get('EMAIL_USE_TLS', True))
     EMAIL_HOST_USER = data['EMAIL_HOST_USER']
-    # DEFAULT_FROM_EMAIL = data['DEFAULT_FROM_EMAIL']
-    # EMAIL_HOST_PASSWORD = data['EMAIL_HOST_PASSWORD']
-    SENDGRID_API_KEY = data['SENDGRID_API_KEY']
+    EMAIL_HOST_PASSWORD = data.get('EMAIL_HOST_PASSWORD', '')
+    DEFAULT_FROM_EMAIL = data.get('DEFAULT_FROM_EMAIL') or EMAIL_HOST_USER
+    # Sin timeout, smtplib se queda bloqueado indefinidamente cuando el servidor
+    # deja de responder y el hilo de envío nunca termina.
+    EMAIL_TIMEOUT = int(data.get('EMAIL_TIMEOUT') or 20)
     # WKHTMLTOPDF
     WKHTMLTOPDF_CMD = data['WKHTMLTOPDF_CMD']
     # SSL
@@ -354,6 +350,11 @@ LOGGING = {
         'crm': {
             'handlers': ['console'],
             'level': 'WARNING',
+            'propagate': False,
+        },
+        'core': {
+            'handlers': ['console'],
+            'level': 'INFO',
             'propagate': False,
         },
         'django': {

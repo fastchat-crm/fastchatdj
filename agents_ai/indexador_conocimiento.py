@@ -24,17 +24,15 @@ _TIPO_ETIQUETA = {1: "enlace", 2: "archivo", 3: "texto"}
 # ---------------------------------------------------------------------------
 
 def _resolver_gemini_key(empresa_id: int) -> str:
-    """API key Gemini (proveedor 2) activa del perfil para embeddings del RAG.
-    Replica _resolver_embed_key de agente_consultor.py."""
-    try:
-        from crm.models import ApiKeyIA
-        ak = (ApiKeyIA.objects
-              .filter(perfil_id=empresa_id, proveedor=2, estado=True, status=True)
-              .order_by('-id').first())
-        return ak.descripcion if ak else ''
-    except Exception as exc:
-        logger.debug("No se pudo resolver Gemini embed key: %s", exc)
-        return ''
+    """API key con la que se vectoriza el conocimiento del perfil.
+
+    Delega en el Centro de IA (crm/ia_config.py), que respeta la key marcada
+    como `usar_para_embeddings`, luego la default del proveedor y finalmente
+    la key global de la plataforma. Se conserva el nombre por compatibilidad
+    con los llamadores existentes.
+    """
+    from crm.ia_config import resolver_key_embeddings_str
+    return resolver_key_embeddings_str(empresa_id)
 
 
 def _json_a_texto(obj, nivel: int = 0) -> str:
@@ -174,23 +172,27 @@ def provisionar_tenant(empresa_id: int) -> bool:
         return False
 
 
-def reindexar_agente(agente) -> dict:
+def reindexar_agente(agente, api_key: str = '') -> dict:
     """Reindexa a Weaviate las fuentes del panel de un agente (DetalleAgentesAI).
 
     No destructivo: por cada fuente borra solo su `source` y reinserta, dejando
     intactos los sources cargados por otras vías. Una fuente que falle no aborta
     las demás (se acumula en 'errores').
+
+    `api_key` fuerza con qué credencial se generan los embeddings. Se usa desde
+    el Centro de IA para revectorizar un lote con una key elegida a mano. Vacío
+    = la que resuelva el Centro de IA para el perfil.
     """
-    # El tenant Weaviate es POR AGENTE (agente_<id>); la key de embeddings Gemini
-    # se resuelve por PERFIL (la credencial es a nivel empresa).
+    # El tenant Weaviate es POR AGENTE (agente_<id>); la key de embeddings se
+    # resuelve por PERFIL (la credencial es a nivel empresa).
     perfil_id = getattr(agente, 'perfil_id', None)
     agente_id = getattr(agente, 'id', None)
     if not perfil_id or not agente_id:
         return {"ok": False, "error": "agente sin perfil/id"}
 
-    gemini_api_key = _resolver_gemini_key(perfil_id)
+    gemini_api_key = (api_key or '').strip() or _resolver_gemini_key(perfil_id)
     if not gemini_api_key:
-        return {"ok": False, "error": "no Gemini embed key", "necesita_gemini": True}
+        return {"ok": False, "error": "no hay API key de embeddings", "necesita_gemini": True}
 
     from agents_ai import weaviate_rag
 

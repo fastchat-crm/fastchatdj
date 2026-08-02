@@ -133,6 +133,13 @@ class SesionWhatsApp(ModeloBase):
         help_text='Cuántas horas antes de que se cierre la ventana de 24h de Meta se avisa en el panel '
                   'y se marca la conversación como "por caducar" en el inbox. Rango de 1 a 23.'
     )
+    horas_reactivar_bot = models.PositiveSmallIntegerField(
+        'Reactivar el bot tras inactividad (horas)', default=12,
+        help_text='Si el cliente vuelve a escribir después de este tiempo de silencio y el bot estaba '
+                  'apagado (porque un asesor lo pausó al atenderlo), se vuelve a encender solo. '
+                  'Evita que un cliente que reaparece días después quede sin respuesta esperando a un '
+                  'asesor que ya cerró el caso. 0 = nunca reactivar automáticamente.'
+    )
     pixel_meta = models.ForeignKey(
         'whatsapp.PixelMeta', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='sesiones_vinculadas', verbose_name='Pixel Meta (CAPI)',
@@ -709,7 +716,11 @@ class ConversacionWhatsApp(ModeloBase):
                     # se indexa en la memoria RAG del agente — reutiliza el resumen
                     # ya generado, solo cuesta 1 embedding (cero tokens LLM extra).
                     try:
-                        if self.resumen_conversacion and getattr(agente, 'memoria_rag_activa', True):
+                        # memoria_rag_activa puede venir en NULL = "heredar del
+                        # Centro de IA"; resolver la cascada en vez de leer el
+                        # campo, que en NULL sería falsy y apagaría la memoria.
+                        from crm.ia_config import parametro as _parametro_ia
+                        if self.resumen_conversacion and _parametro_ia('memoria_rag_activa', agente=agente):
                             from agents_ai.providers import get_provider
                             from agents_ai.memoria.rag_conversaciones import guardar_conocimiento
                             _emb = get_provider(apikey.proveedor).get_embeddings(
