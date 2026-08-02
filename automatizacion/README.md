@@ -65,7 +65,14 @@ condición puede leerlos con notación de punto: `datos.precio`, `datos.titulo`.
 ## Acciones disponibles
 
 `esperar` · `enviar_whatsapp` · `enviar_email` · `agregar_etiqueta` ·
-`asignar_asesor` · `webhook` · `notificar`
+`asignar_asesor` · `crear_registro` · `webhook` · `notificar`
+
+`crear_registro` cierra el circuito con `objetos/`: un evento del CRM materializa
+una ficha en la entidad que el usuario se definió. Los parámetros son
+`objeto_slug` y un mapa `valores` de `{campo: plantilla}`, y las plantillas se
+interpolan antes de validarse. **La validación es completa, no parcial**: si la
+acción no mapeó un campo obligatorio se reporta el error en vez de crear una
+ficha a medias que después nadie sabe de dónde salió.
 
 Los textos admiten interpolación `{{campo}}` contra el contexto, con rutas
 anidadas (`{{cliente.plan}}`). Un placeholder inexistente se reemplaza por vacío
@@ -98,9 +105,27 @@ en lugar de romper el envío.
 `cron_jobs/procesar_automatizaciones.py`, cada 1 minuto. Sin él las
 automatizaciones con `esperar` nunca terminan.
 
+## Condiciones
+
+El armador vive en el modal de la automatización: campo, operador y valor, con
+los campos disponibles sugeridos según el disparador elegido
+(`CAMPOS_POR_EVENTO`). El campo va como `datalist` y no como select cerrado
+porque los objetos personalizados aportan claves que no están en el catálogo
+(`datos.precio`), así que hay que poder escribir una a mano.
+
+Dos cosas que el armador cuida:
+
+- **Los operadores de presencia (`existe`, `vacio`) deshabilitan el valor.** Sin
+  eso quedaba un dato escrito que la evaluación ignora en silencio.
+- **`_leer_condiciones` descarta filas incompletas**: sin campo, con operador
+  desconocido, o con un operador que necesita valor y no lo tiene. Una condición
+  `igual` sin valor compararía contra cadena vacía y filtraría todo sin que se
+  note.
+
+Sin condiciones, la automatización corre cada vez que ocurre el evento. Con
+varias, deben cumplirse todas.
+
 ## Pendiente
 
-- UI para las condiciones: el backend las evalúa (`cumple_condiciones`) y el
-  modelo las guarda, pero el formulario todavía no las carga.
-- Reordenar los pasos desde la UI (hoy se agregan al final).
-- Acciones sobre objetos personalizados: crear y actualizar registros.
+- Acción para **actualizar** un registro existente (hoy solo se puede crear).
+- Ramas condicionales dentro del flujo (si/entonces por paso, no solo al inicio).

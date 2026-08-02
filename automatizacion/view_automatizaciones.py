@@ -12,6 +12,7 @@ from core.funciones import addData, log, secure_module
 from .models import (
     ACCION_CHOICES,
     ACCION_ESPERAR,
+    CAMPOS_POR_EVENTO,
     ESTADO_CANCELADA,
     EVENTO_CHOICES,
     OPERADOR_CHOICES,
@@ -20,6 +21,9 @@ from .models import (
     Automatizacion,
     EjecucionAutomatizacion,
 )
+
+# Operadores que no llevan valor a comparar: preguntan por presencia.
+OPERADORES_SIN_VALOR = ('existe', 'vacio')
 
 
 def automatizaciones_visibles(request):
@@ -49,14 +53,44 @@ def automatizacionesView(request):
     automatizaciones = list(
         automatizaciones_visibles(request).prefetch_related('acciones').order_by('-activo', 'nombre')
     )
+    etiquetas_operador = dict(OPERADOR_CHOICES)
     for a in automatizaciones:
         a.pendientes = a.ejecuciones.filter(estado__in=['pendiente', 'esperando'], status=True).count()
+        # Texto legible de las condiciones para mostrarlo en la tarjeta.
+        a.condiciones_texto = [
+            '{} {} {}'.format(
+                c.get('campo', ''),
+                etiquetas_operador.get(c.get('operador'), c.get('operador', '')),
+                c.get('valor', ''),
+            ).strip()
+            for c in (a.condiciones or [])
+        ]
+        a.condiciones_json = json.dumps(a.condiciones or [])
 
     data['automatizaciones'] = automatizaciones
     data['eventos'] = EVENTO_CHOICES
     data['tipos_accion'] = ACCION_CHOICES
     data['unidades'] = UNIDAD_CHOICES
     data['operadores'] = OPERADOR_CHOICES
+    data['operadores_sin_valor'] = list(OPERADORES_SIN_VALOR)
+    data['campos_por_evento'] = json.dumps({
+        evento: [{'campo': c, 'label': l} for c, l in campos]
+        for evento, campos in CAMPOS_POR_EVENTO.items()
+    })
+
+    # Objetos personalizados con sus campos, para la acción «crear registro».
+    from objetos.view_objetos import objetos_visibles
+    data['objetos_custom'] = json.dumps([
+        {
+            'slug': o.slug,
+            'nombre': o.nombre_singular,
+            'campos': [
+                {'nombre': c.nombre, 'etiqueta': c.etiqueta, 'requerido': c.requerido}
+                for c in o.campos_activos()
+            ],
+        }
+        for o in objetos_visibles(request).order_by('nombre_plural')
+    ])
     data['ejecuciones'] = (
         EjecucionAutomatizacion.objects
         .filter(automatizacion__in=automatizaciones_visibles(request), status=True)
@@ -83,6 +117,8 @@ def _procesar_accion(request):
                 return _guardar_accion(request)
             if action == 'delete_accion':
                 return _borrar_accion(request)
+            if action == 'mover_accion':
+                return _mover_accion(request)
             if action == 'cancelar_ejecucion':
                 return _cancelar_ejecucion(request)
     except Exception as ex:
@@ -92,6 +128,12 @@ def _procesar_accion(request):
 
 
 def _leer_condiciones(request):
+    """Normaliza las condiciones que manda el armador de la UI.
+
+    Descarta las filas sin campo (el usuario agregó una y la dejó vacía) y las
+    que necesitan un valor y no lo tienen — una condición `igual` sin valor
+    compararía contra cadena vacía y filtraría todo en silencio.
+    """
     crudo = (request.POST.get('condiciones') or '').strip()
     if not crudo:
         return None
@@ -99,7 +141,25 @@ def _leer_condiciones(request):
         datos = json.loads(crudo)
     except json.JSONDecodeError:
         return None
-    return [c for c in datos if c.get('campo')] or None
+    if not isinstance(datos, list):
+        return None
+
+    limpias = []
+    for c in datos:
+        if not isinstance(c, dict):
+            continue
+        campo = (c.get('campo') or '').strip()
+        operador = (c.get('operador') or 'igual').strip()
+        valor = c.get('valor')
+        valor = '' if valor is None else str(valor).strip()
+        if not campo:
+            continue
+        if operador not in dict(OPERADOR_CHOICES):
+            continue
+        if operador not in OPERADORES_SIN_VALOR and not valor:
+            continue
+        limpias.append({'campo': campo, 'operador': operador, 'valor': valor})
+    return limpias or None
 
 
 def _guardar(request, editar=False):
@@ -219,6 +279,42 @@ def _borrar_accion(request):
     accion.status = False
     accion.save(request)
     return JsonResponse({'error': False, 'message': 'Acción eliminada.'})
+
+
+def _mover_accion(request):
+    """Sube o baja un paso intercambiándolo con su vecino.
+
+    Se reescriben los dos `orden` en vez de sumar o restar uno: los valores
+    pueden tener huecos si se borraron pasos, y un `orden ± 1` los dejaría
+    empatados o saltearía posiciones.
+    """
+    accion = AccionAutomatizacion.objects.filter(
+        pk=int(request.POST.get('pk') or 0), status=True,
+        automatizacion__in=automatizaciones_visibles(request),
+    ).select_related('automatizacion').first()
+    if not accion:
+        return JsonResponse({'error': True, 'message': 'No se encontró la acción.'})
+
+    direccion = (request.POST.get('direccion') or '').strip()
+    if direccion not in ('subir', 'bajar'):
+        return JsonResponse({'error': True, 'message': 'Dirección inválida.'})
+
+    pasos = list(accion.automatizacion.acciones_activas())
+    try:
+        i = next(idx for idx, p in enumerate(pasos) if p.pk == accion.pk)
+    except StopIteration:
+        return JsonResponse({'error': True, 'message': 'No se encontró la acción en la lista.'})
+
+    j = i - 1 if direccion == 'subir' else i + 1
+    if j < 0 or j >= len(pasos):
+        return JsonResponse({'error': False, 'message': 'La acción ya está en el extremo.'})
+
+    pasos[i], pasos[j] = pasos[j], pasos[i]
+    for posicion, paso in enumerate(pasos):
+        if paso.orden != posicion:
+            AccionAutomatizacion.objects.filter(pk=paso.pk).update(orden=posicion)
+
+    return JsonResponse({'error': False, 'message': 'Orden actualizado.'})
 
 
 def _cancelar_ejecucion(request):

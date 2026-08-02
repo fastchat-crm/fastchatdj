@@ -19,6 +19,7 @@ from django.utils import timezone
 from .models import (
     ACCION_AGREGAR_ETIQUETA,
     ACCION_ASIGNAR_ASESOR,
+    ACCION_CREAR_REGISTRO,
     ACCION_ENVIAR_EMAIL,
     ACCION_ENVIAR_WHATSAPP,
     ACCION_ESPERAR,
@@ -267,11 +268,49 @@ def _accion_notificar(accion, contexto):
         return False, f'No se pudo notificar: {ex}'
 
 
+def _accion_crear_registro(accion, contexto):
+    """Crea un registro de un objeto personalizado con valores interpolados.
+
+    Cierra el circuito entre las dos apps: un evento del CRM puede materializar
+    una ficha en la entidad que el usuario se definió (una Oportunidad, un
+    Expediente). Los valores pasan por la misma validación que el formulario,
+    así que un tipo mal armado se reporta en vez de guardarse torcido.
+    """
+    from objetos.models import ObjetoPersonalizado, RegistroPersonalizado
+
+    p = accion.parametros or {}
+    slug = (p.get('objeto_slug') or '').strip()
+    if not slug:
+        return False, 'No se indicó a qué objeto agregar el registro.'
+
+    objeto = ObjetoPersonalizado.objects.filter(slug=slug, status=True).first()
+    if not objeto:
+        return False, f'No existe el objeto «{slug}».'
+
+    # Los valores llegan como {clave: plantilla}; cada plantilla se interpola
+    # contra el contexto del evento antes de validarse.
+    crudos = {}
+    for clave, plantilla in (p.get('valores') or {}).items():
+        crudos[clave] = _interpolar(str(plantilla), contexto)
+
+    # Validación completa, no parcial: si la acción no mapeó un campo
+    # obligatorio hay que avisarlo, no crear una ficha a medias que después
+    # nadie sabe de dónde salió ni por qué está incompleta.
+    limpios, errores = objeto.validar_datos(crudos, parcial=False)
+    if errores:
+        detalle = '; '.join(f'{k}: {v}' for k, v in errores.items())
+        return False, f'No se pudo crear el {objeto.nombre_singular.lower()}: {detalle}'
+
+    registro = RegistroPersonalizado.objects.create(objeto=objeto, datos=limpios)
+    return True, f'{objeto.nombre_singular} #{registro.id} creado.'
+
+
 EJECUTORES = {
     ACCION_ENVIAR_WHATSAPP: _accion_enviar_whatsapp,
     ACCION_ENVIAR_EMAIL: _accion_enviar_email,
     ACCION_AGREGAR_ETIQUETA: _accion_agregar_etiqueta,
     ACCION_ASIGNAR_ASESOR: _accion_asignar_asesor,
+    ACCION_CREAR_REGISTRO: _accion_crear_registro,
     ACCION_WEBHOOK: _accion_webhook,
     ACCION_NOTIFICAR: _accion_notificar,
 }

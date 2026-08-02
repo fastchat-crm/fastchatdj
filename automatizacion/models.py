@@ -54,6 +54,7 @@ ACCION_AGREGAR_ETIQUETA = 'agregar_etiqueta'
 ACCION_ASIGNAR_ASESOR = 'asignar_asesor'
 ACCION_WEBHOOK = 'webhook'
 ACCION_NOTIFICAR = 'notificar'
+ACCION_CREAR_REGISTRO = 'crear_registro'
 
 ACCION_CHOICES = (
     (ACCION_ESPERAR, 'Esperar'),
@@ -61,6 +62,7 @@ ACCION_CHOICES = (
     (ACCION_ENVIAR_EMAIL, 'Enviar correo'),
     (ACCION_AGREGAR_ETIQUETA, 'Agregar etiqueta al contacto'),
     (ACCION_ASIGNAR_ASESOR, 'Asignar asesor'),
+    (ACCION_CREAR_REGISTRO, 'Crear un registro de objeto personalizado'),
     (ACCION_WEBHOOK, 'Llamar a un webhook'),
     (ACCION_NOTIFICAR, 'Notificar a un usuario'),
 )
@@ -81,6 +83,58 @@ OPERADOR_CHOICES = (
     ('mayor', 'es mayor que'),
     ('menor', 'es menor que'),
 )
+
+# Campos que trae el contexto de cada evento. Los usa el armador de condiciones
+# de la UI para ofrecer una lista en vez de que el usuario adivine el nombre.
+# Tiene que quedar en sync con lo que arma cada emisor (ver README.md).
+CAMPOS_POR_EVENTO = {
+    EVENTO_CONTACTO_CREADO: [
+        ('contacto_nombre', 'Nombre del contacto'),
+        ('numero', 'Número'),
+        ('canal', 'Canal (whatsapp, instagram, messenger, tiktok)'),
+        ('sesion', 'Nombre de la sesión'),
+    ],
+    EVENTO_CONVERSACION_INICIADA: [
+        ('contacto_nombre', 'Nombre del contacto'),
+        ('numero', 'Número'),
+        ('canal', 'Canal'),
+    ],
+    EVENTO_CONVERSACION_FINALIZADA: [
+        ('contacto_nombre', 'Nombre del contacto'),
+        ('numero', 'Número'),
+        ('clasificacion', 'Clasificación'),
+        ('estado_atencion', 'Estado de atención'),
+    ],
+    EVENTO_ETIQUETA_AGREGADA: [
+        ('etiqueta', 'Nombre de la etiqueta'),
+        ('contacto_nombre', 'Nombre del contacto'),
+        ('canal', 'Canal'),
+    ],
+    EVENTO_CITA_CREADA: [
+        ('servicio', 'Servicio'),
+        ('recurso', 'Recurso'),
+        ('origen', 'Origen (manual, chatbot)'),
+        ('reagendado', 'Es reagendada'),
+    ],
+    EVENTO_CITA_CUMPLIDA: [
+        ('servicio', 'Servicio'),
+        ('recurso', 'Recurso'),
+        ('estado_anterior', 'Estado anterior'),
+    ],
+    EVENTO_OPORTUNIDAD_GANADA: [
+        ('etapa', 'Etapa'),
+        ('etapa_anterior', 'Etapa anterior'),
+        ('pipeline', 'Pipeline'),
+        ('valor', 'Valor'),
+        ('moneda', 'Moneda'),
+    ],
+    EVENTO_REGISTRO_CREADO: [
+        ('objeto', 'Nombre del objeto'),
+        ('objeto_slug', 'Identificador del objeto'),
+        ('titulo', 'Título del registro'),
+        ('datos.<campo>', 'Un campo del registro — ej: datos.precio'),
+    ],
+}
 
 ESTADO_PENDIENTE = 'pendiente'
 ESTADO_ESPERANDO = 'esperando'
@@ -167,6 +221,8 @@ class AccionAutomatizacion(ModeloBase):
             return f"etiquetar «{p.get('etiqueta', '')}»"
         if self.tipo == ACCION_ASIGNAR_ASESOR:
             return 'asignar asesor'
+        if self.tipo == ACCION_CREAR_REGISTRO:
+            return f"crear {p.get('objeto_slug', 'registro')}"
         if self.tipo == ACCION_WEBHOOK:
             return 'llamar webhook'
         if self.tipo == ACCION_NOTIFICAR:

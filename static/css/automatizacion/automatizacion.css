@@ -248,3 +248,49 @@
         padding: 1.1rem;
     }
 }
+
+.aut-condiciones {
+    border-top: 1px solid #e5e7eb;
+    padding-top: .8rem;
+}
+
+.cond-fila {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr auto;
+    gap: .35rem;
+    margin-bottom: .4rem;
+    align-items: center;
+}
+
+.aut-cond-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem;
+    margin-bottom: .5rem;
+}
+
+.aut-chip {
+    font-size: .7rem;
+    background: #f3f4f6;
+    color: #4b5563;
+    border-radius: 1rem;
+    padding: .12rem .5rem;
+    white-space: nowrap;
+}
+
+@media (max-width: 575.98px) {
+    .cond-fila {
+        grid-template-columns: 1fr 1fr auto;
+    }
+}
+
+.aut-pasos-btns {
+    display: flex;
+    gap: .1rem;
+    flex-shrink: 0;
+}
+
+.aut-icon-btn:disabled {
+    opacity: .3;
+    cursor: default;
+}

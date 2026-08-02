@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block head %}
-    <link rel="stylesheet" href="/static/css/automatizacion/automatizacion.css?v1.0">
+    <link rel="stylesheet" href="/static/css/automatizacion/automatizacion.css?v1.2">
 {% endblock %}
 
 {% block content %}
@@ -35,6 +35,7 @@
                                 <button type="button" class="aut-icon-btn aut-editar"
                                         data-pk="{{ a.id }}" data-nombre="{{ a.nombre }}"
                                         data-evento="{{ a.evento }}" data-descripcion="{{ a.descripcion }}"
+                                        data-condiciones="{{ a.condiciones_json }}"
                                         title="Editar"><i class="fa fa-pen"></i></button>
                                 <button type="button" class="aut-icon-btn aut-borrar"
                                         data-pk="{{ a.id }}" data-nombre="{{ a.nombre }}"
@@ -45,6 +46,11 @@
                         <p class="aut-disparador">
                             <i class="fa fa-play-circle me-1"></i>{{ a.get_evento_display }}
                         </p>
+                        {% if a.condiciones_texto %}
+                            <div class="aut-cond-chips">
+                                {% for c in a.condiciones_texto %}<span class="aut-chip">{{ c }}</span>{% endfor %}
+                            </div>
+                        {% endif %}
                         {% if a.descripcion %}<p class="aut-desc">{{ a.descripcion }}</p>{% endif %}
                         <div class="aut-flujo">{{ a.resumen_acciones }}</div>
                         <div class="aut-stats">
@@ -121,9 +127,23 @@
                         {% for valor, label in eventos %}<option value="{{ valor }}">{{ label }}</option>{% endfor %}
                     </select>
                 </div>
-                <div class="mb-2">
+                <div class="mb-3">
                     <label class="form-label small fw-semibold">Descripción</label>
                     <textarea class="form-control form-control-sm" id="autDescripcion" rows="2"></textarea>
+                </div>
+
+                <div class="aut-condiciones">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <label class="form-label small fw-semibold mb-0">Condiciones</label>
+                        <button type="button" class="btn btn-sm btn-link p-0" id="condAgregar">
+                            <i class="fa fa-plus me-1"></i>Agregar
+                        </button>
+                    </div>
+                    <p class="form-text mt-0">
+                        Sin condiciones, la automatización corre <strong>cada vez</strong> que ocurre el evento.
+                        Si agregás varias, deben cumplirse todas.
+                    </p>
+                    <div id="condLista"></div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -192,9 +212,87 @@ function autRecargar(mensaje) {
     setTimeout(function () { location.reload(); }, 1200);
 }
 
+// ---- Armador de condiciones ----
+var AUT_CAMPOS_EVENTO = {{ campos_por_evento|safe }};
+var AUT_OPERADORES = [
+    {% for v, l in operadores %}{value: '{{ v }}', label: '{{ l }}'}{% if not forloop.last %},{% endif %}{% endfor %}
+];
+var AUT_OP_SIN_VALOR = {{ operadores_sin_valor|safe }};
+
+function condFilaHtml(cond) {
+    cond = cond || {campo: '', operador: 'igual', valor: ''};
+    var campos = AUT_CAMPOS_EVENTO[$('#autEvento').val()] || [];
+
+    // El campo va como datalist, no como select cerrado: los objetos
+    // personalizados aportan claves que no están en el catálogo (datos.precio),
+    // así que hay que poder escribir una a mano.
+    var opciones = campos.map(function (c) {
+        return '<option value="' + autEsc(c.campo) + '">' + autEsc(c.label) + '</option>';
+    }).join('');
+
+    var ops = AUT_OPERADORES.map(function (o) {
+        return '<option value="' + o.value + '"' + (o.value === cond.operador ? ' selected' : '') + '>'
+             + autEsc(o.label) + '</option>';
+    }).join('');
+
+    var sinValor = AUT_OP_SIN_VALOR.indexOf(cond.operador) !== -1;
+
+    return '<div class="cond-fila">'
+        + '<input type="text" class="form-control form-control-sm cond-campo" list="condCamposLista" '
+        + 'placeholder="campo" value="' + autEsc(cond.campo) + '">'
+        + '<datalist id="condCamposLista">' + opciones + '</datalist>'
+        + '<select class="form-select form-select-sm cond-op">' + ops + '</select>'
+        + '<input type="text" class="form-control form-control-sm cond-valor" placeholder="valor" '
+        + 'value="' + autEsc(cond.valor) + '"' + (sinValor ? ' disabled' : '') + '>'
+        + '<button type="button" class="aut-icon-btn cond-quitar"><i class="fa fa-times"></i></button>'
+        + '</div>';
+}
+
+function condPintar(condiciones) {
+    var html = (condiciones || []).map(condFilaHtml).join('');
+    $('#condLista').html(html);
+}
+
+function condRecolectar() {
+    var out = [];
+    $('#condLista .cond-fila').each(function () {
+        var $f = $(this);
+        out.push({
+            campo: $f.find('.cond-campo').val(),
+            operador: $f.find('.cond-op').val(),
+            valor: $f.find('.cond-valor').val()
+        });
+    });
+    return out;
+}
+
+$('#condAgregar').on('click', function () {
+    $('#condLista').append(condFilaHtml());
+});
+
+$(document).on('click', '.cond-quitar', function () {
+    $(this).closest('.cond-fila').remove();
+});
+
+// Los operadores de presencia no comparan contra nada: se deshabilita el valor
+// para que no quede un dato escrito que la evaluación ignora en silencio.
+$(document).on('change', '.cond-op', function () {
+    var $valor = $(this).closest('.cond-fila').find('.cond-valor');
+    var sinValor = AUT_OP_SIN_VALOR.indexOf($(this).val()) !== -1;
+    $valor.prop('disabled', sinValor);
+    if (sinValor) { $valor.val(''); }
+});
+
+// Cambiar el disparador cambia los campos disponibles: se repinta la lista
+// conservando lo escrito, porque puede seguir siendo válido.
+$('#autEvento').on('change', function () {
+    condPintar(condRecolectar());
+});
+
 $('#autNueva, #autNuevaVacio').on('click', function () {
     $('#autPk').val('');
     $('#autNombre, #autDescripcion').val('');
+    condPintar([]);
     $('#autModalTitulo').text('Nueva automatización');
     new bootstrap.Modal(document.getElementById('autModal')).show();
 });
@@ -205,6 +303,8 @@ $('.aut-editar').on('click', function () {
     $('#autNombre').val($b.data('nombre'));
     $('#autEvento').val($b.data('evento'));
     $('#autDescripcion').val($b.data('descripcion'));
+    var cond = $b.attr('data-condiciones');
+    try { condPintar(JSON.parse(cond || '[]')); } catch (e) { condPintar([]); }
     $('#autModalTitulo').text('Editar automatización');
     new bootstrap.Modal(document.getElementById('autModal')).show();
 });
@@ -216,7 +316,8 @@ $('#autGuardar').on('click', function () {
         pk: pk,
         nombre: $('#autNombre').val(),
         evento: $('#autEvento').val(),
-        descripcion: $('#autDescripcion').val()
+        descripcion: $('#autDescripcion').val(),
+        condiciones: JSON.stringify(condRecolectar())
     }, function (r) { autRecargar(r.message); });
 });
 
@@ -269,8 +370,46 @@ var AUT_CAMPOS = {
            + '<textarea class="form-control form-control-sm" data-param="mensaje" rows="2"></textarea>'
 };
 
+var AUT_OBJETOS = {{ objetos_custom|safe }};
+
+function autHtmlCrearRegistro() {
+    if (!AUT_OBJETOS.length) {
+        return '<p class="text-muted small mb-0 pt-3">No hay objetos personalizados todavía. '
+             + 'Creá uno en <a href="/objetos/">Objetos personalizados</a>.</p>';
+    }
+    var ops = AUT_OBJETOS.map(function (o) {
+        return '<option value="' + autEsc(o.slug) + '">' + autEsc(o.nombre) + '</option>';
+    }).join('');
+    return '<label class="form-label small fw-semibold">Objeto</label>'
+        + '<select class="form-select form-select-sm" id="crObjeto" data-param="objeto_slug">' + ops + '</select>'
+        + '<div id="crCampos" class="mt-2"></div>';
+}
+
+function autPintarCamposObjeto() {
+    var slug = $('#crObjeto').val();
+    var obj = AUT_OBJETOS.filter(function (o) { return o.slug === slug; })[0];
+    if (!obj) { $('#crCampos').html(''); return; }
+    var html = '<p class="form-text mt-0">Podés usar '
+             + '{% templatetag openvariable %}campo{% templatetag closevariable %} para tomar datos del evento.</p>';
+    obj.campos.forEach(function (c) {
+        html += '<label class="form-label small fw-semibold">' + autEsc(c.etiqueta)
+             +  (c.requerido ? ' <span class="text-danger">*</span>' : '') + '</label>'
+             +  '<input type="text" class="form-control form-control-sm mb-1 cr-valor" '
+             +  'data-campo="' + autEsc(c.nombre) + '" placeholder="' + autEsc(c.nombre) + '">';
+    });
+    $('#crCampos').html(html);
+}
+
+$(document).on('change', '#crObjeto', autPintarCamposObjeto);
+
 function autPintarParametros() {
-    $('#accionParametros').html(AUT_CAMPOS[$('#accionTipo').val()] || '');
+    var tipo = $('#accionTipo').val();
+    if (tipo === 'crear_registro') {
+        $('#accionParametros').html(autHtmlCrearRegistro());
+        autPintarCamposObjeto();
+        return;
+    }
+    $('#accionParametros').html(AUT_CAMPOS[tipo] || '');
 }
 
 $('#accionTipo').on('change', autPintarParametros);
@@ -281,10 +420,17 @@ function autRenderAcciones(acciones) {
         return;
     }
     var html = '<ol class="aut-pasos">';
-    acciones.forEach(function (a) {
-        html += '<li><span>' + autEsc(a.resumen) + '</span>'
-             +  '<button type="button" class="aut-icon-btn accion-borrar" data-pk="' + a.id + '">'
-             +  '<i class="fa fa-trash"></i></button></li>';
+    acciones.forEach(function (a, i) {
+        html += '<li><span>' + autEsc(a.resumen) + '</span><span class="aut-pasos-btns">'
+             +  '<button type="button" class="aut-icon-btn accion-mover" data-pk="' + a.id + '" '
+             +  'data-dir="subir" title="Subir"' + (i === 0 ? ' disabled' : '') + '>'
+             +  '<i class="fa fa-arrow-up"></i></button>'
+             +  '<button type="button" class="aut-icon-btn accion-mover" data-pk="' + a.id + '" '
+             +  'data-dir="bajar" title="Bajar"' + (i === acciones.length - 1 ? ' disabled' : '') + '>'
+             +  '<i class="fa fa-arrow-down"></i></button>'
+             +  '<button type="button" class="aut-icon-btn accion-borrar" data-pk="' + a.id + '" title="Eliminar">'
+             +  '<i class="fa fa-trash"></i></button>'
+             +  '</span></li>';
     });
     $('#autAccionesLista').html(html + '</ol>');
 }
@@ -308,6 +454,15 @@ $('#accionAgregar').on('click', function () {
     $('#accionParametros').find('[data-param]').each(function () {
         parametros[$(this).data('param')] = $(this).val();
     });
+    // «Crear registro» arma un mapa campo → plantilla, no un par plano.
+    if ($('#accionTipo').val() === 'crear_registro') {
+        var valores = {};
+        $('#crCampos .cr-valor').each(function () {
+            var v = $(this).val();
+            if (v !== '') { valores[$(this).data('campo')] = v; }
+        });
+        parametros.valores = valores;
+    }
     autPost({
         action: 'add_accion',
         automatizacion_id: $('#autAccionesId').val(),
@@ -321,6 +476,11 @@ $('#accionAgregar').on('click', function () {
 
 $(document).on('click', '.accion-borrar', function () {
     autPost({ action: 'delete_accion', pk: $(this).data('pk') }, function () { autCargarAcciones(); });
+});
+
+$(document).on('click', '.accion-mover', function () {
+    autPost({ action: 'mover_accion', pk: $(this).data('pk'), direccion: $(this).data('dir') },
+        function () { autCargarAcciones(); });
 });
 </script>
 {% endblock %}
