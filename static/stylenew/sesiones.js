@@ -485,6 +485,104 @@
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
+    // ---------- Anti-baneo: cuota del día y verificador de números ----------
+
+    function mostrarAntibanEstado(sesionId, nombre) {
+        postAccion({action: 'antiban_estado', id: sesionId}).then(function (r) {
+            if (r.error) return mostrarToast(r.message || 'No se pudo leer el estado.', 'err');
+            if (!r.aplica) return mostrarToast(r.message, 'ok');
+
+            var a = r.antiban || {};
+            var pct = r.porcentaje || 0;
+            // Verde hasta 3/4 de la cuota, ámbar hasta el 90, rojo arriba: el
+            // color avisa antes de que el corte llegue, no cuando ya cortó.
+            var color = pct >= 90 ? '#dc2626' : (pct >= 75 ? '#d97706' : '#16a34a');
+
+            var filas = [
+                ['Días vinculada', a.diasVinculada],
+                ['Enviados hoy', a.enviadosHoy + ' de ' + a.cuotaDiaria],
+                ['Quedan hoy', a.restantesHoy],
+                ['Contactos nuevos hoy', a.contactosFriosHoy + ' de ' + a.cuotaContactosFrios],
+            ];
+            var html = '<div class="ab-panel">'
+                + '<h3 class="ab-titulo">Cuota y calentamiento</h3>'
+                + '<p class="ab-sub">' + escaparHtml(nombre) + '</p>';
+
+            if (!r.conectada) {
+                html += '<div class="ab-alerta ab-alerta-aviso"><strong>La sesión todavía no se conectó.</strong><br>'
+                     + 'Estos valores son los de una sesión nueva. La antigüedad real del número se toma '
+                     + 'cuando se conecte, y si ya lleva tiempo dado de alta arrancará con la cuota alta, '
+                     + 'sin pasar por el calentamiento.</div>';
+            } else if (a.bloqueada) {
+                html += '<div class="ab-alerta ab-alerta-error"><strong>WhatsApp bloqueó este número.</strong><br>'
+                     + escaparHtml(a.motivoBloqueo || '') + '<br>'
+                     + 'Los envíos están detenidos. Volvé a vincularlo escaneando el QR.</div>';
+            } else if (a.enCalentamiento) {
+                html += '<div class="ab-alerta ab-alerta-aviso"><strong>Número en calentamiento.</strong><br>'
+                     + 'Lleva ' + a.diasVinculada + ' día(s) vinculado, así que el límite todavía es bajo. '
+                     + 'Sube solo cada día.</div>';
+            }
+
+            html += '<div class="ab-barra"><span style="width:' + Math.min(pct, 100) + '%;background:' + color + '"></span></div>'
+                 + '<p class="ab-pct">' + pct + '% de la cuota de hoy</p>'
+                 + '<table class="ab-tabla"><tbody>';
+            filas.forEach(function (f) {
+                html += '<tr><th>' + escaparHtml(f[0]) + '</th><td>' + escaparHtml(f[1]) + '</td></tr>';
+            });
+            html += '</tbody></table>';
+
+            if (a.persistencia === 'memoria') {
+                html += '<p class="ab-nota">Los contadores están en memoria: se reinician si se reinicia el servicio.</p>';
+            }
+            html += '</div>';
+            abrirDetail(html);
+        });
+    }
+
+    function abrirVerificadorNumeros(sesionId, nombre) {
+        var html = '<div class="ab-panel">'
+            + '<h3 class="ab-titulo">Verificar números</h3>'
+            + '<p class="ab-sub">' + escaparHtml(nombre) + '</p>'
+            + '<p class="ab-ayuda">Pegá los números y te decimos cuáles tienen WhatsApp <strong>antes</strong> '
+            + 'de cargarlos en una campaña. Enviar a números inexistentes es la principal causa de bloqueo.</p>'
+            + '<textarea id="abNumeros" class="ab-textarea" rows="6" '
+            + 'placeholder="593987654321&#10;593912345678&#10;…uno por línea, o separados por coma"></textarea>'
+            + '<button type="button" id="abVerificar" class="conex-btn conex-btn-primary">Verificar</button>'
+            + '<div id="abResultado"></div>'
+            + '</div>';
+        abrirDetail(html);
+
+        var btn = document.getElementById('abVerificar');
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+            var numeros = (document.getElementById('abNumeros') || {}).value || '';
+            if (!numeros.trim()) return mostrarToast('Pegá al menos un número.', 'err');
+
+            btn.disabled = true;
+            btn.textContent = 'Verificando…';
+            postAccion({action: 'antiban_verificar_lote', id: sesionId, numeros: numeros}).then(function (r) {
+                btn.disabled = false;
+                btn.textContent = 'Verificar';
+                if (r.error) return mostrarToast(r.message || 'No se pudo verificar.', 'err');
+
+                var out = '<p class="ab-resumen">' + escaparHtml(r.message) + '</p>';
+                function bloque(titulo, lista, clase, ayuda) {
+                    if (!lista || !lista.length) return '';
+                    return '<div class="ab-grupo ' + clase + '">'
+                        + '<h4>' + titulo + ' (' + lista.length + ')</h4>'
+                        + (ayuda ? '<p class="ab-ayuda">' + ayuda + '</p>' : '')
+                        + '<textarea class="ab-textarea" rows="4" readonly>' + escaparHtml(lista.join('\n')) + '</textarea>'
+                        + '</div>';
+                }
+                out += bloque('Con WhatsApp', r.existen, 'ab-ok', 'Estos son los que podés cargar.');
+                out += bloque('Sin WhatsApp', r.no_existen, 'ab-mal', 'Sacalos de la lista: son los que generan el bloqueo.');
+                out += bloque('Sin confirmar', r.indeterminados, 'ab-duda',
+                    'WhatsApp no respondió la consulta. No significa que estén mal — reintentá más tarde.');
+                document.getElementById('abResultado').innerHTML = out;
+            });
+        });
+    }
+
     function renderCambiarNombre(nombreActual, metaUrl) {
         var linkMeta = metaUrl
             ? '<a href="' + escaparHtml(metaUrl) + '" target="_blank" rel="noopener" class="cn-meta-link">' +
@@ -1336,6 +1434,10 @@
             baileysSesionId = sesionId;
             abrirModal('baileys');
             if (btnBaileysStart) btnBaileysStart.click();
+        } else if (action === 'antiban-estado') {
+            mostrarAntibanEstado(sesionId, nombre);
+        } else if (action === 'antiban-verificar') {
+            abrirVerificadorNumeros(sesionId, nombre);
         } else if (action === 'disconnect') {
             if (window.Swal) {
                 Swal.fire({

@@ -3570,3 +3570,126 @@
 .acc-oc-body .kebab-item.kebab-warn { color: #b45309; }
 .acc-oc-body .kebab-item.kebab-danger { color: #dc2626; }
 
+
+.ab-panel {
+    padding: 4px 2px;
+}
+
+.ab-titulo {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 0 0 2px;
+}
+
+.ab-sub {
+    color: #6b7280;
+    font-size: .85rem;
+    margin: 0 0 14px;
+}
+
+.ab-ayuda {
+    color: #6b7280;
+    font-size: .82rem;
+    line-height: 1.45;
+    margin: 0 0 10px;
+}
+
+.ab-alerta {
+    border-radius: .45rem;
+    padding: .7rem .85rem;
+    font-size: .85rem;
+    line-height: 1.45;
+    margin-bottom: 14px;
+}
+
+.ab-alerta-error {
+    background: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+.ab-alerta-aviso {
+    background: #fffbeb;
+    color: #92400e;
+    border: 1px solid #fde68a;
+}
+
+.ab-barra {
+    height: 9px;
+    background: #eef0f2;
+    border-radius: 99px;
+    overflow: hidden;
+}
+
+.ab-barra span {
+    display: block;
+    height: 100%;
+    border-radius: 99px;
+    transition: width .3s ease;
+}
+
+.ab-pct {
+    font-size: .78rem;
+    color: #6b7280;
+    margin: 6px 0 14px;
+}
+
+.ab-tabla {
+    width: 100%;
+    font-size: .87rem;
+}
+
+.ab-tabla th {
+    text-align: left;
+    font-weight: 500;
+    color: #6b7280;
+    padding: .4rem 0;
+    border-bottom: 1px solid #f1f2f4;
+}
+
+.ab-tabla td {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    padding: .4rem 0;
+    border-bottom: 1px solid #f1f2f4;
+    font-weight: 600;
+}
+
+.ab-nota {
+    font-size: .76rem;
+    color: #9ca3af;
+    margin-top: 12px;
+}
+
+.ab-textarea {
+    width: 100%;
+    border: 1px solid #d1d5db;
+    border-radius: .45rem;
+    padding: .55rem .65rem;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: .82rem;
+    margin-bottom: 10px;
+    resize: vertical;
+}
+
+.ab-resumen {
+    font-size: .9rem;
+    font-weight: 600;
+    margin: 16px 0 12px;
+}
+
+.ab-grupo {
+    border-left: 3px solid #d1d5db;
+    padding-left: .8rem;
+    margin-bottom: 14px;
+}
+
+.ab-grupo h4 {
+    font-size: .88rem;
+    font-weight: 600;
+    margin: 0 0 4px;
+}
+
+.ab-ok    { border-left-color: #16a34a; }
+.ab-mal   { border-left-color: #dc2626; }
+.ab-duda  { border-left-color: #d97706; }

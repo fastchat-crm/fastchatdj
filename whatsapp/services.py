@@ -154,6 +154,52 @@ class WhatsAppService(ServicioCanalBase):
         except Exception as e:
             return ''
 
+    def get_antiban_estado(self, session_id):
+        """Cuota del día, calentamiento y consumo de una sesión Baileys.
+
+        Solo aplica al gateway no oficial: las sesiones Meta no pasan por el
+        anti-ban. Devuelve `{'success': True, 'antiban': {...}}` o
+        `{'success': False, 'error': ...}` — nunca lanza, porque se llama al
+        pintar el tablero y un gateway caído no puede tumbar la pantalla.
+        """
+        try:
+            response = requests.get(
+                f"{self.base_url}/antiban/{session_id}",
+                headers=self.headers,
+                timeout=8,
+            )
+            if response.status_code == 200:
+                return {'success': True, 'antiban': response.json().get('antiban') or {}}
+            return self._error_del_gateway(response, 'No se pudo leer el estado anti-baneo')
+        except Exception as e:
+            return {'success': False, 'error': f'No se pudo contactar al servicio: {e}'}
+
+    def verificar_numero(self, session_id, numero):
+        """¿El número tiene cuenta de WhatsApp?
+
+        Devuelve `existe`: True / False / None. **None significa indeterminado**
+        (WhatsApp no respondió la consulta), no "no existe" — tratarlo como
+        inexistente descartaría contactos buenos por un timeout.
+        """
+        try:
+            response = requests.get(
+                f"{self.base_url}/antiban/{session_id}/verificar",
+                headers=self.headers,
+                params={'numero': numero},
+                timeout=15,
+            )
+            if response.status_code == 200:
+                cuerpo = response.json()
+                return {
+                    'success': True,
+                    'numero': cuerpo.get('numero'),
+                    'existe': None if cuerpo.get('indeterminado') else cuerpo.get('existe'),
+                    'indeterminado': bool(cuerpo.get('indeterminado')),
+                }
+            return self._error_del_gateway(response, 'No se pudo verificar el número')
+        except Exception as e:
+            return {'success': False, 'error': f'No se pudo contactar al servicio: {e}'}
+
     @sync_to_async_function
     def sync_contacts(self, session):
         from django.db import connection

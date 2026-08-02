@@ -1035,7 +1035,106 @@ def _accion_ads_campanas(request):
     })
 
 
+def _accion_antiban_estado(request):
+    """Cuota del día y calentamiento de una sesión Baileys.
+
+    Solo aplica al gateway no oficial: las sesiones Meta no pasan por el
+    anti-ban y devuelven `aplica: False` para que la UI no muestre el panel.
+    """
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('id'), usuario=request.user).first()
+    if not sesion:
+        return JsonResponse({'error': True, 'message': 'Sesión no encontrada.'})
+    if not sesion.es_baileys:
+        return JsonResponse({'error': False, 'aplica': False,
+                             'message': 'Esta sesión usa la API oficial de Meta: no pasa por el anti-baneo.'})
+
+    res = WhatsAppService().get_antiban_estado(sesion.session_id)
+    if not res.get('success'):
+        return JsonResponse({'error': True, 'message': res.get('error') or 'No se pudo leer el estado.'})
+
+    datos = res.get('antiban') or {}
+    cuota = int(datos.get('cuotaDiaria') or 0)
+    usados = int(datos.get('enviadosHoy') or 0)
+    # El anti-ban recién registra la sesión cuando el socket abre por primera
+    # vez: hasta entonces devuelve los valores de una sesión nueva (día 0, cuota
+    # mínima) aunque el número lleve meses dado de alta. Sin avisarlo, el panel
+    # diría "en calentamiento" de un número que en realidad ya está establecido.
+    return JsonResponse({
+        'error': False,
+        'aplica': True,
+        'antiban': datos,
+        'conectada': sesion.estado == 'conectado',
+        'porcentaje': round((usados / cuota) * 100) if cuota else 0,
+    })
+
+
+def _accion_antiban_verificar_lote(request):
+    """Verifica una lista de números contra WhatsApp antes de una campaña.
+
+    Devuelve tres grupos: los que existen, los que no y los indeterminados.
+    **Un indeterminado no es un número malo** — es que WhatsApp no respondió la
+    consulta —, así que se reporta aparte para no descartar contactos buenos por
+    un timeout.
+    """
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('id'), usuario=request.user).first()
+    if not sesion:
+        return JsonResponse({'error': True, 'message': 'Sesión no encontrada.'})
+    if not sesion.es_baileys:
+        return JsonResponse({'error': True,
+                             'message': 'La verificación de números solo está disponible en sesiones no oficiales.'})
+
+    crudo = (request.POST.get('numeros') or '').strip()
+    if not crudo:
+        return JsonResponse({'error': True, 'message': 'Pegá al menos un número para verificar.'})
+
+    import re
+    numeros, vistos = [], set()
+    for parte in re.split(r'[\s,;]+', crudo):
+        limpio = re.sub(r'\D', '', parte)
+        if limpio and limpio not in vistos:
+            vistos.add(limpio)
+            numeros.append(limpio)
+
+    if not numeros:
+        return JsonResponse({'error': True, 'message': 'No se reconoció ningún número en el texto.'})
+
+    TOPE = 200
+    recortados = max(0, len(numeros) - TOPE)
+    numeros = numeros[:TOPE]
+
+    servicio = WhatsAppService()
+    existen, no_existen, indeterminados = [], [], []
+    for numero in numeros:
+        res = servicio.verificar_numero(sesion.session_id, numero)
+        if not res.get('success'):
+            indeterminados.append(numero)
+        elif res.get('existe') is True:
+            existen.append(numero)
+        elif res.get('existe') is False:
+            no_existen.append(numero)
+        else:
+            indeterminados.append(numero)
+
+    partes = [f'{len(existen)} con WhatsApp', f'{len(no_existen)} sin WhatsApp']
+    if indeterminados:
+        partes.append(f'{len(indeterminados)} sin confirmar')
+    mensaje = ' · '.join(partes)
+    if recortados:
+        mensaje += f'. Se verificaron los primeros {TOPE}; quedaron {recortados} sin revisar.'
+
+    return JsonResponse({
+        'error': False,
+        'message': mensaje,
+        'existen': existen,
+        'no_existen': no_existen,
+        'indeterminados': indeterminados,
+        'recortados': recortados,
+    })
+
+
 _ACCIONES = {
+    'antiban_estado':              _accion_antiban_estado,
+    'antiban_verificar_lote':      _accion_antiban_verificar_lote,
     'baileys_start':               _accion_baileys_start,
     'baileys_status':              _accion_baileys_status,
     'baileys_verificar':           _accion_baileys_verificar,
