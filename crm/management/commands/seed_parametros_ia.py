@@ -51,8 +51,17 @@ PARAMETROS = [
      'Aviso de consumo alto', 'Emite un aviso cuando el consumo mensual supera este umbral. 0 = sin aviso.'),
 ]
 
-MODULO_URL = '/crm/parametros-ia/'
-MODULO_NOMBRE = 'Parámetros IA'
+# Los parámetros se editan desde dos pantallas separadas: comportamiento del
+# agente y control de gasto son decisiones de distinta naturaleza y suelen
+# tomarlas personas distintas, así que cada una es su propio módulo y permiso.
+# Se registran ademas en su grupo del sidebar y en el rol Administrador, que es
+# lo que hace falta para que aparezcan en el menu.
+MODULOS = [
+    ('/crm/parametros-agentes/', 'Parámetros de agentes IA'),
+    ('/crm/parametros-tokens/', 'Tokens y límites de IA'),
+]
+GRUPO_SIDEBAR = 'Inteligencia Artificial'
+ROL = 'Administrador'
 
 
 class Command(BaseCommand):
@@ -79,16 +88,34 @@ class Command(BaseCommand):
             fila.status = True
             fila.save()
 
-        modulo, creado_mod = Modulo.objects.get_or_create(
-            url=MODULO_URL, defaults={'nombre': MODULO_NOMBRE, 'orden': 0}
-        )
-        if not creado_mod and modulo.nombre != MODULO_NOMBRE:
-            modulo.nombre = MODULO_NOMBRE
-            modulo.save()
+        from seguridad.models import ModuloGrupo, GroupModulo
+
+        grupo = ModuloGrupo.objects.filter(nombre=GRUPO_SIDEBAR, status=True).first()
+        rol = GroupModulo.objects.filter(group__name=ROL, status=True).first()
+
+        modulos_nuevos = 0
+        for url, nombre in MODULOS:
+            modulo, creado_mod = Modulo.objects.get_or_create(
+                url=url, defaults={'nombre': nombre, 'orden': 0}
+            )
+            if not creado_mod and modulo.nombre != nombre:
+                modulo.nombre = nombre
+                modulo.save()
+            if creado_mod:
+                modulos_nuevos += 1
+            # Sin grupo de sidebar y sin rol, el módulo existe pero no aparece
+            # en el menú de nadie: hay que agregarlo a mano desde Seguridad.
+            if grupo and not grupo.modulos.filter(pk=modulo.pk).exists():
+                grupo.modulos.add(modulo)
+            if rol and not rol.modulos.filter(pk=modulo.pk).exists():
+                rol.modulos.add(modulo)
+
+        # La pantalla única anterior quedó reemplazada por las dos nuevas.
+        Modulo.objects.filter(url='/crm/parametros-ia/').update(status=False)
 
         self.stdout.write(self.style.SUCCESS(
-            'Parámetros IA: {} creados, {} actualizados. Módulo "{}" {}.'.format(
-                creados, actualizados, MODULO_URL,
-                'creado' if creado_mod else 'ya existía',
+            'Parámetros IA: {} creados, {} actualizados. Módulos: {} nuevos de {}, '
+            'ubicados en «{}» y habilitados al rol {}.'.format(
+                creados, actualizados, modulos_nuevos, len(MODULOS), GRUPO_SIDEBAR, ROL,
             )
         ))

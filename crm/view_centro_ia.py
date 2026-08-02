@@ -82,9 +82,9 @@ def _parametros_para_form(perfil_id):
 def _config_editable(perfil):
     """ConfiguracionIA propia del perfil, creándola si hace falta.
 
-    `configuracion_de_perfil` puede devolver la fila global de plataforma, que
-    NO hay que editar desde acá: tocarla cambiaría los defaults de todos los
-    perfiles. Para guardar siempre se usa la del perfil.
+    Se crea con todos los campos en NULL: así el perfil hereda de los Parámetros
+    IA de la plataforma hasta que el usuario sobreescriba algo. Crearla con
+    valores concretos taparía el nivel de plataforma para siempre.
     """
     config, _ = ConfiguracionIA.objects.get_or_create(perfil=perfil)
     return config
@@ -125,12 +125,18 @@ def centro_ia_view(request):
     if request.method == 'POST':
         return _procesar_accion(request, perfil)
 
-    config_efectiva = configuracion_de_perfil(perfil.id)
+    config = _config_editable(perfil)
     keys, embed = _resumen_keys(perfil)
 
+    # El perfil hereda de la plataforma mientras no tenga ningún campo propio.
+    hereda_todo = all(
+        getattr(config, campo, None) is None
+        for campo in CAMPOS_HEREDABLES if campo not in CAMPOS_SOLO_CENTRO or hasattr(config, campo)
+    )
+
     data['perfil'] = perfil
-    data['config'] = _config_editable(perfil)
-    data['hereda_de_plataforma'] = bool(config_efectiva and not config_efectiva.perfil_id)
+    data['config'] = config
+    data['hereda_de_plataforma'] = hereda_todo
     data['parametros'] = _parametros_para_form(perfil.id)
     data['keys'] = keys
     data['key_embeddings'] = embed

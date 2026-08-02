@@ -6,9 +6,16 @@ duplicado en cinco archivos:
     1. ¿Con qué API key se vectoriza el conocimiento de este perfil?
     2. ¿Qué valor tiene realmente el parámetro X para este agente?
 
-Ambas siguen la misma cascada de tres niveles:
+Ambas siguen la misma cascada de cuatro niveles:
 
-    agente (valor propio)  →  perfil (ConfiguracionIA)  →  plataforma
+    agente (AgentesIA.cfg_*)
+      → perfil (ConfiguracionIA)
+        → plataforma (ParametroSistema, editable en /crm/parametros-ia/)
+          → default de código (PARAMETROS_IA_DEFAULT)
+
+En los tres primeros niveles, **NULL significa "heredar", no "cero"**. Por eso
+los campos de `AgentesIA` y de `ConfiguracionIA` son nullables: si tuvieran
+valor siempre, taparían al nivel de abajo y el de plataforma nunca se aplicaría.
 
 Nadie debe leer `agente.cfg_*` ni filtrar `ApiKeyIA` por `proveedor=2` a mano:
 usar `parametros_efectivos()` y `resolver_key_embeddings()`.
@@ -43,18 +50,18 @@ CAMPOS_SOLO_CENTRO = ('cfg_umbral_distancia', 'cfg_max_static_amplia')
 # ---------------------------------------------------------------------------
 
 def configuracion_de_perfil(perfil_id):
-    """`ConfiguracionIA` del perfil, o la fila global de plataforma si no tiene.
+    """`ConfiguracionIA` propia del perfil. None si no tiene.
 
-    Devuelve None si no existe ninguna de las dos — en ese caso la cascada cae
-    a `PARAMETROS_IA_DEFAULT`.
+    **Ya no cae a una fila global de `ConfiguracionIA`.** El nivel de plataforma
+    lo ocupa `ParametroSistema` (editable en `/crm/parametros-ia/`). Mientras
+    hubo dos almacenes de plataforma, el de `ConfiguracionIA` ganaba siempre y
+    la página de Parámetros IA no gobernaba nada.
     """
     from crm.models import ConfiguracionIA
+    if not perfil_id:
+        return None
     try:
-        if perfil_id:
-            propia = ConfiguracionIA.objects.filter(perfil_id=perfil_id, status=True).first()
-            if propia:
-                return propia
-        return ConfiguracionIA.objects.filter(perfil__isnull=True, status=True).first()
+        return ConfiguracionIA.objects.filter(perfil_id=perfil_id, status=True).first()
     except Exception as exc:
         logger.debug('No se pudo leer ConfiguracionIA: %s', exc)
         return None

@@ -1114,59 +1114,59 @@ class ConfiguracionIA(ModeloBase):
     )
 
     faqs_en_prompt = models.PositiveSmallIntegerField(
-        default=5, verbose_name='Cantidad de FAQs en prompt',
+        blank=True, null=True, default=None, verbose_name='Cantidad de FAQs en prompt',
         help_text='Top N FAQs aprobadas (por prioridad) inyectadas literal en el prompt. '
                   'Las demás quedan disponibles vía RAG.'
     )
     cfg_faiss_k = models.PositiveSmallIntegerField(
-        default=5, verbose_name='Fragmentos relevantes por respuesta',
+        blank=True, null=True, default=None, verbose_name='Fragmentos relevantes por respuesta',
         help_text='Cuántos pedacitos del entrenamiento le pasamos al bot por cada pregunta. '
                   'Más = más contexto pero respuestas más lentas y caras. Rango: 3–10.'
     )
     cfg_faiss_fetch_k = models.PositiveSmallIntegerField(
-        default=20, verbose_name='Candidatos antes de elegir',
+        blank=True, null=True, default=None, verbose_name='Candidatos antes de elegir',
         help_text='Cuántos fragmentos consideramos antes de quedarnos con los mejores. Rango: 10–40.'
     )
     cfg_max_context_chars = models.PositiveIntegerField(
-        default=4000, verbose_name='Máx caracteres de contexto del entrenamiento',
+        blank=True, null=True, default=None, verbose_name='Máx caracteres de contexto del entrenamiento',
         help_text='Tope total de información del entrenamiento que cabe en una respuesta. Rango: 2000–8000.'
     )
     cfg_max_static_chars = models.PositiveIntegerField(
-        default=1200, verbose_name='Máx caracteres del texto fijo (cuando complementa)',
+        blank=True, null=True, default=None, verbose_name='Máx caracteres del texto fijo (cuando complementa)',
         help_text='Cuando hay entrenamiento Y texto fijo (FAQ/menú), cuánto texto fijo se incluye. Rango: 800–5000.'
     )
     cfg_history_turns = models.PositiveSmallIntegerField(
-        default=5, verbose_name='Mensajes previos que recuerda',
+        blank=True, null=True, default=None, verbose_name='Mensajes previos que recuerda',
         help_text='Cuántos turnos de conversación recuerda el bot (1 turno = cliente + respuesta). Rango: 3–20.'
     )
     cfg_user_snippet = models.PositiveSmallIntegerField(
-        default=150, verbose_name='Máx caracteres por mensaje del cliente recordado',
+        blank=True, null=True, default=None, verbose_name='Máx caracteres por mensaje del cliente recordado',
         help_text='Trunca los mensajes largos del cliente para no gastar tokens. Rango: 100–600.'
     )
     cfg_ai_snippet = models.PositiveSmallIntegerField(
-        default=400, verbose_name='Máx caracteres por respuesta del bot recordada',
+        blank=True, null=True, default=None, verbose_name='Máx caracteres por respuesta del bot recordada',
         help_text='Crítico cuando el bot envía menús largos: si está muy bajo, olvida lo que ya mostró. Rango: 300–2000.'
     )
     cfg_max_output_tokens = models.PositiveIntegerField(
-        default=3000, verbose_name='Máx longitud de la respuesta del bot',
+        blank=True, null=True, default=None, verbose_name='Máx longitud de la respuesta del bot',
         help_text='Límite de tokens que el bot puede generar en una sola respuesta. Rango: 500–4000.'
     )
     cfg_topic_anchor_chars = models.PositiveSmallIntegerField(
-        default=180, verbose_name='Chars del tema inicial conservado',
+        blank=True, null=True, default=None, verbose_name='Chars del tema inicial conservado',
         help_text='Ancla del primer mensaje sustantivo del cliente para mantener el foco. Rango: 100–400.'
     )
     cfg_umbral_distancia = models.FloatField(
-        default=1.4, verbose_name='Umbral de distancia de relevancia',
+        blank=True, null=True, default=None, verbose_name='Umbral de distancia de relevancia',
         help_text='Distancia máxima para considerar relevante un fragmento recuperado. '
                   'Más bajo = más estricto (descarta más). Rango: 0.8–2.0.'
     )
     cfg_max_static_amplia = models.PositiveIntegerField(
-        default=12000, verbose_name='Máx caracteres del texto fijo en consultas amplias',
+        blank=True, null=True, default=None, verbose_name='Máx caracteres del texto fijo en consultas amplias',
         help_text='Techo del contexto estático completo cuando la pregunta es general ("¿qué venden?"). '
                   'Rango: 4000–20000.'
     )
     memoria_rag_activa = models.BooleanField(
-        default=True, verbose_name='Memoria de conversaciones previas (RAG)',
+        blank=True, null=True, default=None, verbose_name='Memoria de conversaciones previas (RAG)',
         help_text='El agente indexa cada pregunta→respuesta válida y reutiliza lo ya respondido a '
                   'otros clientes. Aprende entre conversaciones sin gastar tokens LLM.'
     )

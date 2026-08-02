@@ -9,10 +9,15 @@
 
     <div class="row align-items-center mb-4">
         <div class="col-md-8">
-            <h4 class="mb-1"><i class="fas fa-sliders-h me-2 text-primary"></i>Parámetros IA</h4>
+            <h4 class="mb-1">
+                <i class="{{ icono|default:'fas fa-sliders-h' }} me-2 text-primary"></i>{{ titulo }}
+            </h4>
             <p class="text-muted mb-0">
-                Configuración global del motor de IA. Cada agente toma estos valores cuando no define uno propio.
+                {{ ayuda|default:descripcion }}
                 Los cambios aplican en runtime (cache de 60 s).
+                {% if enlace_relacionado %}
+                    <a href="{{ enlace_relacionado.url }}">{{ enlace_relacionado.texto }}</a>.
+                {% endif %}
             </p>
         </div>
         <div class="col-md-4 text-md-end mt-3 mt-md-0">
