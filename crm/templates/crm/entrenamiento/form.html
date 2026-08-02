@@ -4,7 +4,7 @@
 {% block head %}
     <link rel="stylesheet" href="/static/stylenew/entrenamiento.css?v1.1">
     <link rel="stylesheet" href="/static/stylenew/agentesia_form.css?v1.0">
-    <link rel="stylesheet" href="/static/stylenew/entrenamiento_agentes.css?v1.0">
+    <link rel="stylesheet" href="/static/stylenew/entrenamiento_agentes.css?v1.1">
 {% endblock %}
 
 {% block content %}
@@ -13,21 +13,11 @@
         perfil del negocio, agrega productos y servicios, y define respuestas a preguntas frecuentes para entrenar la IA según tus criterios.
     </div>
 
-    <ul class="nav nav-tabs mb-3" role="tablist">
-        <li class="nav-item">
-            <a class="nav-link fw-medium active" data-bs-toggle="tab" href="#agentes" role="tab"
-               aria-selected="false">Agentes</a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link fw-medium" data-bs-toggle="tab" href="#apikeys" role="tab"
-               aria-selected="false">Api Keys</a>
-        </li>
-    </ul>
-    <div class="tab-content">
+    <div>
         {# ── Tab Agentes ──────────────────────────────────────────────── #}
-        <div class="tab-pane active" id="agentes" role="tabpanel">
-            <div class="card bg-transparent shadow-sm mb-4">
-                <div class="card-header bg-white border-bottom-0 d-flex justify-content-between align-items-center">
+        <div id="agentes">
+            <div class="seccion-ia mb-4">
+                <div class="seccion-ia-header d-flex justify-content-between align-items-center">
                     <div>
                         <h5 class="mb-0 text-primary"><i class="fas fa-robot me-2"></i>Agentes AI</h5>
                         <small class="text-muted">Configura cómo responde la IA en cada conversación.</small>
@@ -43,8 +33,8 @@
                         </a>
                     </div>
                 </div>
-                <div class="card-body" id="bloque_agentes_ia">
-                    <div class="card-body pt-0">
+                <div class="seccion-ia-body" id="bloque_agentes_ia">
+                    <div class="pt-0">
                         {% if agentes %}
                             <div class="row g-3">
                                 {% for l in agentes %}
@@ -213,9 +203,9 @@
         </div>
 
         {# ── Tab API Keys ─────────────────────────────────────────────── #}
-        <div class="tab-pane" id="apikeys" role="tabpanel">
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-white border-bottom-0 d-flex justify-content-between align-items-center">
+        <div id="apikeys">
+            <div class="seccion-ia mb-4">
+                <div class="seccion-ia-header d-flex justify-content-between align-items-center">
                     <div>
                         <h5 class="mb-0 text-primary"><i class="fas fa-key me-2"></i>APIs Keys AI</h5>
                         <small class="text-muted">Credenciales para conectar con los proveedores de IA.</small>
@@ -243,8 +233,8 @@
                         </a>
                     </div>
                 </div>
-                <div class="card-body" id="bloque_apis_ia">
-                    <div class="card-body pt-0">
+                <div class="seccion-ia-body" id="bloque_apis_ia">
+                    <div class="pt-0">
                         {% if apis %}
                         <div class="row g-3">
                             {% for l in apis %}
@@ -416,31 +406,31 @@
                     {# Tarjetas resumen #}
                     <div class="row g-3 mb-4" id="consumo-cards">
                         <div class="col-6 col-md-3">
-                            <div class="card border-0 bg-light text-center py-3">
+                            <div class="tile-metrica text-center py-3">
                                 <div class="h4 mb-0 text-primary fw-bold" id="c-llamadas">—</div>
                                 <div class="small text-muted mt-1">Llamadas al LLM</div>
                             </div>
                         </div>
                         <div class="col-6 col-md-3">
-                            <div class="card border-0 bg-light text-center py-3">
+                            <div class="tile-metrica text-center py-3">
                                 <div class="h4 mb-0 text-success fw-bold" id="c-total">—</div>
                                 <div class="small text-muted mt-1">Tokens totales</div>
                             </div>
                         </div>
                         <div class="col-6 col-md-3">
-                            <div class="card border-0 bg-light text-center py-3">
+                            <div class="tile-metrica text-center py-3">
                                 <div class="h4 mb-0 text-info fw-bold" id="c-entrada">—</div>
                                 <div class="small text-muted mt-1">Tokens prompt</div>
                             </div>
                         </div>
                         <div class="col-6 col-md-3">
-                            <div class="card border-0 bg-light text-center py-3">
+                            <div class="tile-metrica text-center py-3">
                                 <div class="h4 mb-0 text-warning fw-bold" id="c-salida">—</div>
                                 <div class="small text-muted mt-1">Tokens respuesta</div>
                             </div>
                         </div>
                         <div class="col-6 col-md-3">
-                            <div class="card border-0 bg-light text-center py-3">
+                            <div class="tile-metrica text-center py-3">
                                 <div class="h4 mb-0 text-danger fw-bold" id="c-costo">—</div>
                                 <div class="small text-muted mt-1">Costo estimado (USD)</div>
                             </div>
@@ -2825,6 +2815,12 @@
     </script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            // Agentes y Api Keys dejaron de ser pestañas: ahora son secciones
+            // apiladas. Se descarta el valor guardado para que a quien tenía
+            // una de esas dos activa no le quede apuntando a algo inexistente.
+            if (['#agentes', '#apikeys'].includes(localStorage.getItem('mainTab'))) {
+                localStorage.removeItem('mainTab');
+            }
             const mainTab = localStorage.getItem('mainTab');
             const subTab  = localStorage.getItem('subTab');
             if (mainTab) {
@@ -2838,7 +2834,7 @@
             document.querySelectorAll('.nav-tabs > .nav-item > .nav-link').forEach(tab => {
                 tab.addEventListener('shown.bs.tab', function (e) {
                     const href = e.target.getAttribute('href');
-                    if (['#perfil','#mantenimientos','#preguntas','#agentes','#apikeys'].includes(href)) {
+                    if (['#perfil','#mantenimientos','#preguntas'].includes(href)) {
                         localStorage.setItem('mainTab', href);
                     } else if (['#productos','#servicios'].includes(href)) {
                         localStorage.setItem('subTab', href);

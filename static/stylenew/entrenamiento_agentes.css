@@ -1,3 +1,35 @@
+
+/* ── Secciones ───────────────────────────────────────────────────────────
+   Antes cada bloque era un `.card` de Bootstrap que contenia las tarjetas de
+   agente y de API key: marco dentro de marco, con el padding del card-body
+   duplicado encima. Ahora son secciones planas y la unica tarjeta visible es
+   la del agente. */
+.seccion-ia {
+    background: transparent;
+}
+
+.seccion-ia-header {
+    padding: 0 2px 12px;
+    border-bottom: 1px solid #e8edf5;
+    margin-bottom: 16px;
+}
+
+.seccion-ia-header h5 {
+    font-weight: 600;
+}
+
+.seccion-ia-body {
+    padding: 0;
+}
+
+/* Tiles de metrica del panel de consumo: son numeros, no tarjetas. */
+.tile-metrica {
+    background: #f6f8fb;
+    border: 1px solid #eef2f7;
+    border-radius: 10px;
+    height: 100%;
+}
+
 /* Entrenamiento de agentes IA — tarjetas, modales y paneles.
    Movido desde el bloque <style> del template (442 lineas): la convencion del
    proyecto prohibe CSS embebido en templates. */
