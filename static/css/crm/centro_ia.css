@@ -214,3 +214,21 @@
     border-radius: .45rem;
     padding: .5rem .7rem;
 }
+
+.cia-fragmento {
+    border-left: 3px solid #4f46e5;
+    background: #f8f9fc;
+    border-radius: .35rem;
+    padding: .55rem .7rem;
+    margin-bottom: .5rem;
+    font-size: .84rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.cia-fragmento-meta {
+    font-size: .72rem;
+    color: #6b7280;
+    margin-bottom: .25rem;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+}

@@ -427,8 +427,6 @@
                         <small class="text-muted">Vacío = todos los canales del contacto (solo se muestran los que tenés conectados).</small>
                     </div>
                     {% else %}
-                    {# Un solo canal: no tiene sentido el multi-select. Enviamos el canal como hidden
-                       para que el backend reciba el mismo dato sin friccion de UI. #}
                     {% for canal in canales_disponibles %}
                         <input type="hidden" name="canales[]" value="{{ canal }}">
                     {% endfor %}

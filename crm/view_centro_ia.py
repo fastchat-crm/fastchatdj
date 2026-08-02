@@ -22,6 +22,7 @@ from crm.ia_config import (
     origen_parametros,
     parametros_efectivos,
     resolver_key_embeddings,
+    resolver_key_embeddings_str,
 )
 from crm.models import (
     PROVEEDORES_CON_EMBEDDINGS,
@@ -196,6 +197,12 @@ def _procesar_accion(request, perfil):
             return _marcar_flag(request, perfil, 'es_default')
         if action == 'revectorizar':
             return _revectorizar(request, perfil)
+        if action == 'estado_conocimiento':
+            return _estado_conocimiento(request, perfil)
+        if action == 'explorar_agente':
+            return _explorar_agente(request, perfil)
+        if action == 'consultar_agente':
+            return _consultar_agente(request, perfil)
         if action == 'guardar_key':
             return _guardar_key(request, perfil)
         if action == 'eliminar_key':
@@ -367,6 +374,150 @@ def _probar_key(request, perfil):
         'message': res.get('message') or '',
         'estado': res.get('status'),
         'reload': True,
+    })
+
+
+def _agente_del_perfil(request, perfil):
+    try:
+        pk = int(request.POST.get('agente_id') or 0)
+    except (TypeError, ValueError):
+        return None
+    return AgentesIA.objects.filter(pk=pk, perfil=perfil, status=True).first()
+
+
+def _estado_conocimiento(request, perfil):
+    """Cuánto conocimiento vectorizado tiene cada agente en Weaviate.
+
+    El tenant es **por agente** (`agente_<id>`), no por perfil, así que hay que
+    consultar uno por uno. Cada consulta abre y cierra su cliente, por eso esto
+    va bajo demanda y no al pintar la página.
+    """
+    from agents_ai.rag import weaviate as weaviate_rag
+
+    filas = []
+    for agente in AgentesIA.objects.filter(perfil=perfil, status=True).order_by('nombre'):
+        try:
+            total = weaviate_rag.contar(agente.id)
+        except Exception as ex:
+            logger.debug('No se pudo contar el tenant del agente %s: %s', agente.id, ex)
+            total = None
+        filas.append({
+            'id': agente.id,
+            'nombre': agente.nombre,
+            'total': total,
+            # None = no se pudo consultar (Weaviate caído); 0 = consultado y vacío.
+            'sin_memoria': total == 0,
+            'error': total is None,
+            'tiene_key': agente.apikey.filter(estado=True, status=True).exists(),
+        })
+
+    sin_memoria = [f for f in filas if f['sin_memoria']]
+    return JsonResponse({
+        'error': False,
+        'filas': filas,
+        'sin_memoria_ids': [f['id'] for f in sin_memoria],
+        'message': (f'{len(sin_memoria)} de {len(filas)} agentes no tienen conocimiento vectorizado.'
+                    if sin_memoria else
+                    f'Los {len(filas)} agentes tienen conocimiento vectorizado.'),
+    })
+
+
+def _explorar_agente(request, perfil):
+    """Qué hay dentro del tenant de un agente, agrupado por fuente."""
+    from agents_ai.rag import weaviate as weaviate_rag
+
+    agente = _agente_del_perfil(request, perfil)
+    if not agente:
+        return JsonResponse({'error': True, 'message': 'No se encontró el agente.'})
+
+    try:
+        total = weaviate_rag.contar(agente.id)
+        fuentes = weaviate_rag.resumen_fuentes(agente.id)
+    except Exception as ex:
+        logger.exception('No se pudo explorar el tenant del agente %s', agente.id)
+        return JsonResponse({'error': True, 'message': f'No se pudo consultar Weaviate: {ex}'})
+
+    return JsonResponse({
+        'error': False,
+        'agente': agente.nombre,
+        'total': total,
+        'fuentes': fuentes,
+        'message': (f'{total} fragmento(s) en {len(fuentes)} fuente(s).' if total else
+                    'Este agente todavía no tiene conocimiento vectorizado.'),
+    })
+
+
+def _consultar_agente(request, perfil):
+    """Corre una búsqueda real contra el conocimiento del agente.
+
+    Sirve para ver **qué recupera** el agente ante una pregunta concreta, que es
+    lo que después termina en su prompt: si acá no aparece, el agente tampoco lo
+    va a saber.
+    """
+    from agents_ai.rag import weaviate as weaviate_rag
+
+    agente = _agente_del_perfil(request, perfil)
+    if not agente:
+        return JsonResponse({'error': True, 'message': 'No se encontró el agente.'})
+
+    pregunta = (request.POST.get('pregunta') or '').strip()
+    if not pregunta:
+        return JsonResponse({'error': True, 'message': 'Escribí una pregunta para consultar.'})
+
+    api_key = resolver_key_embeddings_str(perfil.id)
+    if not api_key:
+        return JsonResponse({
+            'error': True,
+            'message': 'No hay ninguna API key que pueda generar embeddings. '
+                       'Marcá una de Gemini u OpenAI en «Claves y tokens».',
+        })
+
+    try:
+        k = max(1, min(int(request.POST.get('k') or 5), 20))
+    except (TypeError, ValueError):
+        k = 5
+
+    # Un agente sin tenant devuelve lista vacía igual que uno que sí tiene
+    # contenido pero no matchea. Son cosas distintas y la respuesta tiene que
+    # decir cuál es: en el primer caso hay que vectorizar, en el segundo no.
+    try:
+        total = weaviate_rag.contar(agente.id)
+    except Exception:
+        total = None
+    if total == 0:
+        return JsonResponse({
+            'error': False,
+            'agente': agente.nombre,
+            'pregunta': pregunta,
+            'fragmentos': [],
+            'sin_conocimiento': True,
+            'message': 'Este agente no tiene nada vectorizado todavía. '
+                       'Seleccionalo arriba y pulsá «Vectorizar seleccionados».',
+        })
+
+    try:
+        resultados = weaviate_rag.buscar(agente.id, api_key, pregunta, k=k)
+    except Exception as ex:
+        logger.exception('Consulta a Weaviate falló para el agente %s', agente.id)
+        return JsonResponse({'error': True, 'message': f'La consulta falló: {ex}'})
+
+    fragmentos = []
+    for r in (resultados or []):
+        fragmentos.append({
+            'texto': (r.get('content') or '')[:1200],
+            'source': r.get('source') or '',
+            'categoria': r.get('categoria') or '',
+            'distancia': r.get('distancia') if r.get('distancia') is not None else r.get('distance'),
+        })
+
+    return JsonResponse({
+        'error': False,
+        'agente': agente.nombre,
+        'pregunta': pregunta,
+        'fragmentos': fragmentos,
+        'message': (f'{len(fragmentos)} fragmento(s) recuperados.' if fragmentos else
+                    f'El agente tiene {total} fragmento(s) indexados, pero ninguno responde a esa '
+                    f'pregunta. Le falta ese contenido en el entrenamiento.'),
     })
 
 
