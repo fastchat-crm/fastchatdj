@@ -24,6 +24,42 @@ import logging
 _logger = logging.getLogger(__name__)
 
 
+def _consumo_acumulado(agente):
+    """Consumo histórico del agente: hoy y total, con costo estimado.
+
+    El costo se agrega **por modelo**, no sobre el total: cada modelo tiene su
+    tarifa y sumar todos los tokens y multiplicar por un precio único daría un
+    número inventado.
+    """
+    from django.db.models import Sum
+    from django.utils import timezone
+
+    from agents_ai.consumo import costo_usd
+
+    def _resumir(qs):
+        filas = (qs.values('modelo')
+                   .annotate(entrada=Sum('tokens_entrada'), salida=Sum('tokens_salida'),
+                             total=Sum('tokens_total'))
+                   .order_by())
+        tokens = costo = 0
+        for f in filas:
+            tokens += f['total'] or 0
+            costo += costo_usd(f['modelo'] or '', f['entrada'] or 0, f['salida'] or 0)
+        return {'tokens': tokens, 'costo_usd': round(costo, 6)}
+
+    try:
+        base = ConsumoTokenIA.objects.filter(agente=agente)
+        # `timezone.now().date()`, no `localdate()`: el proyecto corre con
+        # datetimes naive y `localdate()` levanta ValueError. Es el mismo patrón
+        # que usa `crm/alertas_consumo.py`.
+        hoy = base.filter(fecha__date=timezone.now().date())
+        return {'hoy': _resumir(hoy), 'total': _resumir(base)}
+    except Exception:
+        _logger.exception('No se pudo calcular el consumo acumulado del agente %s',
+                          getattr(agente, 'id', None))
+        return {'hoy': {'tokens': 0, 'costo_usd': 0}, 'total': {'tokens': 0, 'costo_usd': 0}}
+
+
 def _registrar_consumo_tokens(respuesta_llm, apikey_obj, agente=None, modelo='',
                               conversacion=None, origen='chat_crm', prompt_preview=''):
     """Extrae tokens de la respuesta LangChain y crea ConsumoTokenIA + verifica alertas."""
@@ -235,17 +271,35 @@ def chat_agente_view(request, agente_enc_id):
                 except Exception:
                     pass
 
+            # Costo del mensaje y acumulado histórico del agente, para que el
+            # contador en vivo no arranque de cero en cada recarga: lo que se
+            # gastó ya está gastado y el usuario necesita verlo.
+            from agents_ai.consumo import costo_usd as _costo_usd
+            _modelo = consultor.model_name or ''
+            _costo_msg = _costo_usd(_modelo, resultado.tokens_entrada, resultado.tokens_salida)
+            _acumulado = _consumo_acumulado(agente)
+
             return JsonResponse({
                 'error': False,
                 'respuesta': resultado.respuesta,
                 'fin_detectado': fin_detectado,
                 'sin_datos': resultado.sin_datos,
+                'consumo': {
+                    'mensaje': {
+                        'tokens_in': resultado.tokens_entrada,
+                        'tokens_out': resultado.tokens_salida,
+                        'tokens_total': resultado.tokens_total,
+                        'costo_usd': _costo_msg,
+                    },
+                    'acumulado': _acumulado,
+                },
                 'traza': {
                     'latencia_total_ms': int((time.time() - _t0) * 1000),
                     'latencia_llm_ms': _lat_llm,
                     'tokens_in': resultado.tokens_entrada,
                     'tokens_out': resultado.tokens_salida,
                     'tokens_total': resultado.tokens_total,
+                    'costo_usd': _costo_msg,
                     'modelo': consultor.model_name,
                     'proveedor': {2: 'Gemini', 3: 'OpenAI', 4: 'Claude', 5: 'Ollama'}.get(apikey_obj.proveedor, 'LLM'),
                     'caracteres_respuesta': len(resultado.respuesta or ''),
@@ -276,6 +330,10 @@ def chat_agente_view(request, agente_enc_id):
     data['agente'] = agente
     data['agente_enc_id'] = agente_enc_id
     data['mensajes_previos'] = mensajes_previos
+    # Semilla del contador en vivo: lo ya consumido por este agente. Sin esto
+    # el contador arrancaría en cero en cada recarga y daría la impresión
+    # equivocada de cuánto se lleva gastado.
+    data['consumo_inicial'] = _consumo_acumulado(agente)
 
     return render(request, 'crm/entrenamiento/chat.html', data)
 
@@ -395,6 +453,30 @@ def _clasificar_error_llm(ex, apikey_obj=None, modelo_str=''):
             except Exception:
                 pass
         return f"⚠️ El modelo '{modelo_lbl}' no está disponible para esta API Key. Edita la key y cambia el Modelo LLM.", True, flags
+    # Transitorio: el proveedor tardó demasiado o está saturado. NO es culpa de
+    # la key y por eso no se desactiva — hacerlo dejaría al agente mudo por una
+    # caída pasajera del proveedor.
+    is_transitorio = (
+        '504' in err_str
+        or '503' in err_str
+        or 'deadline_exceeded' in err_lower
+        or 'deadline expired' in err_lower
+        or 'unavailable' in err_lower
+        or 'overloaded' in err_lower
+        or 'timeout' in err_lower
+        or 'timed out' in err_lower
+        or 'try again later' in err_lower
+    )
+    if is_transitorio:
+        flags['transitorio'] = True
+        modelo_lbl = modelo_str or 'el modelo'
+        return (
+            f"⏱️ {modelo_lbl} no respondió a tiempo (el proveedor está saturado o la consulta "
+            f"es muy pesada). No es un problema de tu API Key. Probá de nuevo en unos segundos; "
+            f"si se repite seguido, reducí el contexto del agente o usá un modelo más rápido.",
+            None, flags,
+        )
+
     # Otro: no tocamos la key, solo mostramos mensaje corto
     return f"❌ Error del proveedor LLM: {err_str[:300]}", None, flags
 

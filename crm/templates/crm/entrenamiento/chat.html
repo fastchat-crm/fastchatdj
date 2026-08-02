@@ -3,7 +3,7 @@
 {% block atras %}{{ request.path }}{% endblock %}
 
 {% block head %}
-    <link rel="stylesheet" href="{% static 'stylenew/chat_traza.css' %}">
+    <link rel="stylesheet" href="/static/stylenew/chat_traza.css?v1.1">
     <style>
         /* ── Reset & layout ─────────────────────────────────────────────── */
         .chat-page-wrapper {
@@ -692,6 +692,24 @@
                     </div>
                 </div>
                 <div class="chat-head-right">
+                    <div class="tok-contador" id="tokContador"
+                         title="Tokens y costo estimado. La sesión cuenta desde que abriste esta pantalla.">
+                        <div class="tok-bloque">
+                            <span class="tok-label">Sesión</span>
+                            <span class="tok-valor" id="tokSesion">0</span>
+                            <span class="tok-costo" id="tokSesionCosto">$0.0000</span>
+                        </div>
+                        <div class="tok-bloque">
+                            <span class="tok-label">Hoy</span>
+                            <span class="tok-valor" id="tokHoy">{{ consumo_inicial.hoy.tokens|default:0 }}</span>
+                            <span class="tok-costo" id="tokHoyCosto">${{ consumo_inicial.hoy.costo_usd|floatformat:4 }}</span>
+                        </div>
+                        <div class="tok-bloque">
+                            <span class="tok-label">Total</span>
+                            <span class="tok-valor" id="tokTotal">{{ consumo_inicial.total.tokens|default:0 }}</span>
+                            <span class="tok-costo" id="tokTotalCosto">${{ consumo_inicial.total.costo_usd|floatformat:4 }}</span>
+                        </div>
+                    </div>
                     {% for api in agente.apikey.all %}
                         <span class="badge {% if api.estado %}bg-opacity-20{% else %}bg-danger bg-opacity-75{% endif %} text-white"
                               style="font-size:.68rem;"
@@ -1057,6 +1075,50 @@
                 return html;
             }
 
+            /* ── Contador de tokens en vivo ──────────────────────────────
+               «Sesión» cuenta desde que se abrió la pantalla; «Hoy» y «Total»
+               vienen del servidor, que es la fuente de verdad: el acumulado ya
+               incluye lo que se gastó desde otras pestañas o antes de entrar. */
+            var tokSesionTotal = 0, tokSesionCosto = 0;
+
+            function fmtNum(n) {
+                return Number(n || 0).toLocaleString('es-AR');
+            }
+
+            function actualizarContadorTokens(consumo) {
+                if (!consumo) { return; }
+                var m = consumo.mensaje || {};
+                tokSesionTotal += (m.tokens_total || 0);
+                tokSesionCosto += (m.costo_usd || 0);
+
+                var el = document.getElementById('tokSesion');
+                if (el) { el.textContent = fmtNum(tokSesionTotal); }
+                el = document.getElementById('tokSesionCosto');
+                if (el) { el.textContent = '$' + tokSesionCosto.toFixed(4); }
+
+                var a = consumo.acumulado || {};
+                if (a.hoy) {
+                    el = document.getElementById('tokHoy');
+                    if (el) { el.textContent = fmtNum(a.hoy.tokens); }
+                    el = document.getElementById('tokHoyCosto');
+                    if (el) { el.textContent = '$' + Number(a.hoy.costo_usd || 0).toFixed(4); }
+                }
+                if (a.total) {
+                    el = document.getElementById('tokTotal');
+                    if (el) { el.textContent = fmtNum(a.total.tokens); }
+                    el = document.getElementById('tokTotalCosto');
+                    if (el) { el.textContent = '$' + Number(a.total.costo_usd || 0).toFixed(4); }
+                }
+
+                // Destello para que se note que el numero cambio.
+                var cont = document.getElementById('tokContador');
+                if (cont) {
+                    cont.classList.remove('tok-pulso');
+                    void cont.offsetWidth;
+                    cont.classList.add('tok-pulso');
+                }
+            }
+
             function appendBubble(tipo, texto, traza) {
                 const empty = document.getElementById('empty-state');
                 if (empty) empty.remove();
@@ -1351,6 +1413,7 @@
                                 noDataBanner.classList.add('visible');
                             }
                             appendBubble('ia', res.respuesta, res.traza);
+                            actualizarContadorTokens(res.consumo);
                             if (res.fin_detectado) {
                                 marcarFinConversacion();
                             }
