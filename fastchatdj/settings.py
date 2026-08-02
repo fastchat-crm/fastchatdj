@@ -123,6 +123,8 @@ INSTALLED_APPS = [
     'facebook.apps.FacebookConfig',
     'tiktok.apps.TiktokConfig',
     'crm.apps.CrmConfig',
+    'objetos.apps.ObjetosConfig',
+    'automatizacion.apps.AutomatizacionConfig',
     'agents_ai.apps.AgentsAiConfig',
     'voz.apps.VozConfig',
     'agenda.apps.AgendaConfig',

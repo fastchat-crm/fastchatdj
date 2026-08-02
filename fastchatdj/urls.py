@@ -15,6 +15,8 @@ from autenticacion.urls import autenticacion_urls
 from autenticacion.view_perfil import perfilView
 from core.ajax import ConsultasAjax
 from crm.urls import crm_urls
+from objetos.urls import objetos_urls
+from automatizacion.urls import automatizacion_urls
 from fastchatdj.view_clearsitedata import clearSiteDataView
 from fastchatdj.view_health import health_view
 from fastchatdj import settings
@@ -100,6 +102,22 @@ urls_sistema = (
         "url": 'crm/',
         "sub_urls": crm_urls,
         "include": include('crm.urls'),
+        "name": None,
+        "vista": None
+    },
+    {
+        "nombre": "Automatizaciones",
+        "url": 'automatizacion/',
+        "sub_urls": automatizacion_urls,
+        "include": include('automatizacion.urls'),
+        "name": None,
+        "vista": None
+    },
+    {
+        "nombre": "Objetos personalizados",
+        "url": 'objetos/',
+        "sub_urls": objetos_urls,
+        "include": include('objetos.urls'),
         "name": None,
         "vista": None
     },

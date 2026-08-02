@@ -77,7 +77,7 @@ def process_incoming_message(session, event_data, channel_layer):
             return
 
         # Buscar o crear la conversación
-        contacto, _ = Contacto.objects.get_or_create(
+        contacto, contacto_es_nuevo = Contacto.objects.get_or_create(
             sesion=session, from_number=from_number
         )
         contacto.estado = 'activo'
@@ -131,6 +131,22 @@ def process_incoming_message(session, event_data, channel_layer):
             contacto.referral_meta = referral
 
         contacto.save()
+
+        # Automatizaciones: un contacto nuevo puede disparar acciones (etiquetar,
+        # asignar, dar la bienvenida por correo). `disparar` no ejecuta nada de
+        # forma síncrona — crea la ejecución y el cron la procesa —, así que no
+        # agrega latencia al webhook ni puede romperlo.
+        if contacto_es_nuevo:
+            from automatizacion.motor import disparar
+            from automatizacion.models import EVENTO_CONTACTO_CREADO
+            disparar(EVENTO_CONTACTO_CREADO, {
+                'contacto_id': contacto.id,
+                'contacto_nombre': contacto.contacto_nombre or '',
+                'numero': contacto.contacto_numero or '',
+                'canal': contacto.canal or '',
+                'sesion_id': session.id,
+                'sesion': session.nombre or '',
+            })
 
         # Determinar el tipo de mensaje y su contenido
         message_type = 'texto'

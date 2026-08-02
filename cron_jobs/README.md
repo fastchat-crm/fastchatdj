@@ -18,6 +18,7 @@ lo ejecuta. **Sin conectarlos, esas funciones se ven en pantalla pero nunca env�
 | `ejecutar_campanas.py` | Envía las campañas masivas que creas en `/whatsapp/campanas/` | Las campañas quedan en "programada" para siempre | Cada 1 min |
 | `enviar_mensajes_programados.py` | Envía los mensajes individuales agendados a fecha/hora desde la ficha del contacto | Los mensajes agendados nunca salen | Cada 1 min |
 | `ejecutar_secuencias.py` | Envía los pasos de las secuencias drip de `/whatsapp/secuencias/` cuando vence su espera | Los inscritos nunca reciben la serie de mensajes | Cada 5 min |
+| `procesar_automatizaciones.py` | Hace avanzar las automatizaciones de `/automatizacion/`: ejecuta las acciones pendientes y retoma las que estaban en un paso `esperar` | Las automatizaciones con espera **nunca terminan**: quedan dormidas para siempre | Cada 1 min |
 | `enviar_recordatorios_turnos.py` | Recuerda las citas de agenda N horas antes (con confirmar/cancelar por respuesta) | Clientes sin recordatorio → más ausencias | Cada 15 min |
 | `enviar_mensaje_reconexion.py` | Da un empujón al cliente que dejó de responder antes de que venza la ventana 24h | Leads tibios mueren; recuperarlos costará plantilla paga | Cada 15 min |
 | `enviar_mensaje_despedida.py` | Cierra ordenadamente conversaciones expiradas o muertas (dispara resumen + sentimiento) | Bandejas infladas de zombies y sin resúmenes IA | Cada 10 min |
@@ -41,6 +42,7 @@ no necesitan el servidor corriendo, solo el virtualenv y la BD accesibles.
 ```
 * * * * *    cd /ruta/fastchatdj && /ruta/venv/bin/python cron_jobs/ejecutar_campanas.py
 * * * * *    cd /ruta/fastchatdj && /ruta/venv/bin/python cron_jobs/enviar_mensajes_programados.py
+* * * * *    cd /ruta/fastchatdj && /ruta/venv/bin/python cron_jobs/procesar_automatizaciones.py
 */5 * * * *  cd /ruta/fastchatdj && /ruta/venv/bin/python cron_jobs/ejecutar_secuencias.py
 */5 * * * *  cd /ruta/fastchatdj && /ruta/venv/bin/python cron_jobs/reabrir_pospuestas.py
 */5 * * * *  cd /ruta/fastchatdj && /ruta/venv/bin/python cron_jobs/reconectar_sesiones.py

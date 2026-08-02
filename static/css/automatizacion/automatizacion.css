@@ -1,0 +1,250 @@
+.aut-hero {
+    background: linear-gradient(135deg, #b45309 0%, #d97706 100%);
+    color: #fff;
+    border-radius: .75rem;
+    padding: 1.4rem 1.6rem;
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.aut-hero h4 {
+    margin: 0 0 .3rem;
+    font-weight: 600;
+}
+
+.aut-hero p {
+    margin: 0;
+    opacity: .92;
+    font-size: .88rem;
+    max-width: 70ch;
+}
+
+.aut-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: .65rem;
+    padding: 1rem;
+    margin-bottom: 1.1rem;
+    height: calc(100% - 1.1rem);
+    display: flex;
+    flex-direction: column;
+}
+
+.aut-card-pausada {
+    opacity: .68;
+}
+
+.aut-card-plano {
+    padding: 0;
+    height: auto;
+}
+
+.aut-card-head {
+    padding: .8rem 1rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.aut-card-head h6 {
+    margin: 0;
+    font-weight: 600;
+    font-size: .92rem;
+}
+
+.aut-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: .55rem;
+}
+
+.aut-card h6 {
+    margin: 0 0 .3rem;
+    font-weight: 600;
+    font-size: .95rem;
+}
+
+.aut-estado {
+    font-size: .68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    padding: .15rem .5rem;
+    border-radius: 1rem;
+}
+
+.aut-estado-on {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.aut-estado-off {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+.aut-disparador {
+    font-size: .8rem;
+    color: #b45309;
+    margin: 0 0 .4rem;
+    font-weight: 500;
+}
+
+.aut-desc {
+    color: #6b7280;
+    font-size: .8rem;
+    margin: 0 0 .5rem;
+    line-height: 1.4;
+}
+
+.aut-flujo {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: .4rem;
+    padding: .45rem .6rem;
+    font-size: .78rem;
+    color: #78350f;
+    margin-bottom: .6rem;
+    word-break: break-word;
+}
+
+.aut-stats {
+    display: flex;
+    gap: .9rem;
+    font-size: .76rem;
+    color: #6b7280;
+    margin-bottom: .7rem;
+    margin-top: auto;
+}
+
+.aut-pendiente {
+    color: #b45309;
+    font-weight: 600;
+}
+
+.aut-icon-btn {
+    border: 0;
+    background: transparent;
+    color: #6b7280;
+    width: 28px;
+    height: 28px;
+    border-radius: .35rem;
+    font-size: .78rem;
+}
+
+.aut-icon-btn:hover {
+    background: #f3f4f6;
+    color: #111827;
+}
+
+.aut-tabla {
+    width: 100%;
+    font-size: .84rem;
+}
+
+.aut-tabla th {
+    font-weight: 600;
+    color: #374151;
+    border-bottom: 2px solid #e5e7eb;
+    padding: .5rem .6rem;
+    text-align: left;
+}
+
+.aut-tabla td {
+    border-bottom: 1px solid #f3f4f6;
+    padding: .5rem .6rem;
+}
+
+.aut-badge {
+    font-size: .7rem;
+    font-weight: 600;
+    padding: .12rem .5rem;
+    border-radius: 1rem;
+}
+
+.aut-badge-pendiente,
+.aut-badge-esperando {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.aut-badge-completada {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.aut-badge-fallida {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.aut-badge-cancelada {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+.aut-form-accion {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: .5rem;
+    padding: .9rem;
+}
+
+.aut-pasos {
+    padding-left: 1.2rem;
+    margin: 0;
+    font-size: .86rem;
+}
+
+.aut-pasos li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    padding: .35rem 0;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.aut-vacio {
+    text-align: center;
+    padding: 3rem 1.5rem;
+    background: #fff;
+    border: 1px dashed #d1d5db;
+    border-radius: .65rem;
+}
+
+.aut-vacio i {
+    font-size: 2.4rem;
+    color: #fbbf24;
+    margin-bottom: .8rem;
+    display: block;
+}
+
+.aut-vacio h6 {
+    font-weight: 600;
+    margin-bottom: .4rem;
+}
+
+.aut-vacio p {
+    color: #6b7280;
+    font-size: .86rem;
+    max-width: 58ch;
+    margin: 0 auto 1rem;
+}
+
+.aut-vacio-mini {
+    color: #6b7280;
+    font-size: .85rem;
+    padding: 1rem;
+    margin: 0;
+    text-align: center;
+}
+
+@media (max-width: 767.98px) {
+    .aut-hero {
+        padding: 1.1rem;
+    }
+}

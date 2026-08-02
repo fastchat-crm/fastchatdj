@@ -197,6 +197,20 @@ def citasView(request):
                         t.notas = ((t.notas + '\n' + linea) if t.notas else linea)[:4000]
                     t.save(request=request)
                     log(f'Turno {t.id} marcado como {nuevo}', request, 'change', obj=t.id)
+
+                    # Automatizaciones: "cita cumplida" es el disparador típico
+                    # del pedido de reseña (esperar N días → enviar WhatsApp).
+                    if nuevo == 'fulfilled' and estado_anterior != 'fulfilled':
+                        from automatizacion.motor import disparar
+                        from automatizacion.models import EVENTO_CITA_CUMPLIDA
+                        disparar(EVENTO_CITA_CUMPLIDA, {
+                            'turno_id': t.id,
+                            'contacto_id': getattr(t, 'contacto_id', None),
+                            'servicio': str(getattr(t, 'servicio', '') or ''),
+                            'recurso': str(getattr(t, 'recurso', '') or ''),
+                            'estado_anterior': estado_anterior,
+                        })
+
                     return JsonResponse({'error': False, 'reload': True})
 
                 if action == 'delete':

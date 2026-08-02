@@ -1062,6 +1062,24 @@ class ConversacionWhatsApp(ModeloBase):
         except Exception:
             _log.exception("No pude registrar traza fin_conversacion")
 
+        # Automatizaciones: cerrar una conversación es el gancho natural para
+        # encuestas de satisfacción o pedidos de reseña. `disparar` solo encola;
+        # el cron ejecuta, así que un fallo acá no puede impedir el cierre.
+        try:
+            from automatizacion.motor import disparar
+            from automatizacion.models import EVENTO_CONVERSACION_FINALIZADA
+            disparar(EVENTO_CONVERSACION_FINALIZADA, {
+                'conversacion_id': self.id,
+                'contacto_id': self.contacto_id,
+                'contacto_nombre': getattr(self.contacto, 'contacto_nombre', '') or '',
+                'numero': getattr(self.contacto, 'contacto_numero', '') or '',
+                'sesion_id': getattr(sesion, 'id', None),
+                'clasificacion': self.clasificacion,
+                'estado_atencion': self.estado_atencion,
+            })
+        except Exception:
+            _log.exception("No pude disparar las automatizaciones de fin_conversacion")
+
         return True
 
     @classmethod

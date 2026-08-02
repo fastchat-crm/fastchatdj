@@ -1,0 +1,367 @@
+{% extends 'base.html' %}
+
+{% block head %}
+    <link rel="stylesheet" href="/static/css/objetos/objetos.css?v1.0">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <div class="obj-hero">
+        <div>
+            <h4><i class="fa fa-cubes me-2"></i>Objetos personalizados</h4>
+            <p>Creá tus propias entidades con los campos que necesites. No hace falta tocar código
+               ni esperar un despliegue.</p>
+        </div>
+        <button type="button" class="btn btn-light btn-sm" id="objNuevo">
+            <i class="fa fa-plus me-1"></i>Nuevo objeto
+        </button>
+    </div>
+
+    {% if objetos %}
+        <div class="row">
+            {% for o in objetos %}
+                <div class="col-xl-3 col-lg-4 col-md-6">
+                    <div class="obj-card">
+                        <div class="obj-card-top">
+                            <span class="obj-icono"><i class="{{ o.icono|default:'fa fa-cube' }}"></i></span>
+                            <div class="obj-card-acciones">
+                                <button type="button" class="obj-icon-btn obj-editar"
+                                        data-pk="{{ o.id }}"
+                                        data-singular="{{ o.nombre_singular }}"
+                                        data-plural="{{ o.nombre_plural }}"
+                                        data-icono="{{ o.icono }}"
+                                        data-descripcion="{{ o.descripcion }}"
+                                        title="Editar">
+                                    <i class="fa fa-pen"></i>
+                                </button>
+                                <button type="button" class="obj-icon-btn obj-borrar"
+                                        data-pk="{{ o.id }}" data-nombre="{{ o.nombre_plural }}"
+                                        title="Eliminar">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <h6>{{ o.nombre_plural }}</h6>
+                        {% if o.descripcion %}
+                            <p class="obj-card-desc">{{ o.descripcion }}</p>
+                        {% endif %}
+                        <div class="obj-card-stats">
+                            <span><strong>{{ o.total_campos }}</strong> campo{{ o.total_campos|pluralize }}</span>
+                            <span><strong>{{ o.total_registros }}</strong> registro{{ o.total_registros|pluralize }}</span>
+                        </div>
+                        <div class="obj-card-pie">
+                            <button type="button" class="btn btn-sm btn-outline-primary obj-campos"
+                                    data-pk="{{ o.id }}" data-nombre="{{ o.nombre_plural }}">
+                                <i class="fa fa-sliders-h me-1"></i>Campos
+                            </button>
+                            <a href="/objetos/{{ o.slug }}/" class="btn btn-sm btn-primary">
+                                <i class="fa fa-table me-1"></i>Abrir
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="obj-vacio">
+            <i class="fa fa-cubes"></i>
+            <h6>Todavía no hay objetos personalizados</h6>
+            <p>Un objeto es una entidad tuya: Propiedades, Pólizas, Vehículos, Expedientes.
+               Definís sus campos una vez y el sistema arma el listado y el formulario solo.</p>
+            <button type="button" class="btn btn-primary btn-sm" id="objNuevoVacio">
+                <i class="fa fa-plus me-1"></i>Crear el primero
+            </button>
+        </div>
+    {% endif %}
+</div>
+
+<div class="modal fade" id="objModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title" id="objModalTitulo">Nuevo objeto</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="objPk">
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Nombre en singular</label>
+                    <input type="text" class="form-control form-control-sm" id="objSingular" placeholder="Propiedad">
+                    <div class="form-text">Cómo se llama un registro suelto.</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Nombre en plural</label>
+                    <input type="text" class="form-control form-control-sm" id="objPlural" placeholder="Propiedades">
+                    <div class="form-text">Cómo se llama el listado y el módulo.</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Ícono</label>
+                    <input type="text" class="form-control form-control-sm" id="objIcono" placeholder="fa fa-home">
+                    <div class="form-text">Clase de Font Awesome.</div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small fw-semibold">Descripción</label>
+                    <textarea class="form-control form-control-sm" id="objDescripcion" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-sm btn-primary" id="objGuardar">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="objCamposModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">Campos de <span id="objCamposNombre"></span></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="objCamposObjetoId">
+                <input type="hidden" id="objCampoPk">
+
+                <div class="obj-form-campo">
+                    <div class="row g-2">
+                        <div class="col-md-5">
+                            <label class="form-label small fw-semibold">Etiqueta</label>
+                            <input type="text" class="form-control form-control-sm" id="campoEtiqueta" placeholder="Dirección">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-semibold">Tipo de dato</label>
+                            <select class="form-select form-select-sm" id="campoTipo">
+                                {% for valor, label in tipos_campo %}
+                                    <option value="{{ valor }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button type="button" class="btn btn-sm btn-primary w-100" id="campoGuardar">
+                                <i class="fa fa-plus me-1"></i><span id="campoGuardarTexto">Agregar</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row g-2 mt-1">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold">Texto de ayuda</label>
+                            <input type="text" class="form-control form-control-sm" id="campoAyuda">
+                        </div>
+                        <div class="col-md-6 d-flex align-items-end gap-3 pb-1">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="campoRequerido">
+                                <label class="form-check-label small" for="campoRequerido">Obligatorio</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="campoMostrar">
+                                <label class="form-check-label small" for="campoMostrar">Mostrar como columna</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row g-2 mt-1 obj-oculto" id="campoOpcionesBloque">
+                        <div class="col-12">
+                            <label class="form-label small fw-semibold">Opciones (una por renglón)</label>
+                            <textarea class="form-control form-control-sm" id="campoOpciones" rows="3"></textarea>
+                        </div>
+                    </div>
+                    <div class="mt-2 obj-oculto" id="campoCancelarBloque">
+                        <button type="button" class="btn btn-sm btn-link p-0" id="campoCancelar">Cancelar edición</button>
+                    </div>
+                </div>
+
+                <div id="objCamposLista" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block jscript %}
+<script>
+const OBJ_TIPOS_CON_OPCIONES = {{ tipos_con_opciones|safe }};
+
+function objEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+}
+
+function objPost(datos, alTerminar) {
+    datos.csrfmiddlewaretoken = '{{ csrf_token }}';
+    $.post('{{ request.path }}', datos).done(function (r) {
+        if (r.error) {
+            Swal.fire({ type: 'error', title: 'No se pudo guardar', text: r.message });
+            return;
+        }
+        alTerminar(r);
+    }).fail(function () {
+        Swal.fire({ type: 'error', title: 'Error', text: 'No se pudo contactar al servidor.' });
+    });
+}
+
+function objAbrirModal(titulo) {
+    $('#objModalTitulo').text(titulo);
+    new bootstrap.Modal(document.getElementById('objModal')).show();
+}
+
+function objLimpiarModal() {
+    $('#objPk').val('');
+    $('#objSingular, #objPlural, #objIcono, #objDescripcion').val('');
+}
+
+$('#objNuevo, #objNuevoVacio').on('click', function () {
+    objLimpiarModal();
+    objAbrirModal('Nuevo objeto');
+});
+
+$('.obj-editar').on('click', function () {
+    var $b = $(this);
+    $('#objPk').val($b.data('pk'));
+    $('#objSingular').val($b.data('singular'));
+    $('#objPlural').val($b.data('plural'));
+    $('#objIcono').val($b.data('icono'));
+    $('#objDescripcion').val($b.data('descripcion'));
+    objAbrirModal('Editar objeto');
+});
+
+$('#objGuardar').on('click', function () {
+    var pk = $('#objPk').val();
+    objPost({
+        action: pk ? 'change_objeto' : 'add_objeto',
+        pk: pk,
+        nombre_singular: $('#objSingular').val(),
+        nombre_plural: $('#objPlural').val(),
+        icono: $('#objIcono').val(),
+        descripcion: $('#objDescripcion').val()
+    }, function (r) {
+        Swal.fire({ type: 'success', title: 'Listo', text: r.message, timer: 1600, showConfirmButton: false });
+        setTimeout(function () { location.reload(); }, 1200);
+    });
+});
+
+$('.obj-borrar').on('click', function () {
+    var pk = $(this).data('pk');
+    var nombre = $(this).data('nombre');
+    Swal.fire({
+        title: '¿Eliminar "' + nombre + '"?',
+        text: 'Los registros dejan de listarse pero no se borran de la base.',
+        type: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar'
+    }).then(function (res) {
+        if (!res.value) { return; }
+        objPost({ action: 'delete_objeto', pk: pk }, function (r) {
+            Swal.fire({ type: 'success', title: 'Eliminado', text: r.message, timer: 1500, showConfirmButton: false });
+            setTimeout(function () { location.reload(); }, 1200);
+        });
+    });
+});
+
+function objRenderCampos(campos) {
+    if (!campos.length) {
+        $('#objCamposLista').html('<p class="obj-vacio-mini">Este objeto todavía no tiene campos.</p>');
+        return;
+    }
+    var html = '<table class="obj-tabla"><thead><tr>'
+             + '<th>Etiqueta</th><th>Clave</th><th>Tipo</th><th>Marcas</th><th></th>'
+             + '</tr></thead><tbody>';
+    campos.forEach(function (c) {
+        var marcas = '';
+        if (c.requerido) { marcas += '<span class="obj-badge obj-badge-req">Obligatorio</span> '; }
+        if (c.mostrar_en_listado) { marcas += '<span class="obj-badge obj-badge-col">Columna</span>'; }
+        html += '<tr>'
+             +  '<td>' + objEsc(c.etiqueta) + '</td>'
+             +  '<td><code>' + objEsc(c.nombre) + '</code></td>'
+             +  '<td class="text-muted">' + objEsc(c.tipo_label) + '</td>'
+             +  '<td>' + marcas + '</td>'
+             +  '<td class="text-end">'
+             +   '<button type="button" class="obj-icon-btn campo-editar" data-campo=\'' + objEsc(JSON.stringify(c)) + '\'><i class="fa fa-pen"></i></button>'
+             +   '<button type="button" class="obj-icon-btn campo-borrar" data-pk="' + c.id + '"><i class="fa fa-trash"></i></button>'
+             +  '</td></tr>';
+    });
+    $('#objCamposLista').html(html + '</tbody></table>');
+}
+
+function objCargarCampos() {
+    objPost({ action: 'listar_campos', objeto_id: $('#objCamposObjetoId').val() }, function (r) {
+        objRenderCampos(r.campos);
+    });
+}
+
+function objResetFormCampo() {
+    $('#objCampoPk').val('');
+    $('#campoEtiqueta, #campoAyuda, #campoOpciones').val('');
+    $('#campoRequerido, #campoMostrar').prop('checked', false);
+    $('#campoGuardarTexto').text('Agregar');
+    $('#campoCancelarBloque').addClass('obj-oculto');
+    objToggleOpciones();
+}
+
+function objToggleOpciones() {
+    var tipo = $('#campoTipo').val();
+    $('#campoOpcionesBloque').toggleClass('obj-oculto', OBJ_TIPOS_CON_OPCIONES.indexOf(tipo) === -1);
+}
+
+$('#campoTipo').on('change', objToggleOpciones);
+
+$('.obj-campos').on('click', function () {
+    $('#objCamposObjetoId').val($(this).data('pk'));
+    $('#objCamposNombre').text($(this).data('nombre'));
+    objResetFormCampo();
+    objCargarCampos();
+    new bootstrap.Modal(document.getElementById('objCamposModal')).show();
+});
+
+$('#campoGuardar').on('click', function () {
+    var pk = $('#objCampoPk').val();
+    objPost({
+        action: pk ? 'change_campo' : 'add_campo',
+        pk: pk,
+        objeto_id: $('#objCamposObjetoId').val(),
+        etiqueta: $('#campoEtiqueta').val(),
+        tipo: $('#campoTipo').val(),
+        ayuda: $('#campoAyuda').val(),
+        opciones: $('#campoOpciones').val(),
+        requerido: $('#campoRequerido').is(':checked') ? 'on' : '',
+        mostrar_en_listado: $('#campoMostrar').is(':checked') ? 'on' : ''
+    }, function (r) {
+        objResetFormCampo();
+        objCargarCampos();
+    });
+});
+
+$('#campoCancelar').on('click', objResetFormCampo);
+
+$(document).on('click', '.campo-editar', function () {
+    var c = JSON.parse($(this).attr('data-campo'));
+    $('#objCampoPk').val(c.id);
+    $('#campoEtiqueta').val(c.etiqueta);
+    $('#campoTipo').val(c.tipo);
+    $('#campoAyuda').val(c.ayuda);
+    $('#campoOpciones').val(c.opciones);
+    $('#campoRequerido').prop('checked', c.requerido);
+    $('#campoMostrar').prop('checked', c.mostrar_en_listado);
+    $('#campoGuardarTexto').text('Guardar');
+    $('#campoCancelarBloque').removeClass('obj-oculto');
+    objToggleOpciones();
+});
+
+$(document).on('click', '.campo-borrar', function () {
+    var pk = $(this).data('pk');
+    Swal.fire({
+        title: '¿Eliminar el campo?',
+        text: 'Los valores ya cargados quedan guardados por si lo restaurás.',
+        type: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar',
+        cancelButtonText: 'Cancelar'
+    }).then(function (res) {
+        if (!res.value) { return; }
+        objPost({ action: 'delete_campo', pk: pk }, function () { objCargarCampos(); });
+    });
+});
+</script>
+{% endblock %}

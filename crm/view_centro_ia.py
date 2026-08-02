@@ -54,17 +54,29 @@ RANGOS_FLOAT = {
 CAMPOS_BOOL = ('memoria_rag_activa',)
 
 
-def _etiquetas_parametros():
-    """Label + help_text de cada parámetro, leídos del propio modelo para no
-    duplicar los textos en el template."""
-    etiquetas = {}
+def _parametros_para_form(perfil_id):
+    """Lista lista para el template: campo, valor efectivo, label y ayuda.
+
+    Los textos salen del propio modelo (`verbose_name` / `help_text`) para no
+    duplicarlos en el HTML y que no se desincronicen con el form del agente.
+    """
+    valores = parametros_efectivos(perfil_id=perfil_id)
+    filas = []
     for campo in CAMPOS_HEREDABLES:
         try:
             f = ConfiguracionIA._meta.get_field(campo)
-            etiquetas[campo] = {'label': f.verbose_name, 'ayuda': f.help_text}
+            label, ayuda = f.verbose_name, f.help_text
         except Exception:
-            etiquetas[campo] = {'label': campo, 'ayuda': ''}
-    return etiquetas
+            label, ayuda = campo, ''
+        filas.append({
+            'campo': campo,
+            'valor': valores.get(campo),
+            'label': label,
+            'ayuda': ayuda,
+            'es_bool': campo in CAMPOS_BOOL,
+            'solo_centro': campo in CAMPOS_SOLO_CENTRO,
+        })
+    return filas
 
 
 def _config_editable(perfil):
@@ -119,10 +131,7 @@ def centro_ia_view(request):
     data['perfil'] = perfil
     data['config'] = _config_editable(perfil)
     data['hereda_de_plataforma'] = bool(config_efectiva and not config_efectiva.perfil_id)
-    data['parametros'] = parametros_efectivos(perfil_id=perfil.id)
-    data['etiquetas'] = _etiquetas_parametros()
-    data['campos_bool'] = CAMPOS_BOOL
-    data['campos_solo_centro'] = CAMPOS_SOLO_CENTRO
+    data['parametros'] = _parametros_para_form(perfil.id)
     data['keys'] = keys
     data['key_embeddings'] = embed
     data['agentes'] = _resumen_agentes(perfil)
