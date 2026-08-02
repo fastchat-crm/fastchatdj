@@ -645,7 +645,7 @@ def process_incoming_message(session, event_data, channel_layer):
             logger.warning("Guard horario falló (continúa flujo normal): %s", _h_ex)
         # ─────────────────────────────────────────────────────────────────
 
-        _ia_activa = bool(session.agente_ia and session.agente_ia.apikey.filter(estado=True).exists())
+        _ia_activa = bool(session.agente_ia and session.agente_ia.apikey.filter(estado=True, status=True).exists())
         # Claim atómico anti doble-bienvenida: dos mensajes del cliente en ráfaga
         # (IDs distintos, ambos pasan el dedup) leían bienvenida_enviado=False a
         # la vez y ambos enviaban. El UPDATE condicional solo deja pasar a uno.
@@ -682,7 +682,7 @@ def process_incoming_message(session, event_data, channel_layer):
         # Log diagnóstico cuando la IA no está activa — ayuda a detectar cambios de agente sin keys
         if not _ia_activa and session.agente_ia:
             _keys_total = session.agente_ia.apikey.count()
-            _keys_activas = session.agente_ia.apikey.filter(estado=True).count()
+            _keys_activas = session.agente_ia.apikey.filter(estado=True, status=True).count()
             logger.warning(
                 "Sesión %s: agente '%s' (id=%s) tiene %d/%d API Keys activas — IA desactivada",
                 session.session_id, session.agente_ia.nombre, session.agente_ia.id,
@@ -849,7 +849,7 @@ def process_incoming_message(session, event_data, channel_layer):
             _traza(
                 etapa='agente_asignado', sesion=session, conversacion=conversation, mensaje=message,
                 numero=from_number, nivel='info',
-                detalle={'agente': agente.nombre, 'agente_id': agente.id, 'keys_activas': agente.apikey.filter(estado=True).count()},
+                detalle={'agente': agente.nombre, 'agente_id': agente.id, 'keys_activas': agente.apikey.filter(estado=True, status=True).count()},
             )
 
             # ── Detección de reintento ────────────────────────────────────
@@ -919,7 +919,7 @@ def process_incoming_message(session, event_data, channel_layer):
                 )
                 respuesta_enviada = False
                 resultado = None
-                _keys_activas_qs = agente.apikey.filter(estado=True)
+                _keys_activas_qs = agente.apikey.filter(estado=True, status=True)
                 if not _keys_activas_qs.exists():
                     _traza(
                         etapa='sin_respuesta', sesion=session, conversacion=conversation, mensaje=message,

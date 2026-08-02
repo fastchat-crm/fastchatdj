@@ -153,7 +153,7 @@ def recopilar_metricas(agente, dias=30) -> dict:
         'tokens_consumidos': suma_tokens,
         'sesiones_activas': sesiones_qs.filter(status=True).count() if sesiones_qs is not None else 0,
         'docs_entrenamiento': agente.detalleagentesai_set.filter(status=True).count(),
-        'api_keys_activas': agente.apikey.filter(estado=True).count(),
+        'api_keys_activas': agente.apikey.filter(estado=True, status=True).count(),
         'top_preguntas_rechazadas': top_rechazadas,
         'respuestas_problema_muestra': respuestas_muestra,
     }
@@ -396,7 +396,7 @@ def ejecutar_auditoria(agente, usuario=None, apikey_obj=None, dias=30):
         auditoria.metricas = metricas
 
         if not apikey_obj:
-            apikey_obj = agente.apikey.filter(estado=True).first()
+            apikey_obj = agente.apikey.filter(estado=True, status=True).first()
         if not apikey_obj:
             raise RuntimeError("El agente no tiene API keys activas para invocar al auditor.")
 

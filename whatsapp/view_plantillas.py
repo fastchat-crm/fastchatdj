@@ -385,7 +385,7 @@ def _get_apikey_para_ia(request, sesion):
     from crm.models import ApiKeyIA, PerfilNegocioIA
     # Preferimos la del agente IA de la sesion si existe
     if sesion.agente_ia:
-        ak = sesion.agente_ia.apikey.filter(estado=True).first()
+        ak = sesion.agente_ia.apikey.filter(estado=True, status=True).first()
         if ak and (ak.descripcion or '').strip():
             return ak
     # Fallback: cualquier ApiKeyIA activa del usuario
