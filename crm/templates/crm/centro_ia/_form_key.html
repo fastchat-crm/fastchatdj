@@ -1,0 +1,15 @@
+<form id="ciaFormKey">
+    <input type="hidden" id="ciaKeyPk" value="{{ key.id|default:'' }}">
+    <div class="row">
+        {% for campo in form %}
+            <div class="col-md-{{ campo.field.widget.attrs.col|default:6 }} mb-3">
+                <label class="form-label small fw-semibold" for="{{ campo.id_for_label }}">
+                    {{ campo.label }}
+                </label>
+                {{ campo }}
+                {% if campo.help_text %}<div class="form-text">{{ campo.help_text }}</div>{% endif %}
+                <div class="invalid-feedback d-block small" id="ciaErrorKey_{{ campo.name }}"></div>
+            </div>
+        {% endfor %}
+    </div>
+</form>

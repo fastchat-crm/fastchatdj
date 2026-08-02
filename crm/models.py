@@ -1035,23 +1035,29 @@ class ApiKeyIA(ModeloBase):
         return f"{prov} · {self.modelo}" if self.modelo else prov
 
     def clean(self):
-        from django.core.exceptions import ValidationError
-        errores = {}
+        """Invariantes de la key.
+
+        Los errores van a `NON_FIELD_ERRORS`, no a la clave del campo: ninguno de
+        los tres (`perfil`, `es_global`, `usar_para_embeddings`) está en
+        `ApiKeyIAForm`, y Django revienta con
+        `ValueError: 'ApiKeyIAForm' has no field named 'perfil'` al intentar
+        adjuntar un error a un campo que el form no expone. Con `__all__` el
+        mensaje se muestra igual y cualquier formulario puede renderizarlo.
+        """
+        from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
+        errores = []
 
         if self.usar_para_embeddings and self.proveedor not in PROVEEDORES_CON_EMBEDDINGS:
-            errores['usar_para_embeddings'] = (
+            errores.append(
                 f'El proveedor {self.get_proveedor_display()} no ofrece un modelo de embeddings. '
                 f'Elegí una key de Gemini u OpenAI para vectorizar.'
             )
 
         if self.es_global and self.perfil_id:
-            errores['es_global'] = 'Una key global no puede estar asociada a un perfil de negocio.'
-
-        if not self.es_global and not self.perfil_id:
-            errores['perfil'] = 'Indicá el perfil de negocio o marcá la key como global de la plataforma.'
+            errores.append('Una key global no puede estar asociada a un perfil de negocio.')
 
         if errores:
-            raise ValidationError(errores)
+            raise ValidationError({NON_FIELD_ERRORS: errores})
 
     def save(self, *args, **kwargs):
         if not self.webservice_token:

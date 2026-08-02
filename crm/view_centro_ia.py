@@ -14,7 +14,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import render
 
-from core.funciones import addData, secure_module
+from core.funciones import addData, log, secure_module
 from crm.ia_config import (
     CAMPOS_HEREDABLES,
     CAMPOS_SOLO_CENTRO,
@@ -99,15 +99,27 @@ def _resumen_keys(perfil):
     return keys, embed
 
 
-def _resumen_agentes(perfil):
+def _resumen_agentes(perfil, solo_activos=False):
+    """Agentes del perfil con el detalle de qué parámetros heredan.
+
+    `solo_activos` deja fuera a los que no tienen ninguna API key activa: no
+    pueden responder ni vectorizar, así que ofrecerlos en el selector de
+    vectorización solo genera un error garantizado. Es el mismo criterio con el
+    que el panel de entrenamiento los marca en rojo.
+    """
     agentes = list(AgentesIA.objects.filter(perfil=perfil, status=True).order_by('nombre'))
+    salida = []
     for a in agentes:
+        a.keys_activas = a.apikey.filter(estado=True, status=True).count()
+        if solo_activos and not a.keys_activas:
+            continue
         origen = origen_parametros(a)
         propios = [c for c, o in origen.items() if o == 'propio']
         a.params_propios = propios
         a.num_propios = len(propios)
         a.hereda_todo = not propios
-    return agentes
+        salida.append(a)
+    return salida
 
 
 @login_required
@@ -141,7 +153,23 @@ def centro_ia_view(request):
     data['keys'] = keys
     data['key_embeddings'] = embed
     data['agentes'] = _resumen_agentes(perfil)
+    # En vectorización solo los que pueden trabajar: sin key activa, reindexar
+    # falla siempre.
+    data['agentes_vectorizables'] = _resumen_agentes(perfil, solo_activos=True)
+    data['agentes_sin_key'] = len(data['agentes']) - len(data['agentes_vectorizables'])
     data['proveedores_con_embeddings'] = PROVEEDORES_CON_EMBEDDINGS
+
+    # Parámetros de plataforma (ParametroSistema): el nivel que aplica cuando ni
+    # el agente ni el perfil definen un valor propio. Se muestran junto a los del
+    # perfil para que la cascada se vea de un vistazo en vez de en dos pantallas.
+    from seguridad.models import ParametroSistema
+    data['plataforma_comportamiento'] = list(
+        ParametroSistema.objects.filter(status=True, grupo='comportamiento_ia').order_by('orden', 'clave')
+    )
+    data['plataforma_limites'] = list(
+        ParametroSistema.objects.filter(status=True, grupo='limites').order_by('orden', 'clave')
+    )
+    data['tab'] = request.GET.get('tab') or 'claves'
     return render(request, 'crm/centro_ia/index.html', data)
 
 
@@ -150,12 +178,26 @@ def _procesar_accion(request, perfil):
     try:
         if action == 'guardar_parametros':
             return _guardar_parametros(request, perfil)
+        if action == 'guardar_plataforma':
+            return _guardar_plataforma(request, ('comportamiento_ia',))
+        if action == 'guardar_limites':
+            return _guardar_plataforma(request, ('limites',))
         if action == 'marcar_embeddings':
             return _marcar_flag(request, perfil, 'usar_para_embeddings')
         if action == 'marcar_default':
             return _marcar_flag(request, perfil, 'es_default')
         if action == 'revectorizar':
             return _revectorizar(request, perfil)
+        if action == 'guardar_key':
+            return _guardar_key(request, perfil)
+        if action == 'eliminar_key':
+            return _eliminar_key(request, perfil)
+        if action == 'probar_key':
+            return _probar_key(request, perfil)
+        if action == 'probar_todas':
+            return _probar_todas(request, perfil)
+        if action == 'form_key':
+            return _form_key(request, perfil)
     except Exception as ex:
         logger.exception('Centro de IA: la acción "%s" falló', action)
         return JsonResponse({'error': True, 'message': f'Error al procesar la solicitud: {ex}'})
@@ -214,6 +256,151 @@ def _guardar_parametros(request, perfil):
         'error': False,
         'message': 'Parámetros generales guardados. Los agentes que heredan ya usan estos valores.',
         'reload': True,
+    })
+
+
+def _guardar_plataforma(request, grupos):
+    """Guarda los `ParametroSistema` de los grupos indicados.
+
+    Filtrar por grupo es lo que impide que un POST de la pestaña de parámetros
+    toque los topes de gasto, que viven en otra pestaña.
+    """
+    from .parametros_base import _guardar as guardar_parametros_sistema
+    try:
+        guardar_parametros_sistema(request, grupos)
+    except ValueError as ex:
+        return JsonResponse({'error': True, 'message': str(ex)})
+    etiqueta = 'Límites de gasto' if 'limites' in grupos else 'Parámetros de la plataforma'
+    log(f'Editó {etiqueta} desde el Centro de IA', request, 'change')
+    return JsonResponse({'error': False, 'message': f'{etiqueta} guardados.', 'reload': True})
+
+
+# ---------------------------------------------------------------------------
+# API keys
+# ---------------------------------------------------------------------------
+
+def _key_del_perfil(request, perfil):
+    try:
+        pk = int(request.POST.get('pk') or 0)
+    except (TypeError, ValueError):
+        return None
+    return ApiKeyIA.objects.filter(pk=pk, perfil=perfil, status=True).first()
+
+
+def _form_key(request, perfil):
+    """HTML del formulario de alta o edición, renderizado bajo demanda."""
+    from django.template.loader import get_template
+    from .forms import ApiKeyIAForm
+
+    key = _key_del_perfil(request, perfil) if request.POST.get('pk') else None
+    form = ApiKeyIAForm(instance=key, request=request) if key else ApiKeyIAForm(request=request)
+    html = get_template('crm/centro_ia/_form_key.html').render(
+        {'form': form, 'key': key, 'request': request}, request
+    )
+    return JsonResponse({'error': False, 'html': html, 'pk': key.id if key else ''})
+
+
+def _guardar_key(request, perfil):
+    from .forms import ApiKeyIAForm
+
+    key = _key_del_perfil(request, perfil) if request.POST.get('pk') else None
+    form = ApiKeyIAForm(request.POST, instance=key, request=request) if key \
+        else ApiKeyIAForm(request.POST, request=request)
+
+    # El perfil se asigna ANTES de validar: `ApiKeyIA.clean()` lo mira, y el form
+    # no expone ese campo. Asignarlo después dejaría la validación mirando una
+    # instancia sin dueño.
+    form.instance.perfil = perfil
+
+    if not form.is_valid():
+        errores = {campo: ' '.join(str(e) for e in lista) for campo, lista in form.errors.items()}
+        return JsonResponse({
+            'error': True,
+            'message': 'Revisá los campos marcados.',
+            'form': [errores],
+        })
+
+    guardada = form.save()
+    log(f'{"Editó" if key else "Registró"} una API key IA: {guardada}',
+        request, 'change' if key else 'add', obj=guardada.id)
+    return JsonResponse({
+        'error': False,
+        'message': f'API key {"actualizada" if key else "registrada"}.',
+        'reload': True,
+    })
+
+
+def _eliminar_key(request, perfil):
+    key = _key_del_perfil(request, perfil)
+    if not key:
+        return JsonResponse({'error': True, 'message': 'No se encontró la API key.'})
+    # Soft-delete: los registros de consumo la siguen referenciando.
+    key.status = False
+    key.save(request)
+    log(f'Eliminó una API key IA: {key}', request, 'delete', obj=key.id)
+    return JsonResponse({'error': False, 'message': 'API key eliminada.', 'reload': True})
+
+
+def _probar_key(request, perfil):
+    """Llama de verdad al proveedor con un prompt mínimo.
+
+    Reutiliza `_probar_apikey_simple` del panel de entrenamiento, que ya
+    clasifica el fallo (cuota, autenticación, modelo inexistente) y desactiva la
+    key con el motivo en vez de dejar un error opaco.
+    """
+    key = _key_del_perfil(request, perfil)
+    if not key:
+        return JsonResponse({'error': True, 'message': 'No se encontró la API key.'})
+
+    from .view_mientrenamiento import _probar_apikey_simple
+    res = _probar_apikey_simple(key)
+    return JsonResponse({
+        'error': not res.get('ok'),
+        'message': res.get('message') or '',
+        'estado': res.get('status'),
+        'reload': True,
+    })
+
+
+def _probar_todas(request, perfil):
+    """Prueba todas las keys del perfil, una por una.
+
+    Cada una se reporta por separado: una que falle no interrumpe al resto, que
+    es justo el caso de uso —saber de un vistazo cuáles están caídas—.
+    """
+    from .view_mientrenamiento import _probar_apikey_simple
+
+    keys = (ApiKeyIA.objects
+            .filter(perfil=perfil, status=True)
+            .exclude(descripcion='')
+            .order_by('proveedor', 'id'))
+    if not keys:
+        return JsonResponse({'error': True, 'message': 'No hay API keys para probar.'})
+
+    resultados = []
+    for key in keys:
+        try:
+            resultados.append(_probar_apikey_simple(key))
+        except Exception as ex:
+            logger.exception('Centro de IA: falló la prueba de la key %s', key.id)
+            resultados.append({
+                'id': key.id,
+                'alias': key.alias or key.get_proveedor_display(),
+                'proveedor': key.get_proveedor_display(),
+                'modelo': key.modelo or '(default)',
+                'ok': False, 'status': 'error', 'message': str(ex)[:200],
+            })
+
+    ok_count = sum(1 for r in resultados if r.get('ok'))
+    fallidas = len(resultados) - ok_count
+    return JsonResponse({
+        'error': False,
+        'message': (f'{ok_count} de {len(resultados)} responden correctamente.'
+                    if not fallidas else
+                    f'{ok_count} responden, {fallidas} con problemas.'),
+        'resultados': resultados,
+        'ok_count': ok_count,
+        'fail_count': fallidas,
     })
 
 

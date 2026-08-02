@@ -14,8 +14,6 @@ from .view_prueba_chatbot import probar_chatbot_view
 from .view_rag import ragColeccionView
 from .view_centro import centroCrmView
 from .view_centro_ia import centro_ia_view
-from .view_parametros_agentes import parametros_agentes_view
-from .view_parametros_tokens import parametros_tokens_view
 from whatsapp.view_pipeline import pipelineView
 
 crm_urls = (
@@ -28,16 +26,6 @@ crm_urls = (
         "nombre": "Centro de IA",
         "url": 'centro-ia/',
         "vista": centro_ia_view,
-    },
-    {
-        "nombre": "Parámetros de agentes IA",
-        "url": 'parametros-agentes/',
-        "vista": parametros_agentes_view,
-    },
-    {
-        "nombre": "Tokens y límites de IA",
-        "url": 'parametros-tokens/',
-        "vista": parametros_tokens_view,
     },
     {
         "nombre": "Pipeline de ventas",

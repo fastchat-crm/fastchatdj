@@ -202,181 +202,23 @@
             </div>
         </div>
 
-        {# ── Tab API Keys ─────────────────────────────────────────────── #}
-        <div id="apikeys">
-            <div class="seccion-ia mb-4">
-                <div class="seccion-ia-header d-flex justify-content-between align-items-center">
-                    <div>
-                        <h5 class="mb-0 text-primary"><i class="fas fa-key me-2"></i>APIs Keys AI</h5>
-                        <small class="text-muted">Credenciales para conectar con los proveedores de IA.</small>
-                        <p class="mb-0 mt-1">
-                            <a href="javascript:void(0)" class="small text-primary text-decoration-none"
-                               data-bs-toggle="modal" data-bs-target="#modalGuiaTokens">
-                                <i class="fas fa-book-open me-1"></i>Guía: ¿cómo obtener un token de Gemini, GPT o Claude?
-                            </a>
-                        </p>
-                    </div>
-                    <div class="d-flex gap-2 flex-wrap">
-                        <a href="javascript:void(0)" class="btn btn-sm btn-secondary"
-                           data-bs-toggle="modal" data-bs-target="#modalGuiaTokens"
-                           title="Tour para obtener API Keys de proveedores LLM">
-                            <i class="fas fa-route me-1"></i> Guía tokens
-                        </a>
-                        <a href="javascript:void(0)" class="btn btn-sm btn-success" id="btnTestAllKeys"
-                           onclick="testAllApiKeys(this)"
-                           title="Probar todas las API Keys y ver cuales estan activas">
-                            <i class="fas fa-vials me-1"></i> Probar todas
-                        </a>
-                        <a href="javascript:void(0)" class="btn btn-sm btn-dark"
-                           onclick="formModal('', 'Agregar Api Key', 'addapikey')">
-                            <i class="fa fa-plus"></i> Api Key
-                        </a>
-                    </div>
+        {# Las API keys se mudaron al Centro de IA; queda el puntero para quien
+           llegue por un enlace viejo a #apikeys. #}
+        <div id="apikeys" class="seccion-ia mb-4">
+            <div class="alert alert-info d-flex align-items-center gap-3 mb-0">
+                <i class="fa fa-key fa-2x"></i>
+                <div>
+                    <strong>Las API keys se administran en el Centro de IA.</strong><br>
+                    <small>Ahí se registran, se prueban y se define cuál vectoriza y cuál es la
+                           predeterminada de cada proveedor.</small>
                 </div>
-                <div class="seccion-ia-body" id="bloque_apis_ia">
-                    <div class="pt-0">
-                        {% if apis %}
-                        <div class="row g-3">
-                            {% for l in apis %}
-                            <div class="col-xl-4 col-lg-6 col-md-6" id="apikey-row-{{ l.pk }}">
-                                <div class="card apikey-card h-100 {% if not l.estado %}inactiva{% endif %}">
-                                    <div class="apikey-card-header provider-{{ l.proveedor }}">
-                                        <div class="apikey-icon">
-                                            <i class="fas fa-{% if l.proveedor == 2 %}gem{% elif l.proveedor == 3 %}robot{% else %}key{% endif %}"></i>
-                                        </div>
-                                        <div class="apikey-title-group">
-                                            <h6 class="mb-0">{{ l.alias|default:l.get_proveedor_display }}</h6>
-                                            <small class="apikey-provider">
-                                                {{ l.get_proveedor_display }}
-                                                {% if l.modelo %}
-                                                    · <code class="apikey-modelo-hdr" title="Modelo asignado"><i class="fas fa-microchip me-1"></i>{{ l.modelo }}</code>
-                                                {% else %}
-                                                    · <span class="apikey-modelo-hdr missing" title="Sin modelo asignado — usa el default del provider"><i class="fas fa-exclamation-triangle me-1"></i>sin modelo</span>
-                                                {% endif %}
-                                            </small>
-                                        </div>
-                                        <span class="apikey-estado badge {% if l.estado %}bg-success{% else %}bg-danger{% endif %}" id="badge-estado-{{ l.pk }}">
-                                            {{ l.estado|yesno:'Activa,Inactiva' }}
-                                        </span>
-                                    </div>
-                                    <div class="apikey-card-body">
-                                        <div class="apikey-info-row">
-                                            <span class="apikey-label"><i class="fas fa-microchip"></i> Modelo</span>
-                                            {% if l.modelo %}
-                                                <span class="apikey-modelo ok" title="Modelo asignado">
-                                                    <i class="fas fa-check-circle me-1"></i><code>{{ l.modelo }}</code>
-                                                </span>
-                                            {% else %}
-                                                <span class="apikey-modelo missing" title="No hay modelo asignado — usará el default del proveedor">
-                                                    <i class="fas fa-exclamation-triangle me-1"></i>Sin asignar <small class="ms-1">(usa default del provider)</small>
-                                                </span>
-                                            {% endif %}
-                                        </div>
-                                        <div class="apikey-info-row">
-                                            <span class="apikey-label"><i class="fas fa-key"></i> Key</span>
-                                            <code class="apikey-value" title="{{ l.descripcion }}">{{ l.descripcion|slice:":16" }}…{{ l.descripcion|slice:"-4:" }}</code>
-                                        </div>
-                                        <div class="apikey-error-container" id="apikey-error-{{ l.pk }}">
-                                            {% if l.msgerror %}
-                                            <div class="apikey-error">
-                                                <div class="apikey-error-head">
-                                                    <i class="fas fa-exclamation-triangle me-1"></i>
-                                                    <strong>Último error</strong>
-                                                    <span class="apikey-error-date ms-auto">
-                                                        {% if l.fecha_modificacion %}{{ l.fecha_modificacion|date:"d/m/Y H:i" }}{% else %}—{% endif %}
-                                                    </span>
-                                                    <button type="button" class="apikey-error-clear ms-1" title="Limpiar este error"
-                                                            onclick="limpiarErrorApiKey({{ l.pk }})">
-                                                        <i class="fas fa-times"></i>
-                                                    </button>
-                                                </div>
-                                                <div class="apikey-error-msg" title="{{ l.msgerror }}">{{ l.msgerror|truncatechars:120 }}</div>
-                                            </div>
-                                            {% endif %}
-                                        </div>
-                                        <div class="apikey-actions">
-                                            <button type="button" class="btn-apk test"
-                                                    onclick="testApiKey({{ l.pk }}, this)"
-                                                    title="Probar conectividad con el proveedor">
-                                                <i class="fas fa-vial"></i> Probar
-                                            </button>
-                                            <button type="button" class="btn-apk edit"
-                                                    onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'changeapikey')"
-                                                    title="Editar">
-                                                <i class="fas fa-edit"></i> Editar
-                                            </button>
-                                            <div class="dropdown">
-                                                <button type="button" class="btn-apk more"
-                                                        data-bs-toggle="dropdown" data-bs-strategy="fixed"
-                                                        aria-expanded="false" title="Más acciones">
-                                                    <i class="fas fa-ellipsis-h"></i>
-                                                </button>
-                                                <ul class="dropdown-menu dropdown-menu-end">
-                                                    <li>
-                                                        <a class="dropdown-item" href="javascript:void(0)"
-                                                           onclick="verConsumo({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display|escapejs }}')">
-                                                            <i class="fas fa-chart-bar me-2 text-info"></i> Consumo
-                                                        </a>
-                                                    </li>
-                                                    <li>
-                                                        <a class="dropdown-item" href="javascript:void(0)"
-                                                           onclick="verAlerta({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display|escapejs }}')">
-                                                            <i class="fas fa-bell me-2 {% if l.alerta_consumo and l.alerta_consumo.umbral_diario or l.alerta_consumo and l.alerta_consumo.umbral_mensual %}text-danger{% else %}text-secondary{% endif %}"></i>
-                                                            {% if l.alerta_consumo and l.alerta_consumo.umbral_diario or l.alerta_consumo and l.alerta_consumo.umbral_mensual %}Alertas ON{% else %}Alertas{% endif %}
-                                                        </a>
-                                                    </li>
-                                                    <li>
-                                                        <a class="dropdown-item" href="javascript:void(0)"
-                                                           onclick="verDocsWebService('{{ l.webservice_token|default:''|escapejs }}', '{{ l.get_proveedor_display|escapejs }}', '{{ l.modelo|default:''|escapejs }}', {{ l.pk }})">
-                                                            <i class="fas fa-code me-2 text-secondary"></i> WebService
-                                                        </a>
-                                                    </li>
-                                                    <li>
-                                                        <a class="dropdown-item" href="javascript:void(0)"
-                                                           onclick="abrirGenerarAgenteIA({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display|escapejs }}')">
-                                                            <i class="fas fa-wand-magic-sparkles me-2 text-primary"></i> Crear agente IA
-                                                        </a>
-                                                    </li>
-                                                    {% if not l.estado %}
-                                                    <li>
-                                                        <a class="dropdown-item" href="javascript:void(0)"
-                                                           onclick="reactivarApiKey({{ l.pk }})">
-                                                            <i class="fas fa-redo me-2 text-success"></i> Reactivar
-                                                        </a>
-                                                    </li>
-                                                    {% endif %}
-                                                    <li><hr class="dropdown-divider"></li>
-                                                    <li>
-                                                        <a class="dropdown-item item-danger" href="javascript:void(0)"
-                                                           onclick="eliminarajax({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display }}', 'deleteapikey')">
-                                                            <i class="fas fa-trash me-2"></i> Eliminar
-                                                        </a>
-                                                    </li>
-                                                </ul>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% else %}
-                        <div class="empty-state">
-                            <i class="fas fa-key"></i>
-                            <h4>Sin API Keys registradas</h4>
-                            <p class="mb-3">Agrega tu primera API Key de Gemini, OpenAI o Claude.</p>
-                            <button class="btn btn-primary" onclick="formModal('', 'Agregar Api Key', 'addapikey')">
-                                <i class="fas fa-plus me-2"></i>Crear primera API Key
-                            </button>
-                        </div>
-                        {% endif %}
-                    </div>
-                </div>
+                <a href="/crm/centro-ia/" class="btn btn-sm btn-primary ms-auto">
+                    <i class="fa fa-arrow-right me-1"></i>Ir al Centro de IA
+                </a>
             </div>
         </div>
     </div>
 
-    {# ── Modal consumo de tokens ──────────────────────────────────────── #}
     <div class="modal fade" id="modalConsumo" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">

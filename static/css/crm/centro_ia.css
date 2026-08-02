@@ -161,3 +161,56 @@
         font-size: .8rem;
     }
 }
+
+.cia-tabs .nav-link {
+    font-size: .88rem;
+    font-weight: 600;
+    color: #6b7280;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    padding: .55rem .9rem;
+}
+
+.cia-tabs .nav-link.active {
+    color: #4f46e5;
+    border-bottom-color: #4f46e5;
+    background: transparent;
+}
+
+.cia-unidad {
+    font-weight: 400;
+    color: #9ca3af;
+    font-size: .78rem;
+    margin-left: .3rem;
+}
+
+.cia-acciones {
+    white-space: nowrap;
+}
+
+.cia-acciones .btn {
+    margin-left: .2rem;
+}
+
+.cia-icon-btn {
+    border: 0;
+    background: transparent;
+    color: #6b7280;
+    width: 28px;
+    height: 28px;
+    border-radius: .35rem;
+    font-size: .8rem;
+}
+
+.cia-icon-btn:hover {
+    background: #f3f4f6;
+    color: #111827;
+}
+
+.cia-agentes-lista {
+    max-height: 190px;
+    overflow-y: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: .45rem;
+    padding: .5rem .7rem;
+}

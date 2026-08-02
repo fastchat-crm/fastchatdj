@@ -56,10 +56,15 @@ PARAMETROS = [
 # tomarlas personas distintas, así que cada una es su propio módulo y permiso.
 # Se registran ademas en su grupo del sidebar y en el rol Administrador, que es
 # lo que hace falta para que aparezcan en el menu.
+# Los parámetros se editan desde las pestañas del Centro de IA, no desde módulos
+# propios: tener «Parámetros de agentes» y «Tokens y límites» aparte del Centro
+# resultaba en tres pantallas que hacían casi lo mismo — de hecho el Centro y
+# «Parámetros de agentes» eran el MISMO formulario en dos niveles de la cascada.
 MODULOS = [
-    ('/crm/parametros-agentes/', 'Parámetros de agentes IA'),
-    ('/crm/parametros-tokens/', 'Tokens y límites de IA'),
+    ('/crm/centro-ia/', 'Centro de IA'),
 ]
+# Módulos que existieron y ya no: se desactivan para que no queden en el menú.
+MODULOS_OBSOLETOS = ['/crm/parametros-ia/', '/crm/parametros-agentes/', '/crm/parametros-tokens/']
 GRUPO_SIDEBAR = 'Inteligencia Artificial'
 ROL = 'Administrador'
 
@@ -110,8 +115,7 @@ class Command(BaseCommand):
             if rol and not rol.modulos.filter(pk=modulo.pk).exists():
                 rol.modulos.add(modulo)
 
-        # La pantalla única anterior quedó reemplazada por las dos nuevas.
-        Modulo.objects.filter(url='/crm/parametros-ia/').update(status=False)
+        Modulo.objects.filter(url__in=MODULOS_OBSOLETOS).update(status=False)
 
         self.stdout.write(self.style.SUCCESS(
             'Parámetros IA: {} creados, {} actualizados. Módulos: {} nuevos de {}, '
