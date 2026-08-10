@@ -194,6 +194,52 @@ Solo acepta campos de `CAMPOS_HEREDABLES` que existan como columna del agente �
 `cfg_umbral_distancia` y `cfg_max_static_amplia` viven solo en el Centro de IA y
 escribirlos ahí sería inventar un atributo que nadie lee.
 
+## Catálogo por API: tope y recuperación por relevancia (2026-08-10)
+
+El bloque de las fuentes API (`DetalleAgentesAI` tipo=1) era el único del prompt
+sin ningún tope. El RAG tiene `cfg_max_context_chars` y el contexto estático
+`cfg_max_static_chars`; este entraba entero, en cada mensaje. Medido en EPUNEMI
+VENDEDOR: **44.710 caracteres de catálogo (97 ítems) por mensaje**, incluidos
+cursos de 2024 con `Activo: False` y precio `$0.00`.
+
+No era solo costo. Mandar 97 cursos para contestar por uno obliga al modelo a
+encontrar el dato bueno dentro de un pajar de datos muertos — es la causa
+directa de que el agente respondiera mal.
+
+Dos mecanismos, en este orden:
+
+1. **`_filtrar_items_api`** — ante una pregunta puntual se queda solo con los
+   ítems que hablan de ella. La elección es léxica, sin embeddings: el nombre
+   del curso está literalmente en la pregunta ("cuánto cuesta el diplomado en
+   oncología"), así que alcanza con coincidencia de palabras y no cuesta ni una
+   llamada. Se descartan palabras vacías (`_PALABRAS_VACIAS`) y términos de
+   menos de 4 letras, que producen coincidencias por azar.
+2. **`_recortar_bloque_apis`** — el techo (`cfg_max_api_chars`, 12.000 por
+   defecto, editable en Parámetros IA). Se aplica a las preguntas amplias, donde
+   hay que mandar la lista y no un pedazo. Corta en límite de ítem, nunca a
+   mitad de línea.
+
+Quién decide cuál aplica es `_es_consulta_amplia`, el mismo criterio que ya usa
+el resto del motor para el Modo A / Modo B. Si el filtro no encuentra nada, se
+manda la lista recortada: es preferible que el modelo vea una muestra y pueda
+ofrecer alternativas antes que dejarlo sin nada.
+
+Medido sobre el catálogo de 44.710 caracteres:
+
+| Pregunta | Bloque | Ahorro | Primer ítem elegido |
+|---|---:|---:|---|
+| "qué cursos tienen" (amplia) | 12.112 | 73 % | — (lista completa recortada) |
+| "cuánto cuesta el diplomado en oncología" | 2.943 | 93 % | DIPLOMADO EN ONCOLOGÍA ✓ |
+| "tienen algo de enfermería" | 2.926 | 93 % | AUXILIAR DE ENFERMERÍA ✓ |
+| "qué necesito para la licencia profesional C" | 2.876 | 94 % | LICENCIA PROFESIONAL "C" ✓ |
+
+Extremo a extremo, EPUNEMI VENDEDOR pasó de ~17.000 tokens de entrada por
+mensaje a 2.727–5.421, con las respuestas dando los precios correctos.
+
+Ambos mecanismos dejan una nota al final del bloque avisando que la lista es
+parcial. Sin eso el modelo presenta lo que le llegó como si fuera el catálogo
+entero y le dice al cliente que un curso no existe.
+
 ## Pensamiento extendido: `razonamiento=False` (2026-08-10)
 
 `BaseProvider.get_llm()` acepta `razonamiento`. En `False`, el provider de

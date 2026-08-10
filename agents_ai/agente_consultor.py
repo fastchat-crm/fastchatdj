@@ -72,6 +72,52 @@ _MAX_STATIC_AMPLIA = 12_000 # techo del contexto estático completo en consultas
 # tenía ninguno: entraba entero en cada mensaje. Medido, un catálogo conectado
 # por API mandaba 49.868 chars (~12.500 tokens) en TODAS las llamadas.
 _MAX_API_CHARS = 12_000
+
+# Palabras que aparecen en casi cualquier pregunta y no sirven para elegir qué
+# ítem del catálogo mostrar. Sin esto, "cuanto cuesta X" matchearía todo ítem
+# que diga "cuesta".
+_PALABRAS_VACIAS = frozenset("""
+para pero como cuando donde cual cuales cuanto cuanta cuantos cuantas quien
+tienen tiene tengo hay sobre desde hasta esta este estos estas eso esa ese
+quiero necesito saber puedo podes podrias decime dime hola buenas gracias
+informacion info precio precios valor valores costo costos cuesta cuestan
+curso cursos programa programas ustedes nosotros mismo tambien algun alguna
+""".split())
+
+# Por debajo de 4 letras una palabra casi nunca identifica un ítem y sí produce
+# coincidencias por azar.
+_LARGO_MINIMO_TERMINO = 4
+
+
+def _terminos_utiles(pregunta: str) -> set:
+    """Palabras de la pregunta que sirven para buscar en el catálogo."""
+    return {
+        t for t in normalizar_texto(pregunta or '').split()
+        if len(t) >= _LARGO_MINIMO_TERMINO and t not in _PALABRAS_VACIAS
+    }
+
+
+def _partir_items_api(bloque: str) -> tuple:
+    """Separa el volcado en (cabecera, [ítems]).
+
+    Un ítem arranca con "— " y arrastra sus líneas de continuación (la
+    descripción va indentada). La cabecera son las líneas "## ..." del principio,
+    que le dicen al modelo cuándo mirar esa fuente: se conservan siempre, porque
+    sin ellas el bloque llega sin contexto de qué es.
+    """
+    cabecera, items, actual = [], [], None
+    for linea in (bloque or '').splitlines():
+        if linea.startswith('— '):
+            if actual is not None:
+                items.append('\n'.join(actual))
+            actual = [linea]
+        elif actual is not None:
+            actual.append(linea)
+        else:
+            cabecera.append(linea)
+    if actual is not None:
+        items.append('\n'.join(actual))
+    return '\n'.join(cabecera).strip(), items
 _RESUMEN_CADA_N    = 6      # mensajes entre refrescos del resumen rodante (patrón backmanageria)
 _RESUMEN_MAX_CHARS = 700    # techo del resumen rodante reinyectado al historial
 _FAQ_MATCH_RATIO   = 0.92   # similitud mínima para responder una FAQ directa sin LLM
@@ -827,7 +873,7 @@ class AgenteConsultor:
                 _sin_datos = False  # Tenemos FAQ como respaldo
 
         # ── APIs externas (fuentes tipo=1 fetch en vivo, sin embeddings) ──
-        bloque_apis = self._construir_bloque_apis()
+        bloque_apis = self._construir_bloque_apis(pregunta)
         self.desglose_prompt['chars_apis'] = len(bloque_apis)
         if bloque_apis:
             contexto = f"{contexto}\n\n{bloque_apis}" if contexto else bloque_apis
@@ -921,15 +967,19 @@ class AgenteConsultor:
             contexto = f"{bloque_faq}\n\n{contexto}"
             self._faq_ids_usadas = faq_ids
             _sin_datos = False
-        bloque_apis = self._construir_bloque_apis()
+        bloque_apis = self._construir_bloque_apis(pregunta)
         if bloque_apis:
             contexto = f"{contexto}\n\n{bloque_apis}"
             _sin_datos = False
         return contexto, _sin_datos
 
-    def _construir_bloque_apis(self) -> str:
+    def _construir_bloque_apis(self, pregunta: str = '') -> str:
         """Trae el texto de las fuentes API (tipo=1) sin recurrir a embeddings.
         Usa el cache configurado por fuente (`usar_cache`, `tiempo_cache_horas`).
+
+        Ante una pregunta puntual devuelve solo los ítems que tienen que ver con
+        ella; ante una pregunta amplia ("qué cursos tienen"), la lista completa
+        recortada al tope. Ver `_filtrar_items_api`.
         """
         if self.agente is None:
             return ''
@@ -938,7 +988,73 @@ class AgenteConsultor:
         except Exception as exc:
             logger.debug("No se pudo obtener contexto de APIs: %s", exc)
             return ''
+        if not bloque:
+            return ''
+        if pregunta and not _es_consulta_amplia(pregunta):
+            filtrado = self._filtrar_items_api(bloque, pregunta)
+            if filtrado:
+                return filtrado
         return self._recortar_bloque_apis(bloque)
+
+    def _filtrar_items_api(self, bloque: str, pregunta: str) -> str:
+        """Se queda con los ítems del catálogo que hablan de lo que se preguntó.
+
+        El volcado completo era el gasto más grande del prompt y además el que
+        peor hacía responder al agente: 97 cursos para contestar por uno solo.
+        Acá se elige por coincidencia de palabras, sin embeddings — el nombre del
+        curso está literalmente en la pregunta ("cuánto cuesta el diplomado en
+        oncología"), así que lo léxico alcanza y no cuesta ni una llamada.
+
+        Las preguntas amplias no pasan por acá: para "qué cursos tienen" hay que
+        mandar la lista, no un pedazo. Esa decisión la toma el llamador con
+        `_es_consulta_amplia`, el mismo criterio que ya usa el resto del motor.
+
+        Si nada coincide devuelve '' y el llamador manda la lista recortada: es
+        preferible que el modelo vea una muestra y pueda ofrecer alternativas
+        antes que dejarlo sin nada.
+        """
+        cabecera, items = _partir_items_api(bloque)
+        if not items:
+            return ''
+
+        terminos = _terminos_utiles(pregunta)
+        if not terminos:
+            return ''
+
+        puntuados = []
+        for orden, item in enumerate(items):
+            texto = normalizar_texto(item)
+            puntaje = sum(1 for t in terminos if t in texto)
+            if puntaje:
+                puntuados.append((-puntaje, orden, item))
+        if not puntuados:
+            return ''
+
+        puntuados.sort()
+        # El presupuesto es una fracción del tope: si la pregunta es puntual, no
+        # hay razón para acercarse al techo del volcado completo.
+        presupuesto = max(1500, (self.cfg_max_api_chars or _MAX_API_CHARS) // 4)
+        elegidos, usado = [], len(cabecera)
+        for _, _, item in puntuados:
+            if usado + len(item) > presupuesto:
+                break
+            elegidos.append(item)
+            usado += len(item) + 1
+        if not elegidos:
+            return ''
+
+        logger.info(
+            'Catálogo API filtrado para el agente %s: %d de %d ítems, %d chars '
+            '(el volcado completo son %d).',
+            getattr(self.agente, 'id', '?'), len(elegidos), len(items), usado, len(bloque),
+        )
+        partes = [cabecera] if cabecera else []
+        partes.extend(elegidos)
+        partes.append(
+            '[Se muestran los ítems relacionados con la consulta. Hay más en el '
+            'catálogo: si el cliente pregunta por otro, pedile el nombre concreto.]'
+        )
+        return '\n'.join(partes)
 
     def _recortar_bloque_apis(self, bloque: str) -> str:
         """Pone techo al volcado de las fuentes API.
