@@ -19,7 +19,8 @@ class OpenAIProvider(BaseProvider):
     def default_model(self) -> str:
         return "gpt-4o-mini"
 
-    def get_llm(self, apikey, model_name, max_output_tokens, temperature=0.1, base_url=None):
+    def get_llm(self, apikey, model_name, max_output_tokens, temperature=0.1, base_url=None,
+                razonamiento=True):
         # Import diferido — el paquete no se carga si nunca usamos OpenAI
         from langchain_community.chat_models import ChatOpenAI
         kwargs = dict(

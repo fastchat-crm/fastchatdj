@@ -60,12 +60,18 @@ class AgenteResumidor:
                 return None
 
     def _get_llm(self):
+        # `razonamiento=False`: resumir y clasificar sentimiento son tareas de
+        # extracción, el modelo no tiene nada que deliberar. Con el pensamiento
+        # extendido encendido (default de Gemini 2.5) el análisis de sentimiento
+        # gastaba ~1.900 tokens de salida — facturados — para devolver un JSON de
+        # tres campos sobre un texto de 350 tokens.
         return self._provider_obj.get_llm(
             apikey=self.apikey,
             model_name=self.model_name,
             max_output_tokens=_MAX_TOKENS_RESUMEN,
             temperature=0.2,
             base_url=self.base_url,
+            razonamiento=False,
         )
 
     def _get_texto_chat(self) -> str:

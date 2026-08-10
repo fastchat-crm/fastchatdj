@@ -211,6 +211,12 @@ def _procesar_accion(request, perfil):
             return _probar_key(request, perfil)
         if action == 'probar_todas':
             return _probar_todas(request, perfil)
+        if action == 'auditar_consumo':
+            return _auditar_consumo(request, perfil)
+        if action == 'aplicar_recomendacion':
+            return _aplicar_recomendacion(request, perfil)
+        if action == 'revisar_prompt':
+            return _revisar_prompt(request, perfil)
         if action == 'form_key':
             return _form_key(request, perfil)
     except Exception as ex:
@@ -658,3 +664,109 @@ def _revectorizar(request, perfil):
         mensaje = f'{exitosos} agente(s) vectorizado(s) correctamente.'
 
     return JsonResponse({'error': False, 'message': mensaje, 'resultados': resultados})
+
+
+# ---------------------------------------------------------------------------
+# Optimización de consumo
+# ---------------------------------------------------------------------------
+
+def _auditar_consumo(request, perfil):
+    """Auditoría de gasto de todos los agentes del perfil.
+
+    El análisis es aritmética sobre `ConsumoTokenIA` y la cascada de parámetros:
+    no llama al LLM ni gasta un token. Ver `agents_ai/optimizador.py`.
+    """
+    from agents_ai.optimizador import auditar_perfil
+
+    try:
+        dias = max(1, min(365, int(request.POST.get('dias') or 30)))
+    except (TypeError, ValueError):
+        dias = 30
+
+    informe = auditar_perfil(perfil, dias=dias)
+
+    agentes = []
+    for i in informe['informes']:
+        agentes.append({
+            'id': i['agente'].id,
+            'nombre': i['agente'].nombre,
+            'llamadas': i['uso']['llamadas'],
+            'entrada_promedio': i['uso']['entrada_promedio'],
+            'salida_promedio': i['uso']['salida_promedio'],
+            'costo_usd': round(i['uso']['costo_usd'], 4),
+            'costo_mes_usd': round(i['uso']['costo_mes_usd'], 4),
+            'modelo': i['uso']['modelo_principal'],
+            'saturacion': i.get('saturacion'),
+            'presupuesto_tokens': i['presupuesto']['total_tokens'],
+            'piezas': [
+                {'etiqueta': x['etiqueta'], 'tokens': x['tokens'], 'porcentaje': x['porcentaje']}
+                for x in i['presupuesto']['piezas']
+            ],
+            'hallazgos': [
+                {k: h[k] for k in ('codigo', 'severidad', 'titulo', 'detalle',
+                                   'campo', 'actual', 'propuesto', 'aplicable')}
+                | {'ahorro_mes_usd': round(h['ahorro_mes_usd'], 4)}
+                for h in i['hallazgos']
+            ],
+        })
+
+    return JsonResponse({
+        'error': False,
+        'dias': informe['dias'],
+        'costo_usd': round(informe['costo_usd'], 4),
+        'costo_mes_usd': round(informe['costo_mes_usd'], 4),
+        'ahorro_mes_usd': round(informe['ahorro_mes_usd'], 4),
+        'total_hallazgos': informe['hallazgos'],
+        'agentes': agentes,
+    })
+
+
+def _aplicar_recomendacion(request, perfil):
+    """Escribe en el agente un parámetro que la auditoría propuso."""
+    from agents_ai.optimizador import aplicar_recomendacion
+
+    agente = _agente_del_perfil(request, perfil)
+    if not agente:
+        return JsonResponse({'error': True, 'message': 'No se encontró el agente.'})
+
+    campo = (request.POST.get('campo') or '').strip()
+    valor = request.POST.get('valor')
+    try:
+        cambio = aplicar_recomendacion(agente, campo, valor, request)
+    except ValueError as ex:
+        return JsonResponse({'error': True, 'message': str(ex)})
+
+    log(f'Optimizador de IA: {agente.nombre} — {campo} {cambio["anterior"]} → {cambio["nuevo"]}',
+        request, "add")
+    return JsonResponse({
+        'error': False,
+        'message': f'{campo} pasó de {cambio["anterior"]} a {cambio["nuevo"]} en «{agente.nombre}».',
+        'anterior': cambio['anterior'],
+        'nuevo': cambio['nuevo'],
+    })
+
+
+def _revisar_prompt(request, perfil):
+    """Revisión del texto de las instrucciones con el LLM.
+
+    Único punto de la auditoría que consume tokens, por eso es una acción
+    separada y explícita en vez de correr sola con el resto.
+    """
+    from agents_ai.optimizador import revisar_texto_prompt
+
+    agente = _agente_del_perfil(request, perfil)
+    if not agente:
+        return JsonResponse({'error': True, 'message': 'No se encontró el agente.'})
+
+    resultado = revisar_texto_prompt(agente)
+    if not resultado.get('ok'):
+        return JsonResponse({'error': True, 'message': resultado.get('mensaje')})
+
+    return JsonResponse({
+        'error': False,
+        'agente': agente.nombre,
+        'sugerencias': resultado.get('sugerencias') or [],
+        'mensaje': resultado.get('mensaje') or '',
+        'chars_prompt': resultado.get('chars_prompt'),
+        'tokens_usados': resultado.get('tokens_usados'),
+    })

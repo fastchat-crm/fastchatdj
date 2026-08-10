@@ -22,7 +22,8 @@ class OllamaProvider(BaseProvider):
     def default_model(self) -> str:
         return "gpt-oss:20b"
 
-    def get_llm(self, apikey, model_name, max_output_tokens, temperature=0.1, base_url=None):
+    def get_llm(self, apikey, model_name, max_output_tokens, temperature=0.1, base_url=None,
+                razonamiento=True):
         # ChatOpenAI moderno (langchain_openai) — soporta tool-calling (bind_tools)
         # y parsea bien las respuestas. El de langchain_community está deprecado y
         # NO soporta bind_tools con Ollama.

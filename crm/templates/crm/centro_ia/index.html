@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block head %}
-    <link rel="stylesheet" href="/static/css/crm/centro_ia.css?v2.1">
+    <link rel="stylesheet" href="/static/css/crm/centro_ia.css?v2.2">
 {% endblock %}
 
 {% block content %}
@@ -32,6 +32,11 @@
         <li class="nav-item">
             <button class="nav-link" data-bs-toggle="tab" data-bs-target="#ciaVector" type="button">
                 <i class="fa fa-cubes me-1"></i>Vectorización
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#ciaOptim" type="button">
+                <i class="fa fa-leaf me-1"></i>Optimización
             </button>
         </li>
     </ul>
@@ -373,6 +378,40 @@
                 <div id="ciaSaberResultado"></div>
             </div>
         </div>
+
+        <div class="tab-pane fade" id="ciaOptim" role="tabpanel">
+            <div class="cia-card">
+                <div class="cia-card-head">
+                    <div>
+                        <h6>Dónde se va el gasto</h6>
+                        <small>
+                            Cruza la configuración de cada agente con lo que consumió de verdad.
+                            El análisis no llama al modelo: no gasta un solo token.
+                        </small>
+                    </div>
+                    <div class="d-flex gap-2 align-items-center">
+                        <select id="ciaOptimDias" class="form-select form-select-sm cia-optim-dias">
+                            <option value="7">Últimos 7 días</option>
+                            <option value="30" selected>Últimos 30 días</option>
+                            <option value="90">Últimos 90 días</option>
+                            <option value="365">Último año</option>
+                        </select>
+                        <button class="btn btn-sm btn-primary" id="ciaAnalizar">
+                            <i class="fa fa-magnifying-glass-chart me-1"></i>Analizar
+                        </button>
+                    </div>
+                </div>
+                <div class="cia-card-body">
+                    <p class="text-muted small mb-0">
+                        El gasto de un agente está en lo que se le manda, no en lo que responde:
+                        cada mensaje arrastra las instrucciones, el contexto estático, el
+                        conocimiento recuperado y el historial. Esta pestaña muestra cuánto pesa
+                        cada pieza y cuáles se pueden recortar sin degradar la respuesta.
+                    </p>
+                    <div id="ciaOptimResultado" class="mt-3"></div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -685,6 +724,131 @@ $('#ciaSaberConsultar').on('click', function () {
             $btn.prop('disabled', false).text('Consultar');
             $('#ciaSaberResultado').html('<div class="cia-resultado cia-resultado-error">' + ciaEscHtml(r.message) + '</div>');
         });
+});
+
+function ciaBarraPiezas(piezas) {
+    var html = '<div class="cia-barra">';
+    (piezas || []).forEach(function (p, i) {
+        if (!p.porcentaje) { return; }
+        html += '<span class="cia-barra-tramo cia-tramo-' + (i % 4)
+             +  '" style="width:' + p.porcentaje + '%" title="'
+             +  ciaEscHtml(p.etiqueta) + ': ' + p.tokens + ' tokens ('
+             +  p.porcentaje + '%)"></span>';
+    });
+    html += '</div><div class="cia-barra-leyenda">';
+    (piezas || []).forEach(function (p, i) {
+        if (!p.porcentaje) { return; }
+        html += '<span><i class="cia-punto cia-tramo-' + (i % 4) + '"></i>'
+             +  ciaEscHtml(p.etiqueta) + ' <b>' + p.tokens + '</b> tok · '
+             +  p.porcentaje + '%</span>';
+    });
+    return html + '</div>';
+}
+
+function ciaHallazgo(a, h) {
+    var html = '<div class="cia-hallazgo cia-sev-' + ciaEscHtml(h.severidad) + '">'
+             + '<div class="cia-hallazgo-cab"><strong>' + ciaEscHtml(h.titulo) + '</strong>';
+    if (h.ahorro_mes_usd > 0) {
+        html += '<span class="cia-ahorro">hasta USD ' + h.ahorro_mes_usd.toFixed(4) + '/mes</span>';
+    }
+    html += '</div><p>' + ciaEscHtml(h.detalle) + '</p>';
+    if (h.aplicable) {
+        html += '<button class="btn btn-sm btn-outline-primary cia-aplicar"'
+             +  ' data-agente="' + a.id + '" data-campo="' + ciaEscHtml(h.campo) + '"'
+             +  ' data-valor="' + ciaEscHtml(h.propuesto) + '">'
+             +  'Aplicar: ' + ciaEscHtml(h.campo) + ' ' + ciaEscHtml(h.actual)
+             +  ' &rarr; ' + ciaEscHtml(h.propuesto) + '</button>';
+    }
+    return html + '</div>';
+}
+
+function ciaPintarAuditoria(r) {
+    if (!r.agentes.length) {
+        $('#ciaOptimResultado').html('<div class="cia-resultado">No hay agentes con consumo en la ventana elegida.</div>');
+        return;
+    }
+    var html = '<div class="cia-optim-resumen">'
+             + '<div><span>Gasto medido</span><b>USD ' + r.costo_usd.toFixed(4) + '</b>'
+             + '<small>en ' + r.dias + ' días</small></div>'
+             + '<div><span>Proyección mensual</span><b>USD ' + r.costo_mes_usd.toFixed(4) + '</b>'
+             + '<small>al ritmo actual</small></div>'
+             + '<div><span>Ahorro identificado</span><b>USD ' + r.ahorro_mes_usd.toFixed(4) + '</b>'
+             + '<small>' + r.total_hallazgos + ' hallazgo(s)</small></div>'
+             + '</div>';
+
+    r.agentes.forEach(function (a) {
+        html += '<div class="cia-optim-agente"><div class="cia-optim-agente-cab">'
+             +  '<div><h6>' + ciaEscHtml(a.nombre) + '</h6>'
+             +  '<small>' + a.llamadas + ' llamadas · ' + a.entrada_promedio
+             +  ' tokens de entrada por llamada · ' + ciaEscHtml(a.modelo || 'sin modelo')
+             +  ' · USD ' + a.costo_usd.toFixed(4) + '</small></div>';
+        if (a.saturacion != null) {
+            html += '<span class="cia-saturacion" title="Cuánto del presupuesto configurado usa el prompt real">'
+                 +  a.saturacion + '% del presupuesto</span>';
+        }
+        html += '</div>';
+        if (a.piezas && a.piezas.length) {
+            html += '<div class="cia-optim-presu"><small>Presupuesto de prompt: <b>'
+                 +  a.presupuesto_tokens + '</b> tokens</small>' + ciaBarraPiezas(a.piezas) + '</div>';
+        }
+        if (!a.hallazgos.length) {
+            html += '<div class="cia-resultado cia-resultado-ok">Sin hallazgos: la configuración acompaña al uso real.</div>';
+        }
+        a.hallazgos.forEach(function (h) { html += ciaHallazgo(a, h); });
+        html += '<button class="btn btn-sm btn-light cia-revisar-prompt" data-agente="' + a.id + '">'
+             +  '<i class="fa fa-wand-magic-sparkles me-1"></i>Revisar el texto de las instrucciones con IA</button>'
+             +  '<div class="cia-revision" id="ciaRevision' + a.id + '"></div>';
+        html += '</div>';
+    });
+    $('#ciaOptimResultado').html(html);
+}
+
+$('#ciaAnalizar').on('click', function () {
+    var $btn = $(this).prop('disabled', true);
+    $('#ciaOptimResultado').html('<div class="cia-resultado">Analizando el consumo de cada agente…</div>');
+    ciaPost({ action: 'auditar_consumo', dias: $('#ciaOptimDias').val() }, function (r) {
+        $btn.prop('disabled', false);
+        ciaPintarAuditoria(r);
+    }, function (r) {
+        $btn.prop('disabled', false);
+        $('#ciaOptimResultado').html('<div class="cia-resultado cia-resultado-error">' + ciaEscHtml(r.message) + '</div>');
+    });
+});
+
+$('#ciaOptimResultado').on('click', '.cia-aplicar', function () {
+    var $btn = $(this);
+    ciaPost({
+        action: 'aplicar_recomendacion',
+        agente_id: $btn.data('agente'),
+        campo: $btn.data('campo'),
+        valor: $btn.data('valor')
+    }, function (r) {
+        $btn.replaceWith('<span class="cia-aplicado"><i class="fa fa-check me-1"></i>' + ciaEscHtml(r.message) + '</span>');
+    }, function (r) {
+        Swal.fire('No se pudo aplicar', r.message, 'error');
+    });
+});
+
+$('#ciaOptimResultado').on('click', '.cia-revisar-prompt', function () {
+    var $btn = $(this).prop('disabled', true);
+    var id = $btn.data('agente');
+    $('#ciaRevision' + id).html('<div class="cia-resultado">Leyendo las instrucciones…</div>');
+    ciaPost({ action: 'revisar_prompt', agente_id: id }, function (r) {
+        $btn.prop('disabled', false);
+        var html = '';
+        if (r.sugerencias.length) {
+            html = '<ul class="cia-sugerencias">';
+            r.sugerencias.forEach(function (s) { html += '<li>' + ciaEscHtml(s) + '</li>'; });
+            html += '</ul><small class="text-muted">Revisión sobre ' + r.chars_prompt
+                 +  ' caracteres · costó ' + r.tokens_usados + ' tokens</small>';
+        } else {
+            html = '<div class="cia-resultado cia-resultado-ok">' + ciaEscHtml(r.mensaje) + '</div>';
+        }
+        $('#ciaRevision' + id).html(html);
+    }, function (r) {
+        $btn.prop('disabled', false);
+        $('#ciaRevision' + id).html('<div class="cia-resultado cia-resultado-error">' + ciaEscHtml(r.message) + '</div>');
+    });
 });
 
 /* Recordar la pestaña activa entre recargas: casi toda accion recarga la

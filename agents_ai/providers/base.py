@@ -34,11 +34,19 @@ class BaseProvider(ABC):
 
     @abstractmethod
     def get_llm(self, apikey: str, model_name: str, max_output_tokens: int, temperature: float = 0.1,
-                base_url: str | None = None):
+                base_url: str | None = None, razonamiento: bool = True):
         """Devuelve una instancia LangChain del LLM.
 
         `base_url` — endpoint alternativo para providers auto-hospedados u
         OpenAI-compatibles (Ollama, Huawei MaaS). Los providers cloud lo ignoran.
+
+        `razonamiento=False` apaga el pensamiento extendido en los modelos que lo
+        traen encendido de fábrica. No es un detalle de calidad sino de costo:
+        los tokens de razonamiento **se facturan como salida**. Medido en
+        producción, el análisis de sentimiento gastaba ~1.900 tokens de salida
+        para devolver un JSON de tres campos sobre un texto de 350. Usalo en
+        tareas de clasificación y extracción, donde el modelo no tiene nada que
+        deliberar. Los providers que no lo soportan ignoran el parámetro.
         """
         ...
 

@@ -44,6 +44,7 @@ Centro de IA.
 |---|---|
 | `agente_consultor.py` | La clase `AgenteConsultor` — el bot conversacional: arma contexto (FAISS híbrido + estático + FAQs + APIs + memoria, con umbral de relevancia `cfg_umbral_distancia` en consultas específicas), formatea el prompt con persona/humanización, invoca el LLM (con o sin tool-calling) y memoriza la interacción. En el loop de tool-calling usa temperatura reducida (`_TEMPERATURE_TOOLS = 0.2`, o la del agente si es menor) — los argumentos de tools (fechas, ids, cantidades) necesitan determinismo; la temperatura de charla del agente aplica solo al camino sin tools. Se construye por mensaje pero lo pesado está cacheado entre mensajes: cliente LLM/embeddings (`providers.get_llm_cached`/`get_embeddings_cached`), índice FAISS y BM25 (`consultor/retrieval.py`); las listas de pedido (`listas_memoria`) se cargan lazy solo en el flujo con tools. |
 | `consumo.py` | Tabla `PRECIO_USD_POR_1K_TOKENS` y `costo_usd()` — calculadora de costo estimado en dinero para el dashboard de consumo. |
+| `optimizador.py` | Auditoría de consumo por agente: cruza la configuración efectiva con `ConsumoTokenIA` y devuelve hallazgos accionables. Ver la sección "Optimizador de consumo" más abajo. |
 | `models.py` | `MessageStore` — tabla del historial de mensajes por conversación (única tabla propia del paquete). |
 | `memoria_django.py` | SHIM de compatibilidad → `memoria/historial.py`. No agregar código aquí. |
 | `vectorstore_manager.py` | SHIM de compatibilidad → `rag/vectorstore.py`. No agregar código aquí. |
@@ -130,3 +131,93 @@ prompt en bloques (SystemMessage cacheable + HumanMessage volátil) y marcar
 automáticamente). Cambia la forma de armar el prompt para todos los proveedores,
 por eso se deja para una fase revisada/probada aparte. Instrumento para medir el
 antes/después: `desglose_prompt` → traza `llm_respondio.pesos_prompt`.
+
+## Optimizador de consumo (2026-08-10)
+
+`optimizador.py` + pestaña **Optimización** en `/crm/centro-ia/`.
+
+El punto de partida es una medición, no una intuición: en producción WhatsApp
+gastó **370.722 tokens de entrada contra 48.584 de salida**, un factor de 7,6.
+El gasto de un agente no está en lo que responde sino en lo que se le manda, y
+lo que se le manda lo arma la configuración. Por eso el optimizador cruza dos
+cosas que antes se miraban por separado — la cascada de parámetros
+(`crm/ia_config.py`) y el consumo real (`ConsumoTokenIA`).
+
+### Presupuesto de prompt
+
+`presupuesto_prompt(agente)` calcula cuánto pesaría el prompt si cada pieza se
+llenara hasta su tope: instrucciones + contexto estático + RAG + historial. Ese
+número comparado contra la entrada real medida da la **saturación**, y de ahí
+salen las dos lecturas que importan:
+
+- **Saturación baja** (< 60 %): el tope no es el que manda el tamaño real, así
+  que bajarlo no quita un solo token de la factura. El optimizador se calla.
+- **Saturación > 100 %**: hay tokens entrando por fuera de la cascada
+  (herramientas, FAQs, la pregunta del usuario). Se reporta como
+  `presupuesto_incompleto`, porque es gasto que hoy no se puede recortar desde
+  el panel y conviene identificar antes de apretar los topes que sí existen.
+
+### Reglas
+
+| Código | Qué detecta |
+|---|---|
+| `prompt_inflado` | La pieza más pesada del prompt, solo cuando el presupuesto se está usando de verdad. Propone recortar un 30 %. |
+| `presupuesto_incompleto` | El prompt real pesa más que todos los topes sumados. |
+| `pico_de_prompt` | Una llamada 3× por encima del promedio: contexto que se desbocó, no una pregunta larga. |
+| `razonamiento_facturado` | Una tarea de clasificación devolviendo cientos de tokens. Casi siempre es pensamiento extendido. |
+| `sin_instrumentar` | Consumo sin `origen`: no se puede atribuir ni recortar. |
+| `faqs_sin_vectorizar` | Mete N FAQs en cada prompt y no tiene conocimiento vectorizado. |
+| `tope_salida_holgado` | El tope supera 3× la respuesta más larga real. No ahorra por sí solo; acota el peor caso. |
+
+Los propuestos se calculan sobre el **máximo observado**, nunca sobre el
+promedio: un agente que responde 34 tokens de media pero 900 en su caso más
+largo quedaría con el tope en 102 y truncaría la respuesta larga.
+
+### Por qué el diagnóstico no lo hace un LLM
+
+Todo lo anterior es aritmética sobre datos medidos: no hay nada que interpretar
+y sí mucho que equivocar — un modelo inventando nombres de campo escribiría
+configuraciones inválidas, y gastar tokens para ahorrar tokens es discutible.
+
+El LLM entra en un solo lugar donde gana: `revisar_texto_prompt()` lee las
+instrucciones escritas a mano y señala bloques repetidos o sobrantes. Eso sí es
+criterio. Es una acción aparte y explícita porque es la única que cuesta tokens.
+Pide una lista de recortes, **no una reescritura**: reescribir automáticamente un
+prompt en producción cambia cómo el agente le habla a los clientes sin que nadie
+lo haya leído.
+
+### Aplicar
+
+`aplicar_recomendacion()` escribe en el **agente**, no en el perfil ni en la
+plataforma: fija el valor para ese agente y los que heredan siguen heredando.
+Solo acepta campos de `CAMPOS_HEREDABLES` que existan como columna del agente —
+`cfg_umbral_distancia` y `cfg_max_static_amplia` viven solo en el Centro de IA y
+escribirlos ahí sería inventar un atributo que nadie lee.
+
+## Pensamiento extendido: `razonamiento=False` (2026-08-10)
+
+`BaseProvider.get_llm()` acepta `razonamiento`. En `False`, el provider de
+Gemini manda `thinking_budget=0` a los modelos 2.5 (solo esa familia lo
+entiende; mandárselo a otro es un error de la API). Los demás providers aceptan
+el parámetro y lo ignoran.
+
+No es un ajuste de calidad sino de costo: **los tokens de razonamiento se
+facturan como salida**. Medido contra la API real con el mismo prompt de
+clasificación:
+
+| | Entrada | Salida | Respuesta |
+|---|---:|---:|---|
+| `razonamiento=True` | 68 | 180 | `{"sentimiento":"positiva","puntuacion":9}` |
+| `razonamiento=False` | 68 | **18** | `{"sentimiento":"positiva","puntuacion":8}` |
+
+Diez veces menos salida por la misma respuesta. En producción el análisis de
+sentimiento venía gastando ~1.900 tokens de salida para devolver un JSON de tres
+campos sobre un texto de 350.
+
+`AgenteResumidor` (resumir + sentimiento) usa `razonamiento=False`: son tareas de
+extracción, el modelo no tiene nada que deliberar. **El agente conversacional
+no**, ahí el razonamiento sí mejora la respuesta.
+
+`razonamiento` forma parte de la clave de caché de `get_llm_cached`. Sin eso, el
+primer llamador en pedir una config fijaría el modo de pensamiento para todos
+los que compartan modelo y key.

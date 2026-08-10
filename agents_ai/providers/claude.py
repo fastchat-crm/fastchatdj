@@ -13,7 +13,8 @@ class ClaudeProvider(BaseProvider):
     def default_model(self) -> str:
         return "claude-haiku-4-5-20251001"
 
-    def get_llm(self, apikey, model_name, max_output_tokens, temperature=0.1, base_url=None):
+    def get_llm(self, apikey, model_name, max_output_tokens, temperature=0.1, base_url=None,
+                razonamiento=True):
         # Import diferido — el paquete no se carga si nunca usamos Claude
         from langchain_anthropic import ChatAnthropic
         return ChatAnthropic(

@@ -122,16 +122,22 @@ def _hash_apikey(apikey):
 
 
 def get_llm_cached(provider: BaseProvider, apikey, model_name, max_output_tokens,
-                   temperature=0.1, base_url=None):
-    """Devuelve el LLM del provider reutilizando la instancia si la config no cambió."""
-    key = (provider.name, _hash_apikey(apikey), model_name, max_output_tokens, float(temperature), base_url)
+                   temperature=0.1, base_url=None, razonamiento=True):
+    """Devuelve el LLM del provider reutilizando la instancia si la config no cambió.
+
+    `razonamiento` va en la clave de caché: si no estuviera, el primer llamador
+    en pedir una config fijaría el modo de pensamiento para todos los demás que
+    compartan modelo y key.
+    """
+    key = (provider.name, _hash_apikey(apikey), model_name, max_output_tokens, float(temperature),
+           base_url, bool(razonamiento))
     with _clientes_lock:
         llm = _llm_cache.get(key)
         if llm is not None:
             return llm
     llm = provider.get_llm(
         apikey=apikey, model_name=model_name, max_output_tokens=max_output_tokens,
-        temperature=temperature, base_url=base_url,
+        temperature=temperature, base_url=base_url, razonamiento=razonamiento,
     )
     with _clientes_lock:
         if len(_llm_cache) >= _MAX_CLIENTES_CACHE:

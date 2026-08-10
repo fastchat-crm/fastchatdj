@@ -23,7 +23,8 @@ class OpenAICompatProvider(BaseProvider):
             url = f"{url}/v1"
         return url
 
-    def get_llm(self, apikey, model_name, max_output_tokens, temperature=0.1, base_url=None):
+    def get_llm(self, apikey, model_name, max_output_tokens, temperature=0.1, base_url=None,
+                razonamiento=True):
         from langchain_community.chat_models import ChatOpenAI
         return ChatOpenAI(
             model_name=model_name,

@@ -18,7 +18,14 @@ class GeminiProvider(BaseProvider):
     def default_model(self) -> str:
         return "gemini-2.5-flash"
 
-    def get_llm(self, apikey, model_name, max_output_tokens, temperature=0.1, base_url=None):
+    def get_llm(self, apikey, model_name, max_output_tokens, temperature=0.1, base_url=None,
+                razonamiento=True):
+        extra = {}
+        # Los modelos 2.5 traen el pensamiento extendido encendido y lo facturan
+        # como salida. `thinking_budget=0` lo apaga; solo existe en esa familia,
+        # y mandarlo a un modelo que no lo entiende es un error de la API.
+        if not razonamiento and model_name and '2.5' in model_name:
+            extra['thinking_budget'] = 0
         return ChatGoogleGenerativeAI(
             model=model_name,
             google_api_key=apikey,
@@ -26,6 +33,7 @@ class GeminiProvider(BaseProvider):
             temperature=temperature,
             timeout=LLM_TIMEOUT_SEGUNDOS,
             max_retries=LLM_MAX_RETRIES,
+            **extra,
         )
 
     def get_embeddings(self, apikey, base_url=None):
