@@ -63,7 +63,7 @@ def _norm(t):
 
 
 def _probar_agente(agente):
-    key = agente.apikey.filter(estado=True, status=True).first()
+    key = agente.apikey_activa()
     if not key:
         return {'agente': agente.nombre, 'error': 'sin API key activa'}
 

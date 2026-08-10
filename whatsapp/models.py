@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from email.policy import default
 from functools import cached_property
@@ -19,6 +20,8 @@ from core.funciones import default_expira_10_min, get_encrypt
 from core.funciones_adicionales import remover_espacios_de_mas, foto_inicial_gris
 from fastchatdj.settings import MEDIA_ROOT
 from whatsapp.models_querysetmanagers import ContactoManager, ConversacionWhatsAppManager
+
+logger = logging.getLogger(__name__)
 
 ESTADOS_SESION = (
     ('pendiente', 'Pendiente'),
@@ -691,11 +694,48 @@ class ConversacionWhatsApp(ModeloBase):
     def traer_ultimo_mensaje(self):
         return self.mensajes.last()
 
+    # Por debajo de esto no hay conversación que resumir: un "hola" suelto o un
+    # mensaje que nadie contestó. Resumirlos gastaba tokens para producir una
+    # línea sin valor, y esas líneas después ensucian el RAG del agente.
+    MIN_MENSAJES_PARA_RESUMIR = 3
+
+    # Marca de "no hay nada que resumir acá". A diferencia de un fallo, esto no
+    # se reintenta: la conversación no va a crecer.
+    SIN_CONTENIDO = 'CONVERSACION SIN CONTENIDO'
+
     def resumir_conversacion(self):
+        """Genera sentimiento + resumen de la conversación cerrada.
+
+        Idempotente: si ya hay resumen no hace nada.
+
+        **Un fallo NO deja marca.** Antes se escribía 'SIN RESUMEN' cuando algo
+        salía mal, y como el guard de entrada es `if not self.resumen_conversacion`,
+        esa marca volvía la conversación imposible de resumir para siempre. Un
+        error transitorio de la API la mataba definitivamente: 395 de 951
+        conversaciones cerradas quedaron así, y el cron que alimenta el RAG se
+        quedó sin material del que aprender. Ahora un fallo deja el campo vacío
+        y queda elegible para el próximo intento.
+        """
         session = self.contacto.sesion
-        if not self.resumen_conversacion and session.agente_ia and session.agente_ia.apikey.exists():
-            agente = session.agente_ia
-            for apikey in agente.apikey.all():
+        if self.resumen_conversacion or not session.agente_ia:
+            return
+
+        agente = session.agente_ia
+        # Solo keys activas. `apikey.all()` incluía las dadas de baja y las
+        # borradas, así que el primer intento se gastaba en una key muerta.
+        keys = list(agente.apikey.filter(estado=True, status=True).order_by('-es_default', 'id'))
+        if not keys:
+            logger.info('Conversación %s sin resumen: el agente "%s" no tiene key activa.',
+                        self.id, agente.nombre)
+            return
+
+        if self.mensajes.count() < self.MIN_MENSAJES_PARA_RESUMIR:
+            self.resumen_conversacion = self.SIN_CONTENIDO
+            super().save()
+            return
+
+        if True:
+            for apikey in keys:
                 try:
                     consultor = AgenteResumidor(
                         provider=apikey.proveedor, apikey=apikey.descripcion, conversacion=self,
@@ -733,11 +773,19 @@ class ConversacionWhatsApp(ModeloBase):
                             )
                     except Exception:
                         pass
-                except Exception:
+                except Exception as ex:
+                    # Antes esto se tragaba en silencio y el motivo se perdía.
+                    logger.warning(
+                        'No se pudo resumir la conversación %s con la key %s (%s): %s',
+                        self.id, apikey.id, apikey.get_proveedor_display(), ex,
+                    )
                     continue
                 break
             if not self.resumen_conversacion:
-                self.resumen_conversacion = 'SIN RESUMEN'
+                # Se deja vacío a propósito para poder reintentar más adelante.
+                logger.warning('Conversación %s quedó sin resumen: fallaron las %d key(s) activas.',
+                               self.id, len(keys))
+                return
             super().save()
 
     def get_foto_gris(self):

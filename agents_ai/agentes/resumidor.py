@@ -8,6 +8,9 @@ from ..providers import get_provider
 logger = logging.getLogger(__name__)
 
 _MAX_TOKENS_RESUMEN = 2000
+# Techo de la transcripción que se manda a resumir. Hay conversaciones de más de
+# 200 mensajes: enteras cuestan más que el resumen que producen.
+_MAX_CHARS_TRANSCRIPCION = 12_000
 
 
 class AgenteResumidor:
@@ -75,16 +78,77 @@ class AgenteResumidor:
         )
 
     def _get_texto_chat(self) -> str:
+        """Transcripción de la conversación para resumir o clasificar.
+
+        Primero el historial de LangChain (`MessageStore`), que es lo que ve el
+        agente IA mientras conversa. **Si está vacío, se leen los mensajes reales
+        de WhatsApp.**
+
+        Ese fallback es el que faltaba y rompía toda la cadena de aprendizaje:
+        `MessageStore` solo se escribe cuando responde el agente IA, así que una
+        sesión en modo `tradicional` — o atendida por una persona — tenía sus
+        mensajes en `MensajeWhatsApp` y acá se veía una conversación vacía. El
+        resumen salía en blanco, sin sentimiento, y de ahí para abajo:
+        `aprender_conversaciones` la descartaba por no tener sentimiento y
+        `aprender_weaviate` no tenía nada que indexar. Medido: de 951
+        conversaciones cerradas solo 68 tenían resumen útil.
+        """
+        lines = self._lineas_de_langchain()
+        if not lines:
+            lines = self._lineas_de_whatsapp()
+        return "\n".join(lines)
+
+    def _lineas_de_langchain(self) -> list:
         if not self._historia:
-            return ""
-        messages = self._historia.messages
+            return []
         lines = []
-        for msg in messages:
+        for msg in self._historia.messages:
             if isinstance(msg, HumanMessage):
                 lines.append(f"Cliente: {msg.content}")
             elif isinstance(msg, AIMessage):
                 lines.append(f"Asistente: {msg.content}")
-        return "\n".join(lines)
+        return lines
+
+    def _lineas_de_whatsapp(self) -> list:
+        """Transcripción armada desde los mensajes de WhatsApp.
+
+        Quién habla se deduce comparando el remitente con el número del
+        contacto: no hay un campo de dirección en `MensajeWhatsApp`.
+
+        El recorte por caracteres importa — hay conversaciones de 233 mensajes,
+        y mandarlas enteras a resumir cuesta más que el resumen que producen. Se
+        conservan los ÚLTIMOS mensajes: el desenlace es lo que vale para
+        entender en qué terminó.
+        """
+        if not self.conversacion:
+            return []
+        try:
+            numero_contacto = str(self.conversacion.contacto.contacto_numero or '')
+            mensajes = list(
+                self.conversacion.mensajes
+                .filter(eliminado=False)
+                .exclude(mensaje='')
+                .exclude(mensaje__isnull=True)
+                .order_by('fecha')
+            )
+        except Exception as exc:
+            logger.debug('No se pudieron leer los mensajes de WhatsApp: %s', exc)
+            return []
+
+        lines = []
+        for m in mensajes:
+            quien = 'Cliente' if str(m.remitente) == numero_contacto else 'Asistente'
+            lines.append(f"{quien}: {(m.mensaje or '').strip()}")
+
+        total = 0
+        recorte = []
+        for linea in reversed(lines):
+            total += len(linea) + 1
+            if total > _MAX_CHARS_TRANSCRIPCION:
+                break
+            recorte.append(linea)
+        recorte.reverse()
+        return recorte
 
     def resumir(self) -> str:
         texto_chat = self._get_texto_chat()

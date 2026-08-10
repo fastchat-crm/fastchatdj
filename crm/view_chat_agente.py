@@ -121,7 +121,7 @@ def chat_agente_view(request, agente_enc_id):
             if not pregunta:
                 return JsonResponse({'error': True, 'message': 'Escribe un mensaje antes de enviar.'})
 
-            apikey_obj = agente.apikey.filter(estado=True, status=True).first()
+            apikey_obj = agente.apikey_activa()
             if not apikey_obj:
                 return JsonResponse({
                     'error': True,
@@ -490,7 +490,7 @@ def _handle_media(request, agente, session_id):
     if not archivo:
         return JsonResponse({'error': True, 'message': 'No se recibió ningún archivo.'})
 
-    apikey_obj = agente.apikey.filter(estado=True, status=True).first()
+    apikey_obj = agente.apikey_activa()
     if not apikey_obj:
         return JsonResponse({'error': True, 'message': 'Este agente no tiene una API Key activa.'})
 

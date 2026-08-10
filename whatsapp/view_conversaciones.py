@@ -1318,7 +1318,7 @@ def conversacionesView(request, canal_fijo=None, template='whatsapp/conversacion
                             if agente.vectorstore_path and agente.apikey.filter(estado=True, status=True).exists():
                                 apikey_obj = (
                                     agente.apikey.filter(estado=True, proveedor__in=(2, 3, 8)).first()
-                                    or agente.apikey.filter(estado=True, status=True).first()
+                                    or agente.apikey_activa()
                                 )
                                 try:
                                     from agents_ai.vectorstore_manager import VectorStoreManager

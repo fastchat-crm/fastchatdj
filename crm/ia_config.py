@@ -38,11 +38,12 @@ CAMPOS_HEREDABLES = (
     'cfg_topic_anchor_chars',
     'cfg_umbral_distancia',
     'cfg_max_static_amplia',
+    'cfg_max_api_chars',
     'memoria_rag_activa',
 )
 
 # Campos que el agente no tiene como columna propia: sólo existen en el centro.
-CAMPOS_SOLO_CENTRO = ('cfg_umbral_distancia', 'cfg_max_static_amplia')
+CAMPOS_SOLO_CENTRO = ('cfg_umbral_distancia', 'cfg_max_static_amplia', 'cfg_max_api_chars')
 
 
 # ---------------------------------------------------------------------------

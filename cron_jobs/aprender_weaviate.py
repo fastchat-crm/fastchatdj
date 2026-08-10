@@ -47,7 +47,8 @@ MIN_CHARS_RESUMEN = 80
 
 # Textos que el resumidor deja cuando no pudo resumir. Indexarlos ensuciaría el
 # conocimiento con ruido que después el agente recupera como si fuera un caso.
-RESUMENES_VACIOS = ('sin resumen', 'sin datos', 'no disponible', 'n/a')
+RESUMENES_VACIOS = ('sin resumen', 'sin datos', 'no disponible', 'n/a',
+                    'conversacion sin contenido')
 
 
 def _sources_ya_indexados(agente_id):

@@ -72,7 +72,7 @@ def generar_uno(*, descripcion_usuario: str, sesion) -> dict:
     agente = getattr(sesion, 'agente_ia', None)
     if not agente:
         raise IAActionError("La sesion no tiene un agente IA asignado.")
-    apikey = agente.apikey.filter(estado=True, status=True).first()
+    apikey = agente.apikey_activa()
     if not apikey:
         raise IAActionError("El agente no tiene API Keys activas.")
 

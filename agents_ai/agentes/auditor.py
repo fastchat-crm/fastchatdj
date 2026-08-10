@@ -396,7 +396,7 @@ def ejecutar_auditoria(agente, usuario=None, apikey_obj=None, dias=30):
         auditoria.metricas = metricas
 
         if not apikey_obj:
-            apikey_obj = agente.apikey.filter(estado=True, status=True).first()
+            apikey_obj = agente.apikey_activa()
         if not apikey_obj:
             raise RuntimeError("El agente no tiene API keys activas para invocar al auditor.")
 

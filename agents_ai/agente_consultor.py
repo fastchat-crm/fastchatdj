@@ -68,6 +68,10 @@ _TOPIC_ANCHOR_CHARS = 180   # chars del primer mensaje sustantivo como ancla de 
 _UMBRAL_DISTANCIA  = 1.4    # distancia L2² máx de un chunk relevante (embeddings normalizados: ≈ coseno 0.3)
 _TEMPERATURE_TOOLS = 0.2    # temperatura máx durante tool-calling — argumentos deterministas
 _MAX_STATIC_AMPLIA = 12_000 # techo del contexto estático completo en consultas amplias (Modo A)
+# Techo del volcado de las fuentes API. Es el único bloque del prompt que no
+# tenía ninguno: entraba entero en cada mensaje. Medido, un catálogo conectado
+# por API mandaba 49.868 chars (~12.500 tokens) en TODAS las llamadas.
+_MAX_API_CHARS = 12_000
 _RESUMEN_CADA_N    = 6      # mensajes entre refrescos del resumen rodante (patrón backmanageria)
 _RESUMEN_MAX_CHARS = 700    # techo del resumen rodante reinyectado al historial
 _FAQ_MATCH_RATIO   = 0.92   # similitud mínima para responder una FAQ directa sin LLM
@@ -143,6 +147,7 @@ class AgenteConsultor:
         self.cfg_topic_anchor_chars = _cfg('cfg_topic_anchor_chars', _TOPIC_ANCHOR_CHARS)
         self.cfg_umbral_distancia  = _cfg('cfg_umbral_distancia', _UMBRAL_DISTANCIA)
         self.cfg_max_static_amplia = _cfg('cfg_max_static_amplia', _MAX_STATIC_AMPLIA)
+        self.cfg_max_api_chars     = _cfg('cfg_max_api_chars', _MAX_API_CHARS)
         self.cfg_faqs_en_prompt    = _cfg('faqs_en_prompt', 5)
         self.cfg_memoria_rag_activa = _cfg('memoria_rag_activa', True)
         self.desglose_prompt = {}
@@ -929,10 +934,48 @@ class AgenteConsultor:
         if self.agente is None:
             return ''
         try:
-            return self.agente.fetch_contexto_apis() or ''
+            bloque = self.agente.fetch_contexto_apis() or ''
         except Exception as exc:
             logger.debug("No se pudo obtener contexto de APIs: %s", exc)
             return ''
+        return self._recortar_bloque_apis(bloque)
+
+    def _recortar_bloque_apis(self, bloque: str) -> str:
+        """Pone techo al volcado de las fuentes API.
+
+        El RAG tiene `cfg_max_context_chars` y el contexto estático tiene
+        `cfg_max_static_chars`, pero este bloque no tenía ninguno: entraba
+        entero en cada mensaje. Medido en producción, un agente con el catálogo
+        conectado por API mandaba 49.868 caracteres (~12.500 tokens) en TODAS
+        las llamadas, incluidos ítems dados de baja y precios en cero.
+
+        No es solo costo: obliga al modelo a encontrar el dato bueno dentro de
+        un pajar de datos muertos, y ahí es donde empieza a responder mal.
+
+        Se corta en el límite de un ítem, nunca a mitad de una línea, y se
+        avisa en el texto que la lista viene incompleta — si no, el modelo
+        presenta lo que le llegó como si fuera el catálogo entero.
+        """
+        tope = self.cfg_max_api_chars
+        if not tope or len(bloque) <= tope:
+            return bloque
+
+        corte = bloque.rfind('\n', 0, tope)
+        if corte < tope // 2:
+            corte = tope
+        recortado = bloque[:corte].rstrip()
+
+        logger.warning(
+            'Bloque de APIs recortado para el agente %s: %d de %d caracteres '
+            '(tope cfg_max_api_chars=%d). Los ítems que quedaron afuera no los ve el modelo.',
+            getattr(self.agente, 'id', '?'), len(recortado), len(bloque), tope,
+        )
+        return (
+            recortado
+            + '\n\n[LISTA PARCIAL: hay más ítems que no entran acá. Si el cliente '
+              'pregunta por algo que no figura en esta lista, no afirmes que no existe: '
+              'pedile el nombre concreto para confirmarlo.]'
+        )
 
     def _vars_negocio(self) -> dict:
         """Datos del negocio (perfil) para el prompt: nombre_empresa, productos,

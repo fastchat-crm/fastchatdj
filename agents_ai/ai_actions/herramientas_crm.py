@@ -39,7 +39,7 @@ def generar(*, frase: str, agente, request) -> dict:
     if not frase:
         raise IAActionError("Describe que necesita consultar la herramienta.")
 
-    apikey_obj = agente.apikey.filter(estado=True, status=True).first()
+    apikey_obj = agente.apikey_activa()
     if not apikey_obj:
         raise IAActionError("El agente no tiene una API Key activa.")
 

@@ -441,7 +441,7 @@ def entrenamiento_ia_view(request):
                         filtro = AgentesIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
                         apikey_obj = (
                             filtro.apikey.filter(estado=True, proveedor__in=(2, 3, 8)).first()
-                            or filtro.apikey.filter(estado=True, status=True).first()
+                            or filtro.apikey_activa()
                         )
                         if not apikey_obj or not apikey_obj.descripcion:
                             res_json.append({'error': True, 'message': 'El agente no tiene una API Key activa para reprocesar.'})
@@ -721,7 +721,7 @@ def entrenamiento_ia_view(request):
                             filtro.contexto_estatico = texto_completo[:_UMBRAL]
                             if len(texto_completo) > _UMBRAL:
                                 # Construir FAISS para la parte que no cabe
-                                apikey_obj = filtro.apikey.filter(estado=True, status=True).first()
+                                apikey_obj = filtro.apikey_activa()
                                 if apikey_obj and apikey_obj.proveedor in (2, 3):
                                     try:
                                         vs_manager = VectorStoreManager(
@@ -1151,7 +1151,7 @@ def entrenamiento_ia_view(request):
                         if not pregunta:
                             return JsonResponse({'error': True, 'message': 'Escribe una pregunta.'})
 
-                        apikey_obj = agente.apikey.filter(estado=True, status=True).first()
+                        apikey_obj = agente.apikey_activa()
                         if not apikey_obj:
                             return JsonResponse({'error': True, 'message': 'El agente no tiene API Key activa.'})
 
@@ -1236,7 +1236,7 @@ def entrenamiento_ia_view(request):
                         if not mensaje:
                             return JsonResponse({'error': True, 'message': 'Escribe un mensaje.'})
 
-                        apikey_obj = agente.apikey.filter(estado=True, status=True).first()
+                        apikey_obj = agente.apikey_activa()
                         if not apikey_obj:
                             return JsonResponse({'error': True, 'message': 'El agente no tiene una API Key activa.'})
 
@@ -1543,7 +1543,7 @@ def entrenamiento_ia_view(request):
                             except Exception:
                                 data['rag_index_count'] = None
                                 data['rag_fuentes'] = []
-                            _ak = filtro.apikey.filter(estado=True, status=True).first()
+                            _ak = filtro.apikey_activa()
                             if _ak:
                                 data['agente_apikey'] = {'id': _ak.id, 'proveedor': _ak.proveedor, 'modelo': _ak.modelo or ''}
                         data['titulo_pagina'] = f'Editar agente IA — {filtro}' if filtro else 'Nuevo agente IA'
@@ -1762,7 +1762,7 @@ def entrenamiento_ia_view(request):
                             return JsonResponse({'result': False, 'message': 'Ingresa una pregunta de ejemplo.'})
 
                         agente = AgentesIA.objects.get(pk=pk, perfil=perfil)
-                        apikey_obj = agente.apikey.filter(estado=True, status=True).first()
+                        apikey_obj = agente.apikey_activa()
                         if not apikey_obj:
                             return JsonResponse({'result': False, 'message': 'El agente no tiene API Key activa — necesaria para cargar el vectorstore.'})
 
@@ -2028,7 +2028,7 @@ def entrenamiento_ia_view(request):
                             })
 
                         embeddings = None
-                        apikey_obj = filtro.apikey.filter(estado=True, status=True).first()
+                        apikey_obj = filtro.apikey_activa()
                         if apikey_obj:
                             try:
                                 from agents_ai.providers import get_provider

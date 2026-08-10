@@ -24,6 +24,7 @@ lo ejecuta. **Sin conectarlos, esas funciones se ven en pantalla pero nunca env�
 | `enviar_mensaje_despedida.py` | Cierra ordenadamente conversaciones expiradas o muertas (dispara resumen + sentimiento) | Bandejas infladas de zombies y sin resúmenes IA | Cada 10 min |
 | `reabrir_pospuestas.py` | Devuelve a la bandeja las conversaciones pospuestas (snooze) cuando llega su hora | Lo pospuesto nunca reaparece; el cliente queda esperando | Cada 5 min |
 | `reconectar_sesiones.py` | Levanta sesiones Baileys caídas sin intervención manual | Una caída de red deja el número mudo hasta que alguien lo note | Cada 5 min |
+| `resumir_pendientes.py` | Reintenta el resumen + sentimiento de las conversaciones cerradas que quedaron sin él. Primer eslabón de la cadena de aprendizaje | Sin resumen no hay sentimiento, sin sentimiento `aprender_conversaciones` descarta la conversación y `aprender_weaviate` no tiene qué indexar: el agente nunca aprende de lo que ya conversó | 1 vez/día 3:00am |
 | `aprender_weaviate.py` | Indexa en el RAG de Weaviate los resúmenes de las conversaciones cerradas, para que el agente recupere casos reales y no solo lo que se cargó a mano | El conocimiento del agente se congela el día que lo entrenaron | 1 vez/día 3:30am |
 | `aprender_conversaciones.py` | Minería nocturna: genera FAQs desde chats exitosos + resumen por contacto (gasta tokens LLM) | El bot no aprende solo; todo es curación manual | 1 vez/día 3am |
 | `enviar_correo_prueba.py` | Diagnóstico manual del SMTP | — (no se programa) | Manual |
@@ -51,6 +52,7 @@ no necesitan el servidor corriendo, solo el virtualenv y la BD accesibles.
 */15 * * * * cd /ruta/fastchatdj && /ruta/venv/bin/python cron_jobs/enviar_recordatorios_turnos.py
 */15 * * * * cd /ruta/fastchatdj && /ruta/venv/bin/python cron_jobs/enviar_mensaje_reconexion.py
 0 3 * * *    cd /ruta/fastchatdj && /ruta/venv/bin/python cron_jobs/aprender_conversaciones.py
+0  3 * * *   cd /ruta/fastchatdj && /ruta/venv/bin/python cron_jobs/resumir_pendientes.py
 30 3 * * *   cd /ruta/fastchatdj && /ruta/venv/bin/python cron_jobs/aprender_weaviate.py
 ```
 

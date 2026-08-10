@@ -480,6 +480,21 @@ class AgentesIA(ModeloBase):
         logger.debug("JSON generado con %s detalles", len(detalles_json))
         return json.dumps(detalles_json)
 
+    def apikey_activa(self):
+        """La API key con la que responde este agente. None si no tiene ninguna.
+
+        Existe porque `apikey.filter(estado=True, status=True).first()` sobre un
+        queryset **sin orden** devuelve lo que la base quiera: con dos keys
+        activas, qué modelo le contesta al cliente dependía del orden de filas.
+        No es teórico — EPUNEMI VENDEDOR y Vida Buena Asesor IA tienen consumo
+        registrado con dos modelos distintos cada uno.
+
+        El orden es: primero la marcada por defecto en el Centro de IA, después
+        la más vieja. Determinista y con una intención detrás, en vez de azar.
+        """
+        return (self.apikey.filter(estado=True, status=True)
+                .order_by('-es_default', 'id').first())
+
     def fetch_contexto_apis(self, forzar_refresco: bool = False) -> str:
         """
         Descarga todas las fuentes tipo=1 (enlaces API) y devuelve su
@@ -1098,6 +1113,7 @@ PARAMETROS_IA_DEFAULT = {
     'cfg_topic_anchor_chars': 180,
     'cfg_umbral_distancia': 1.4,
     'cfg_max_static_amplia': 12000,
+    'cfg_max_api_chars': 12000,
     'memoria_rag_activa': True,
 }
 

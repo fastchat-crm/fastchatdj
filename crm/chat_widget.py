@@ -147,7 +147,7 @@ def widget_mensaje_view(request):
     agente = AgentesIA.objects.filter(pk=payload['a'], status=True).first()
     if not agente:
         return _cors(JsonResponse({'ok': False, 'error': 'Agente no disponible.'}, status=404), request)
-    apikey_obj = agente.apikey.filter(estado=True, status=True).first()
+    apikey_obj = agente.apikey_activa()
     if not apikey_obj:
         return _cors(JsonResponse({'ok': False, 'error': 'Agente sin API Key activa.'}, status=409), request)
 

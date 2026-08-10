@@ -525,7 +525,7 @@ def revisar_texto_prompt(agente, apikey_obj=None):
         return {'ok': True, 'sugerencias': [],
                 'mensaje': 'Las instrucciones son cortas: no hay nada que recortar.'}
 
-    key = apikey_obj or agente.apikey.filter(estado=True, status=True).first()
+    key = apikey_obj or agente.apikey_activa()
     if not key:
         return {'ok': False, 'mensaje': 'El agente no tiene una API key activa para revisar el texto.'}
 
