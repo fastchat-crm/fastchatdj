@@ -45,6 +45,23 @@ _ERRORES_RECONECTABLES = (
 )
 
 
+def _configuracion_incompleta():
+    """Motivo por el que el SMTP no puede funcionar, o '' si está bien.
+
+    Sin esto, un `EMAIL_HOST` vacío hace que Django intente conectarse a
+    localhost y falle con `please run connect() first` en CADA correo — un
+    mensaje que no dice nada sobre la causa real. Pasó exactamente eso: al mover
+    la config del proveedor a `credenciales.json` no se cargó `EMAIL_HOST`, y
+    los avisos de conversación asignada fallaron en silencio durante días.
+    """
+    if not (EMAIL_HOST or '').strip():
+        return ('falta EMAIL_HOST en credenciales.json — sin servidor SMTP no se '
+                'puede enviar nada')
+    if not (DEFAULT_FROM_EMAIL or '').strip():
+        return 'falta DEFAULT_FROM_EMAIL en credenciales.json'
+    return ''
+
+
 def conectar_cuenta():
     """Conexión SMTP reutilizable para despachar un lote de correos.
 
@@ -130,6 +147,13 @@ def send_html_mail(subject, html_template, datos, recipient_list, recipient_list
     con `conectar_cuenta()` y pasala en todas las llamadas para reusar la misma
     sesión SMTP. Si no la pasás, cada correo abre y cierra la suya.
     """
+    motivo = _configuracion_incompleta()
+    if motivo:
+        # Un solo aviso claro por correo perdido, en vez de dos lineas cripticas
+        # del SMTP. No se reintenta: sin configuración no hay nada que reintentar.
+        logger.error('Correo "%s" NO enviado: %s', subject, motivo)
+        return
+
     try:
         if recipient_list.__len__() or recipient_list_cc.__len__():
             template = get_template(html_template)

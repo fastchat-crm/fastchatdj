@@ -259,7 +259,7 @@ def resolver_expresion(valor: Any, contexto: dict) -> Any:
 # ─────────────────────────────────────────────────────────────────────
 
 def _valida_cedula_ec(cedula: str) -> bool:
-    if len(cedula) != 10 or not cedula.isdigit():
+    if len(cedula) != 10 or not cedula.isdecimal():
         return False
     d = [int(c) for c in cedula]
     if d[2] >= 6:
@@ -331,7 +331,7 @@ def validar_entrada(tipo: str, expresion: str, texto: str) -> bool:
     if tipo == 'cedula':
         return _valida_cedula_ec(t)
     if tipo == 'ruc':
-        return len(t) == 13 and t.isdigit()
+        return len(t) == 13 and t.isdecimal()
     if tipo == 'regex':
         try:
             return bool(re.match(expresion or '.*', t))
@@ -800,7 +800,9 @@ class MotorFlujo:
                 return d
 
         # 2) selector numérico (compat con el menú clásico de departamentos)
-        if txt.isdigit():
+        # `isdecimal()`, no `isdigit()`: '³' y '²' pasan isdigit() pero
+        # revientan en int(). Un cliente mando '³' y tumbo el flujo entero.
+        if txt.isdecimal():
             idx = int(txt) - 1
             if 0 <= idx < len(deptos):
                 return deptos[idx]
@@ -1087,7 +1089,7 @@ class MotorFlujo:
         t_norm = _normalizar_texto(t)
         elegido = None
 
-        if t.isdigit():
+        if t.isdecimal():
             idx = int(t) - 1
             if 0 <= idx < len(deptos):
                 elegido = deptos[idx]
@@ -1453,7 +1455,7 @@ class MotorFlujo:
                         pass
             if elegida:
                 pass  # ya matcheó por boton_id
-            elif t.isdigit():
+            elif t.isdecimal():
                 idx = int(t) - 1
                 if 0 <= idx < len(opciones):
                     elegida = opciones[idx]

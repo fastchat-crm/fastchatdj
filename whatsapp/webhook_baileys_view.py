@@ -325,9 +325,11 @@ def webhook_handler(request):
                 },
             )
 
-            # Las cuotas y el bloqueo de la sesión sí ameritan avisar; los
-            # rechazos puntuales (número inexistente) sólo quedan en la traza.
-            if codigo in ('cuota_diaria', 'cuota_contactos_frios', 'sesion_bloqueada'):
+            # Avisamos cuando lo que se detiene es la corrida entera; los
+            # rechazos puntuales (un número inexistente) sólo quedan en la traza.
+            # `lista_sucia` entra acá porque frena la campaña completa, y sin
+            # aviso el usuario ve una campaña "terminada" que no envió nada.
+            if codigo in ('cuota_diaria', 'cuota_contactos_frios', 'sesion_bloqueada', 'lista_sucia'):
                 cache.set(f'wa_cuota_{session.id}', {'codigo': codigo, 'motivo': motivo_bloqueo}, timeout=3600)
                 notificar_superusers_error(
                     titulo=f'Envíos detenidos por protección anti-bloqueo — sesión "{session.nombre or session.session_id}"',
