@@ -1,0 +1,161 @@
+.ficha-cliente-wrap {
+    padding: .25rem;
+}
+.ficha-multi-aviso {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1e3a8a;
+    border-radius: 8px;
+    padding: .5rem .75rem;
+    font-size: .85rem;
+    margin-bottom: .75rem;
+}
+.ficha-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+.ficha-card:last-child {
+    margin-bottom: 0;
+}
+.ficha-head {
+    display: flex;
+    align-items: center;
+    gap: .85rem;
+    margin-bottom: 1rem;
+}
+.ficha-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #eff6ff;
+    color: #2563eb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    flex-shrink: 0;
+}
+.ficha-nombre {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+.ficha-sub {
+    font-size: .85rem;
+    color: #64748b;
+}
+.ficha-datos {
+    margin-bottom: 1rem;
+}
+.ficha-datos label {
+    display: block;
+    font-size: .72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: #94a3b8;
+    margin-bottom: .1rem;
+}
+.ficha-datos > div > div {
+    font-size: .9rem;
+    color: #1e293b;
+    word-break: break-word;
+}
+.ficha-titulo-origenes {
+    font-size: .9rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 1rem 0 .5rem;
+}
+.ficha-footer {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: flex-end;
+}
+.ficha-vacia {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: #64748b;
+}
+.ficha-vacia i {
+    font-size: 2rem;
+    color: #cbd5e1;
+    margin-bottom: .75rem;
+}
+.ficha-vacia p {
+    margin: 0 0 .25rem;
+    font-size: .95rem;
+}
+.fc-registro {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px dashed #cbd5e1;
+}
+.fc-registro-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: .75rem;
+    margin-bottom: .75rem;
+}
+.fc-registro-titulo {
+    margin: 0;
+    font-size: .95rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+.fc-registro-form {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 1rem;
+}
+.fc-registro-form .form-label {
+    font-size: .72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: #94a3b8;
+    margin-bottom: .15rem;
+}
+.fc-registro-actions {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: flex-end;
+}
+.fc-vars {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    padding: .5rem .65rem;
+    margin-bottom: .85rem;
+}
+.fc-vars-title {
+    display: block;
+    font-size: .72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: #1e40af;
+    margin-bottom: .35rem;
+}
+.fc-vars-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+}
+.fc-var-chip {
+    background: #ffffff;
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    padding: .12rem .55rem;
+    font-size: .78rem;
+    color: #1e293b;
+}
+.fc-var-chip b {
+    color: #1e40af;
+    text-transform: capitalize;
+}

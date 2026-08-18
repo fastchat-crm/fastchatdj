@@ -79,9 +79,10 @@ if ($('head').children('meta[name=formsJsValidator]').length === 0) {
                         pantallaespera();
                     }
                 }).done(function (data) {
-                        console.log(data);
+                    if (!Array.isArray(data)) {
+                        data = [data];
+                    }
                     data.forEach(function (value, index) {
-                        console.log(value);
                         if (!value.error) {
                             if (value.reload) {
                                 location.reload();

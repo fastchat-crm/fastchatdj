@@ -1,0 +1,267 @@
+{% extends 'base.html' %}
+
+{% block head %}
+    <link rel="stylesheet" href="/static/css/whatsapp/segmentos.css?v1.0">
+{% endblock %}
+
+{% block content %}
+    <div class="container-fluid p-0">
+
+        <div class="alert alert-info d-flex align-items-center gap-3 mb-3">
+            <i class="fa fa-filter fa-2x"></i>
+            <div>
+                <strong>¿Qué es un segmento?</strong><br>
+                <small>
+                    Un segmento es un <strong>filtro guardado</strong> de contactos que se recalcula solo:
+                    "VIP sin actividad en 30 días", "Leads de Instagram con email".
+                    Defínelo una vez y úsalo como audiencia en <a href="/whatsapp/campanas/">campañas</a>
+                    o para inscribir en bloque a una <a href="/whatsapp/secuencias/">secuencia</a>.
+                    Combina etiquetas, canal, campos personalizados y actividad reciente.
+                </small>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="GET" class="mb-0">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-8">
+                            <label class="form-label">Búsqueda</label>
+                            <div class="input-group">
+                                <span class="input-group-text border-end-0">
+                                    <i class="fa fa-search text-muted"></i>
+                                </span>
+                                <input type="text" class="form-control border-start-0"
+                                       placeholder="Buscar por nombre o descripción" name="criterio"
+                                       value="{{ criterio|default:'' }}">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search me-1"></i> Filtrar
+                                </button>
+                                {% if url_vars %}
+                                    <a href="{{ request.path }}" class="btn btn-default">
+                                        <i class="fas fa-times"></i> Limpiar
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h4 class="mb-0">Segmentos</h4>
+                <small class="text-muted">
+                    {{ list_count|default:0 }} segmento{{ list_count|default:0|pluralize }}
+                    · Audiencias dinámicas reutilizables
+                </small>
+            </div>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalSegmento">
+                <i class="fa fa-plus"></i> Nuevo segmento
+            </button>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <table class="table table-striped align-middle">
+                    <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Descripción</th>
+                        <th>Contactos actuales</th>
+                        <th style="width:120px">Acciones</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for s in listado %}
+                        <tr data-id="{{ s.id }}">
+                            <td><strong>{{ s.nombre }}</strong></td>
+                            <td>{{ s.descripcion|default:"—" }}</td>
+                            <td><span class="badge bg-primary">{{ s.total_contactos }}</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-secondary btn-edit" title="Editar"
+                                        data-id="{{ s.id }}" data-nombre="{{ s.nombre }}"
+                                        data-desc="{{ s.descripcion }}">
+                                    <i class="fa fa-pen"></i>
+                                </button>
+                                <button class="btn btn-sm btn-danger btn-del" title="Eliminar"
+                                        data-id="{{ s.id }}" data-nombre="{{ s.nombre }}">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">
+                                Aún no has creado segmentos. Crea el primero para armar audiencias dinámicas.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% include 'paginacion.html' %}
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalSegmento" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <form class="modal-content" id="formSegmento">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Nuevo segmento</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="action" value="add">
+                    <input type="hidden" name="pk" value="">
+                    <input type="hidden" name="condiciones_json" value="">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Nombre *</label>
+                            <input type="text" name="nombre" class="form-control" required maxlength="120"
+                                   placeholder="Ej: VIP inactivos 30 días">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Descripción</label>
+                            <input type="text" name="descripcion" class="form-control" maxlength="255"
+                                   placeholder="Opcional">
+                        </div>
+                    </div>
+
+                    <div class="seg-bloque">
+                        <div class="seg-bloque-titulo"><i class="fa fa-tags me-1"></i> Etiquetas</div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label"><small>Incluir contactos con estas etiquetas</small></label>
+                                <select id="segEtiquetasIn" class="form-select seg-select-multiple" multiple>
+                                    {% for e in etiquetas_disponibles %}
+                                        <option value="{{ e.id }}">{{ e.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="radio" name="modo_etiquetas" id="modoAny" value="any" checked>
+                                    <label class="form-check-label" for="modoAny"><small>Con cualquiera de ellas</small></label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="modo_etiquetas" id="modoAll" value="all">
+                                    <label class="form-check-label" for="modoAll"><small>Con todas ellas</small></label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label"><small>Excluir contactos con estas etiquetas</small></label>
+                                <select id="segEtiquetasOut" class="form-select seg-select-multiple" multiple>
+                                    {% for e in etiquetas_disponibles %}
+                                        <option value="{{ e.id }}">{{ e.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="seg-bloque">
+                        <div class="seg-bloque-titulo"><i class="fa fa-share-nodes me-1"></i> Canal de origen</div>
+                        <div class="d-flex gap-4">
+                            <div class="form-check">
+                                <input class="form-check-input seg-canal" type="checkbox" value="whatsapp" id="canalWa">
+                                <label class="form-check-label" for="canalWa">WhatsApp</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input seg-canal" type="checkbox" value="instagram" id="canalIg">
+                                <label class="form-check-label" for="canalIg">Instagram</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input seg-canal" type="checkbox" value="messenger" id="canalMs">
+                                <label class="form-check-label" for="canalMs">Messenger</label>
+                            </div>
+                        </div>
+                        <small class="text-muted">Sin marcar = todos los canales.</small>
+                    </div>
+
+                    <div class="seg-bloque">
+                        <div class="d-flex justify-content-between align-items-center seg-bloque-titulo">
+                            <span><i class="fa fa-list-check me-1"></i> Campos personalizados</span>
+                            <button type="button" class="btn btn-sm btn-primary" id="btnAgregarRegla">
+                                <i class="fa fa-plus"></i> Agregar regla
+                            </button>
+                        </div>
+                        <div id="contenedorReglas"></div>
+                        {% if not campos_disponibles %}
+                            <small class="text-muted">No hay campos personalizados definidos todavía.</small>
+                        {% endif %}
+                    </div>
+
+                    <div class="seg-bloque">
+                        <div class="seg-bloque-titulo"><i class="fa fa-clock me-1"></i> Actividad</div>
+                        <div class="row g-2 align-items-center">
+                            <div class="col-md-6">
+                                <select class="form-select" id="segActividadTipo">
+                                    <option value="">Sin condición de actividad</option>
+                                    <option value="con_actividad">Con mensajes en los últimos…</option>
+                                    <option value="sin_actividad">Sin mensajes hace más de…</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="segActividadDias" min="1" value="30">
+                                    <span class="input-group-text">días</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <strong>Vista previa</strong>
+                        <button type="button" class="btn btn-sm btn-info" id="btnPreview">
+                            <i class="fa fa-eye"></i> Calcular audiencia
+                        </button>
+                    </div>
+                    <div class="seg-preview-box" id="previewBox">
+                        <small class="text-muted">Pulsa "Calcular audiencia" para ver cuántos contactos cumplen las condiciones.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <template id="tplRegla">
+        <div class="row g-2 seg-regla-campo align-items-center">
+            <div class="col-md-4">
+                <select class="form-select form-select-sm regla-campo">
+                    {% for c in campos_disponibles %}
+                        <option value="{{ c.id }}">{{ c.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select class="form-select form-select-sm regla-operador">
+                    <option value="igual">Es igual a</option>
+                    <option value="contiene">Contiene</option>
+                    <option value="no_vacio">Tiene valor</option>
+                    <option value="vacio">Está vacío</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <input type="text" class="form-control form-control-sm regla-valor" placeholder="Valor">
+            </div>
+            <div class="col-md-1">
+                <button type="button" class="btn btn-sm btn-danger btn-quitar-regla">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+        </div>
+    </template>
+{% endblock %}
+
+{% block jscript %}
+    <script src="/static/js/whatsapp/segmentos.js?v1.0"></script>
+{% endblock %}

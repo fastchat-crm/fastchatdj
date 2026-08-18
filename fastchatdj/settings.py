@@ -8,23 +8,13 @@ ALLOWED_HOSTS = ["*"]
 
 WKHTMLTOPDF_DEBUG = True
 # SESSION CONFIGURATION
-# SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_AGE = 28800
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 365 * 5
+SESSION_SAVE_EVERY_REQUEST = True
 
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-# EMAIL_USE_TLS = True
-# EMAIL_HOST = 'smtp.gmail.com'
-
-# EMAIL_PORT = 587
-EMAIL_USE_SSL = True
-
-EMAIL_USE_TLS = False
-EMAIL_HOST = 'smtp.sendgrid.net'
-EMAIL_PORT = 465
-DEFAULT_FROM_EMAIL = 'notisimweb@gmail.com'
-EMAIL_HOST_PASSWORD = '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'
 
 # CREDENCIALES
 import json
@@ -33,6 +23,7 @@ with open(os.path.join(BASE_DIR, 'credenciales.json')) as json_file:
     data = json.load(json_file)
     # POSTGRES
     POSTGRES_PASSWORD = data['POSTGRES_PASSWORD']
+    POSTGRES_USER = data.get('POSTGRES_USER', 'postgres')
     POSTGRES_HOST = data['POSTGRES_HOST']
     POSTGRES_PORT = data['POSTGRES_PORT']
     POSTGRES_DBNAME = data['POSTGRES_DBNAME']
@@ -40,10 +31,17 @@ with open(os.path.join(BASE_DIR, 'credenciales.json')) as json_file:
     BASE_URL_PRODUCCION = data['BASE_URL_PRODUCCION']
     # SECURITY WARNING: keep the secret key used in production secret!
     SECRET_KEY = data['SECRET_KEY']
+    # CORREO SALIENTE (proveedor SMTP configurable desde credenciales.json)
+    EMAIL_HOST = data.get('EMAIL_HOST', '')
+    EMAIL_PORT = int(data.get('EMAIL_PORT') or 587)
+    EMAIL_USE_SSL = bool(data.get('EMAIL_USE_SSL', False))
+    EMAIL_USE_TLS = False if EMAIL_USE_SSL else bool(data.get('EMAIL_USE_TLS', True))
     EMAIL_HOST_USER = data['EMAIL_HOST_USER']
-    # DEFAULT_FROM_EMAIL = data['DEFAULT_FROM_EMAIL']
-    # EMAIL_HOST_PASSWORD = data['EMAIL_HOST_PASSWORD']
-    SENDGRID_API_KEY = data['SENDGRID_API_KEY']
+    EMAIL_HOST_PASSWORD = data.get('EMAIL_HOST_PASSWORD', '')
+    DEFAULT_FROM_EMAIL = data.get('DEFAULT_FROM_EMAIL') or EMAIL_HOST_USER
+    # Sin timeout, smtplib se queda bloqueado indefinidamente cuando el servidor
+    # deja de responder y el hilo de envío nunca termina.
+    EMAIL_TIMEOUT = int(data.get('EMAIL_TIMEOUT') or 20)
     # WKHTMLTOPDF
     WKHTMLTOPDF_CMD = data['WKHTMLTOPDF_CMD']
     # SSL
@@ -53,6 +51,8 @@ with open(os.path.join(BASE_DIR, 'credenciales.json')) as json_file:
     DOMINIO_GENERAL = data["DOMINIO_GENERAL"]
     WINDOWS = data["WINDOWS"]
     URL_GENERAL = ("https://" if USE_SSL else "http://") + DOMINIO_GENERAL
+    if not DEBUG:
+        ALLOWED_HOSTS = data.get('ALLOWED_HOSTS') or [DOMINIO_GENERAL, 'www.' + DOMINIO_GENERAL, 'localhost', '127.0.0.1']
     ADMINS = data["ADMINS"]
     CACHES_REDIS = data.get("CACHES_REDIS")
     ID_GRUPO_CLIENTE = data['ID_GRUPO_CLIENTE']
@@ -66,6 +66,18 @@ with open(os.path.join(BASE_DIR, 'credenciales.json')) as json_file:
     META_APP_SECRET     = data.get('META_APP_SECRET', '')
     META_CONFIG_ID      = data.get('META_CONFIG_ID', '')
     META_API_VERSION    = data.get('META_API_VERSION', 'v22.0')
+    # App secrets adicionales para validar firmas de webhooks cuando hay más
+    # de una Meta App (ej. una app para WhatsApp Cloud y otra para
+    # Messenger/Instagram). Lista o string separado por comas.
+    _meta_secrets_extra = data.get('META_APP_SECRETS_EXTRA', [])
+    if isinstance(_meta_secrets_extra, str):
+        _meta_secrets_extra = [s.strip() for s in _meta_secrets_extra.split(',') if s.strip()]
+    META_APP_SECRETS_EXTRA = _meta_secrets_extra or []
+    # Modo estricto de firma de webhooks Meta: sin app_secret configurado se
+    # RECHAZA el evento (en vez de aceptarlo sin validar). Recomendado en
+    # producción con una sola Meta App y su app_secret cargado. Poner en False
+    # solo durante un setup inicial sin secret.
+    META_WEBHOOK_FAIL_CLOSED = data.get('META_WEBHOOK_FAIL_CLOSED', True)
 
     _chatbot_emails = data.get('CHATBOT_ERROR_NOTIFY_EMAILS', ['hllerenaa1h@gmail.com'])
     if isinstance(_chatbot_emails, str):
@@ -107,7 +119,12 @@ INSTALLED_APPS = [
     'area_geografica.apps.AreaGeograficaConfig',
     'public.apps.PublicConfig',
     'whatsapp.apps.WhatsappConfig',
+    'instagram.apps.InstagramConfig',
+    'facebook.apps.FacebookConfig',
+    'tiktok.apps.TiktokConfig',
     'crm.apps.CrmConfig',
+    'objetos.apps.ObjetosConfig',
+    'automatizacion.apps.AutomatizacionConfig',
     'agents_ai.apps.AgentsAiConfig',
     'voz.apps.VozConfig',
     'agenda.apps.AgendaConfig',
@@ -153,6 +170,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'pwa.context_processors.pwa_settings',
+                'whatsapp.context_processors.selector_sesion',
             ],
         },
     },
@@ -180,7 +198,7 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
         'NAME': POSTGRES_DBNAME,
-        'USER': 'postgres',
+        'USER': POSTGRES_USER,
         'PASSWORD': POSTGRES_PASSWORD,
         'HOST': POSTGRES_HOST,
         'PORT': POSTGRES_PORT,
@@ -240,7 +258,7 @@ MEDIA_URL = '/media/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 TEST_RUNNER = 'django.test.runner.DiscoverRunner'  # If you wish to delay updates to your test suite
-SESSION_SERIALIZER = 'django.contrib.sessions.serializers.PickleSerializer'
+SESSION_SERIALIZER = 'django.contrib.sessions.serializers.JSONSerializer'
 
 SITE_STORAGE = Path(BASE_DIR) / 'media'
 
@@ -251,7 +269,6 @@ FILE_CHARSET = 'utf-8'
 DEFAULT_CHARSET = 'utf-8'
 
 
-CORS_ORIGIN_ALLOW_ALL = True
 CORS_ALLOW_ALL_ORIGINS = False
 
 CORS_ALLOWED_ORIGINS = [
@@ -335,6 +352,11 @@ LOGGING = {
         'crm': {
             'handlers': ['console'],
             'level': 'WARNING',
+            'propagate': False,
+        },
+        'core': {
+            'handlers': ['console'],
+            'level': 'INFO',
             'propagate': False,
         },
         'django': {

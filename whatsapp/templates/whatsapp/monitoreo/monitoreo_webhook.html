@@ -1,0 +1,153 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col-12 d-flex align-items-center gap-2">
+            <h4 class="mb-0"><i class="{{ branding.icono }} me-2"></i>{{ branding.titulo }}</h4>
+            <span class="badge bg-secondary">webhook: {{ branding.webhook }}</span>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md-3">
+            <div class="card text-center h-100">
+                <div class="card-body py-3">
+                    <div class="fs-4 fw-bold">{{ stats.total }}</div>
+                    <div class="small text-muted">Eventos totales</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center h-100">
+                <div class="card-body py-3">
+                    <div class="fs-4 fw-bold">{{ stats.ult_24h }}</div>
+                    <div class="small text-muted">Últimas 24 horas</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center h-100">
+                <div class="card-body py-3">
+                    <div class="fs-4 fw-bold {% if stats.firma_invalida %}text-danger{% endif %}">{{ stats.firma_invalida }}</div>
+                    <div class="small text-muted">Firma inválida</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center h-100">
+                <div class="card-body py-3">
+                    <div class="fs-4 fw-bold {% if stats.con_error %}text-danger{% endif %}">{{ stats.con_error }}</div>
+                    <div class="small text-muted">Con error</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-12 d-flex gap-2 flex-wrap">
+            <a href="{{ ruta }}" class="btn btn-sm {% if not filtro_estado %}btn-primary{% else %}btn-secondary{% endif %}">Todos</a>
+            <a href="{{ ruta }}?estado=error" class="btn btn-sm {% if filtro_estado == 'error' %}btn-primary{% else %}btn-secondary{% endif %}">Con error</a>
+            <a href="{{ ruta }}?estado=firma" class="btn btn-sm {% if filtro_estado == 'firma' %}btn-primary{% else %}btn-secondary{% endif %}">Firma inválida</a>
+            <a href="{{ ruta }}?estado=pendiente" class="btn btn-sm {% if filtro_estado == 'pendiente' %}btn-primary{% else %}btn-secondary{% endif %}">Sin procesar</a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Recibido</th>
+                            <th>Tipo de evento</th>
+                            <th>Firma</th>
+                            <th>Procesado</th>
+                            <th>Error</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ev in eventos %}
+                        <tr>
+                            <td class="text-nowrap">{{ ev.recibido_en|date:"d/m/Y H:i:s" }}</td>
+                            <td><code>{{ ev.tipo_evento }}</code></td>
+                            <td>
+                                {% if ev.firma_valida %}<span class="badge bg-success">Válida</span>
+                                {% else %}<span class="badge bg-danger">Inválida</span>{% endif %}
+                            </td>
+                            <td>
+                                {% if ev.procesado %}<span class="badge bg-success">Sí</span>
+                                {% else %}<span class="badge bg-warning text-dark">No</span>{% endif %}
+                            </td>
+                            <td class="small text-danger">{{ ev.error_procesamiento|default:""|truncatechars:80 }}</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-primary" onclick="verDetalleEvento({{ ev.id }})">
+                                    <i class="fa fa-eye"></i> Detalle
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="text-center text-muted py-4">Sin eventos registrados para este canal.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalDetalleEvento" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa fa-file-code me-2"></i>Detalle del evento <span id="detEvId"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2 mb-3">
+                    <div class="col-6 col-md-3"><div class="small text-muted">Recibido</div><div id="detEvFecha"></div></div>
+                    <div class="col-6 col-md-3"><div class="small text-muted">Tipo</div><div id="detEvTipo"></div></div>
+                    <div class="col-6 col-md-3"><div class="small text-muted">Firma</div><div id="detEvFirma"></div></div>
+                    <div class="col-6 col-md-3"><div class="small text-muted">Procesado</div><div id="detEvProc"></div></div>
+                </div>
+                <div id="detEvErrorBox" class="alert alert-danger d-none"><strong>Error:</strong> <span id="detEvError"></span></div>
+                <div class="small text-muted mb-1">Payload crudo</div>
+                <pre id="detEvPayload" class="bg-light border rounded p-2 small" style="max-height:400px; overflow:auto;"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function verDetalleEvento(id){
+    const r = await fetch('{{ ruta }}?action=detalle&id=' + id);
+    const j = await r.json();
+    if(!j.ok){
+        if(typeof alertaWarning === 'function') alertaWarning(j.message || 'Error');
+        else alert(j.message || 'Error');
+        return;
+    }
+    document.getElementById('detEvId').textContent = '#' + j.id;
+    document.getElementById('detEvFecha').textContent = j.recibido_en;
+    document.getElementById('detEvTipo').textContent = j.tipo_evento;
+    document.getElementById('detEvFirma').innerHTML = j.firma_valida
+        ? '<span class="badge bg-success">Válida</span>'
+        : '<span class="badge bg-danger">Inválida</span>';
+    document.getElementById('detEvProc').innerHTML = j.procesado
+        ? '<span class="badge bg-success">Sí</span>'
+        : '<span class="badge bg-warning text-dark">No</span>';
+    const errBox = document.getElementById('detEvErrorBox');
+    if(j.error){
+        errBox.classList.remove('d-none');
+        document.getElementById('detEvError').textContent = j.error;
+    } else {
+        errBox.classList.add('d-none');
+    }
+    document.getElementById('detEvPayload').textContent = JSON.stringify(j.payload, null, 2);
+    new bootstrap.Modal(document.getElementById('modalDetalleEvento')).show();
+}
+</script>
+{% endblock %}

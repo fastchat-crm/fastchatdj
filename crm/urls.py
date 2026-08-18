@@ -11,8 +11,27 @@ from .view_mientrenamiento import entrenamiento_ia_view
 from .view_departamento_chatbot import departamentoChatbotsView
 from .view_perfilempresa import perfil_empresa
 from .view_prueba_chatbot import probar_chatbot_view
+from .view_rag import ragColeccionView
+from .view_centro import centroCrmView
+from .view_centro_ia import centro_ia_view
+from whatsapp.view_pipeline import pipelineView
 
 crm_urls = (
+    {
+        "nombre": "Centro CRM e IA",
+        "url": 'centro/',
+        "vista": centroCrmView,
+    },
+    {
+        "nombre": "Centro de IA",
+        "url": 'centro-ia/',
+        "vista": centro_ia_view,
+    },
+    {
+        "nombre": "Pipeline de ventas",
+        "url": 'pipeline/',
+        "vista": pipelineView,
+    },
     {
         "nombre": "Mensajeria Instantanea",
         "url": 'departamentos_chatbots/',
@@ -37,6 +56,11 @@ crm_urls = (
         "nombre": "Entrenamiento IA",
         "url": 'entrenamiento/',
         "vista": entrenamiento_ia_view,
+    },
+    {
+        "nombre": "Conocimiento RAG",
+        "url": 'rag/',
+        "vista": ragColeccionView,
     },
     {
         "nombre": "Perfil Empresa",

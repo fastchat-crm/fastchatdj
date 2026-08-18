@@ -397,9 +397,13 @@ ConversacionWhatsApp.objects.filter(
 
 ---
 
-## Email (SendGrid)
+## Email (SMTP)
+
+El proveedor y sus credenciales se configuran en `credenciales.json`; nunca hardcodear host,
+puerto, usuario, password ni remitente en el código.
 
 ```python
+from django.conf import settings
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 
@@ -407,7 +411,7 @@ html = render_to_string('emails/notif_plantilla.html', {'plantilla': plantilla})
 send_mail(
     subject='Plantilla aprobada',
     message='',  # texto plano
-    from_email='no-reply@tudominio',
+    from_email=settings.DEFAULT_FROM_EMAIL,
     recipient_list=[user.email],
     html_message=html
 )

@@ -1,0 +1,103 @@
+<div class="modal fade" id="modalImportarContactos" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa fa-file-import me-2"></i>Importar contactos</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info" role="alert">
+                    <div class="d-flex">
+                        <i class="fa fa-circle-info me-2 mt-1"></i>
+                        <div>
+                            <p class="fw-semibold mb-1">Antes de importar, ten en cuenta:</p>
+                            <ul class="mb-2 ps-3">
+                                <li>El archivo debe seguir la estructura del formato: la columna <b>numero</b> es obligatoria, mientras que <b>nombre</b> y <b>etiquetas</b> son opcionales.</li>
+                                <li>El <b>numero</b> debe incluir el código de país y contener entre 9 y 12 dígitos (ej.: <b>593987654321</b>).</li>
+                                <li>Para asignar varias etiquetas, sepáralas con comas (ej.: <b>Cliente,VIP</b>).</li>
+                                <li>Los números que ya existan en la sesión seleccionada se omitirán automáticamente.</li>
+                                <li>Formatos permitidos: .xlsx, .xls o .csv, con un peso máximo de 3 MB.</li>
+                            </ul>
+                            <a href="/static/formatos/formato_cargar_contactos.xlsx" class="btn btn-link btn-sm p-0" download>
+                                <i class="fa fa-download me-1"></i>Descargar formato
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <form id="formImportarContactos" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="importar">
+                    <div class="mb-3">
+                        <label class="form-label">Session</label>
+                        <select name="sesion" class="form-select" required>
+                            {% for i in mis_sesiones %}
+                                <option value="{{ i.pk }}" {% if i.pk == sesion_id %}selected{% endif %}>{{ i }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">File (.xlsx, .xls, .csv)</label>
+                        <input type="file" name="archivo" class="form-control" accept=".xlsx,.xls,.csv" required>
+                        <div class="form-text">
+                            Required column: <b>numero</b>. Optional: <b>nombre</b>, <b>etiquetas</b> (comma-separated).
+                        </div>
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label">Tag for all imported (optional)</label>
+                        <input type="text" name="etiqueta" class="form-control" placeholder="e.g. Imported">
+                    </div>
+                </form>
+                <div id="importResumen" class="d-none mt-3"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="submitImportarContactos()">
+                    <i class="fa fa-upload me-1"></i> Import
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function submitImportarContactos() {
+    var form = document.getElementById('formImportarContactos');
+    var fd = new FormData(form);
+    var archivo = fd.get('archivo');
+    if (!archivo || !archivo.name) {
+        if (typeof alertaWarning === 'function') alertaWarning('Select a file.');
+        return;
+    }
+    if (typeof pantallaespera === 'function') pantallaespera();
+    $.ajax({
+        type: 'POST',
+        url: '{{ ruta }}',
+        data: fd,
+        processData: false,
+        contentType: false,
+        dataType: 'json'
+    }).done(function (res) {
+        setTimeout($.unblockUI, 1);
+        var d = Array.isArray(res) ? res[0] : res;
+        if (d && d.error === false) {
+            var html = '<div class="alert alert-success mb-2">Created: <b>' + d.creados +
+                '</b> · Skipped: <b>' + d.omitidos + '</b> · Failed: <b>' + d.fallidos + '</b></div>';
+            if (d.errores && d.errores.length) {
+                html += '<table class="table table-sm"><thead><tr><th>Row</th><th>Reason</th></tr></thead><tbody>';
+                d.errores.forEach(function (e) { html += '<tr><td>' + e.fila + '</td><td>' + e.motivo + '</td></tr>'; });
+                html += '</tbody></table>';
+            }
+            var cont = document.getElementById('importResumen');
+            cont.className = 'mt-3';
+            cont.innerHTML = html;
+            if (typeof alertaSuccess === 'function') alertaSuccess('Import finished.');
+            setTimeout(function () { window.location.reload(); }, 1600);
+        } else {
+            if (typeof alertaWarning === 'function') alertaWarning((d && d.message) || 'Import error.');
+        }
+    }).fail(function () {
+        setTimeout($.unblockUI, 1);
+        if (typeof mensajeWarning === 'function') mensajeWarning('Server error.');
+    });
+}
+</script>

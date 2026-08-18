@@ -4,7 +4,7 @@ from django.core.validators import FileExtensionValidator
 from django.db import models
 from django.db.models import Q, Sum, F
 from core.custom_models import ModeloBase
-from core.funciones_adicionales import remover_espacios_de_mas, round_num_dec
+from core.funciones_adicionales import remover_espacios_de_mas, round_num_dec, foto_inicial_gris
 from core.models_utils import FileNameUploadToPath
 from core.validadores import solo_numeros, validate_file_size_2mb
 from django.contrib.auth.models import AbstractUser
@@ -39,6 +39,10 @@ class Usuario(AbstractUser, ModeloBase):
     cambio_clave = models.BooleanField(default=False, verbose_name='Cambio de Contraseña Obligatorio')
     # CONFIGURACIÓN DE USUARIO
     notificar_por_correo = models.BooleanField(default=True, verbose_name='Recibe notificaciones por correo')
+    bienvenida_vista = models.BooleanField(
+        default=False, verbose_name='Bienvenida vista',
+        help_text='True cuando el usuario ya vio el mensaje de bienvenida del primer ingreso.',
+    )
     # empresa = models.ForeignKey('seguridad.Empresa', on_delete=models.PROTECT, blank=True, null=True, verbose_name='Empresa')
 
     # TIPO_DOCUMENTO
@@ -94,10 +98,7 @@ class Usuario(AbstractUser, ModeloBase):
     def get_foto_gris(self):
         try:
             if self.foto == '':
-                inicial = self.first_name[0]
-                if inicial and not inicial.isdigit():
-                    return f"/static/images/initials/gris/{inicial}.png"
-                return "/static/foto_defaultd.png"
+                return foto_inicial_gris(self.first_name)
             return self.foto.url
         except Exception:
             return "/static/foto_defaultd.png"

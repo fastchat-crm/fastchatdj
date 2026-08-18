@@ -11,6 +11,28 @@ def remover_espacios_de_mas(valor: str) -> str:
     return re.sub("\s+", " ", (valor or "").strip())
 
 
+def foto_inicial_gris(nombre: str) -> str:
+    """Devuelve el avatar de inicial en gris para un nombre.
+
+    Solo existen los PNG A.png..Z.png en /static/images/initials/gris/. Un
+    `isalpha()` pelado dejaba pasar tildes y alfabetos unicode ('Á', '𝕍', 'ㅤ')
+    y esas rutas terminaban en 404 en nginx. Se normalizan los acentos y
+    cualquier inicial que no quede en A-Z cae en la foto por defecto.
+    """
+    import unicodedata
+
+    inicial = (nombre or '').strip()[:1].upper()
+    if not inicial:
+        return "/static/foto_defaultd.png"
+    inicial = ''.join(
+        c for c in unicodedata.normalize('NFD', inicial)
+        if unicodedata.category(c) != 'Mn'
+    )[:1].upper()
+    if 'A' <= inicial <= 'Z':
+        return f"/static/images/initials/gris/{inicial}.png"
+    return "/static/foto_defaultd.png"
+
+
 def get_query_dataframe(using, query):
     import pandas as pd
     from django.db import connections

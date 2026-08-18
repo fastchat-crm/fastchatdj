@@ -3,7 +3,7 @@
 
 {% block head %}
     <link rel="stylesheet" href="{% static 'stylenew/sesiones.css' %}">
-    <link rel="stylesheet" href="{% static 'stylenew/webhook_log.css' %}">
+    <link rel="stylesheet" href="{% static 'stylenew/webhook_log.css' %}?v1.0">
 {% endblock %}
 
 {% block atras %}/whatsapp/sesiones/{% endblock %}
@@ -14,7 +14,8 @@
      data-fecha="{{ fecha_str }}"
      data-poll-url="/whatsapp/sesiones/{{ sesion.id }}/webhook-log/poll/"
      data-detalle-url="/whatsapp/sesiones/{{ sesion.id }}/webhook-log/"
-     data-ultimo-id="{{ ultimo_id }}">
+     data-ultimo-id="{{ ultimo_id }}"
+     data-page="{% if pagina %}{{ pagina.number }}{% else %}1{% endif %}">
 
     {# ───────── Header ───────── #}
     <div class="wlog-header">
@@ -164,6 +165,29 @@
         </table>
     </div>
 
+    {# ───────── Paginación ───────── #}
+    {% if pagina and pagina.paginator.num_pages > 1 %}
+        <div class="wlog-paginacion">
+            <span class="wlog-pag-info">
+                Página {{ pagina.number }} de {{ pagina.paginator.num_pages }} · {{ pagina.paginator.count }} eventos
+            </span>
+            <div class="wlog-pag-btns">
+                {% if pagina.has_previous %}
+                    <a class="conex-btn conex-btn-secondary"
+                       href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page={{ pagina.previous_page_number }}">
+                        <i class="fa fa-chevron-left"></i> Anterior
+                    </a>
+                {% endif %}
+                {% if pagina.has_next %}
+                    <a class="conex-btn conex-btn-secondary"
+                       href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page={{ pagina.next_page_number }}">
+                        Siguiente <i class="fa fa-chevron-right"></i>
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+
     {# ───────── Modal payload ───────── #}
     <div id="wlog-modal" class="wlog-modal" hidden>
         <div class="wlog-modal-box">
@@ -304,12 +328,19 @@
         clearTimeout(pollTimer);
         pollTimer = setTimeout(poll, POLL_MS);
     }
-    schedule();
-    document.addEventListener('visibilitychange', () => {
-        // Cuando vuelve a ser visible, dispara un poll inmediato para
-        // ponerse al día sin esperar el ciclo completo.
-        if (!document.hidden) { clearTimeout(pollTimer); poll(); }
-    });
+    // El polling inserta eventos nuevos arriba de la tabla — solo tiene
+    // sentido en la página 1; en páginas siguientes rompería el orden.
+    const enVivo = (root.dataset.page || '1') === '1';
+    if (enVivo) {
+        schedule();
+        document.addEventListener('visibilitychange', () => {
+            // Cuando vuelve a ser visible, dispara un poll inmediato para
+            // ponerse al día sin esperar el ciclo completo.
+            if (!document.hidden) { clearTimeout(pollTimer); poll(); }
+        });
+    } else {
+        indic.classList.add('wlog-live-stale');
+    }
 
     // ---- Modal payload ----
     const modal     = document.getElementById('wlog-modal');

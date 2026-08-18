@@ -335,15 +335,17 @@
 
 .cs-tabs {
     display: flex;
-    padding: 6px 10px;
+    flex-wrap: wrap;
+    padding: 6px 8px;
     gap: 4px;
     border-bottom: 1px solid var(--chat-border-light);
 }
 
 .cs-tab-btn {
-    flex: 1;
-    padding: 7px 10px;
-    font-size: .76rem;
+    flex: 1 1 calc(50% - 4px);
+    min-width: 0;
+    padding: 7px 8px;
+    font-size: .74rem;
     font-weight: 500;
     font-family: var(--chat-font);
     background: transparent;
@@ -360,6 +362,11 @@
     gap: 4px;
     line-height: 1;
     white-space: nowrap;
+    overflow: hidden;
+}
+
+.cs-tab-btn > i {
+    flex-shrink: 0;
 }
 
 .cs-tab-btn:hover {
@@ -376,6 +383,18 @@
     box-shadow: 0 2px 8px var(--chat-primary-glow);
 }
 
+.cs-tab-btn.active.cs-tab-caducadas {
+    background: #DC2626;
+    border-color: #DC2626;
+    box-shadow: 0 2px 8px rgba(220,38,38,.25);
+}
+
+.meta-countdown.meta-caducada,
+.meta-countdown.meta-caducada .meta-countdown-val,
+.meta-countdown.meta-caducada i {
+    color: #fff;
+}
+
 .cs-tab-count {
     min-width: 18px;
     height: 18px;
@@ -389,6 +408,28 @@
     align-items: center;
     justify-content: center;
     line-height: 1;
+}
+
+.cs-tab-total {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 99px;
+    background: var(--chat-surface);
+    border: 1px solid var(--chat-border-light);
+    color: var(--chat-text-secondary);
+    font-size: .64rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.cs-tab-btn.active .cs-tab-total {
+    background: rgba(255,255,255,.9);
+    border-color: transparent;
+    color: var(--chat-primary);
 }
 
 .cs-filter-bar {
@@ -436,6 +477,19 @@
     background: #FEF2F2;
     border-color: #FECACA;
     color: #DC2626;
+}
+
+.cs-chip-export {
+    background: #ECFDF5;
+    border-color: #A7F3D0;
+    color: #047857;
+    text-decoration: none;
+}
+
+.cs-chip-export:hover {
+    background: #D1FAE5;
+    border-color: #6EE7B7;
+    color: #065F46;
 }
 
 .cs-search-wrap {
@@ -605,6 +659,7 @@
 
 .cs-conv-list {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-width: thin;
@@ -613,7 +668,7 @@
 }
 
 .cs-conv-list::-webkit-scrollbar {
-    width: 3px;
+    width: 6px;
 }
 
 .cs-conv-list::-webkit-scrollbar-track {
@@ -872,10 +927,29 @@
 .cm-header-right {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     flex-shrink: 0;
     flex-wrap: wrap;
     justify-content: flex-end;
+}
+
+.cm-header-info,
+.cm-header-acciones {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cm-header-info {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.cm-header-acciones {
+    flex-shrink: 0;
+    flex-wrap: nowrap;
+    padding-left: 8px;
+    border-left: 1px solid var(--chat-border);
 }
 
 .cm-messages {
@@ -1084,6 +1158,82 @@
     align-items: center;
     gap: 8px;
     position: relative;
+}
+
+.composer-caducado-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    background: #FEF2F2;
+    border: 1px solid #FCA5A5;
+    color: #B91C1C;
+    border-radius: 10px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    font-size: .82rem;
+}
+
+.composer-caducado-banner .ccb-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 200px;
+}
+
+.composer-caducado-banner .ccb-info i {
+    font-size: .95rem;
+}
+
+.composer-caducado-banner .cad-elapsed {
+    font-weight: 700;
+}
+
+.composer-caducado-banner .ccb-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.ccb-btn {
+    display: inline-flex;
+    align-items: center;
+    border: none;
+    border-radius: 8px;
+    padding: .32rem .7rem;
+    font-size: .78rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ccb-btn-primary {
+    background: var(--chat-primary);
+    color: #fff;
+}
+
+.ccb-btn-finalizar {
+    background: #fff;
+    color: #B91C1C;
+    border: 1px solid #FCA5A5;
+}
+
+.ccb-btn:hover {
+    filter: brightness(.96);
+}
+
+.cm-composer-caducado #footer-mensaje-input,
+.cm-composer-caducado #emoji-btn,
+.cm-composer-caducado #respuestas-btn,
+.cm-composer-caducado .cm-attach-label,
+.cm-composer-caducado #footer-send-btn {
+    opacity: .45;
+    cursor: not-allowed;
+}
+
+.cm-attach-label.cm-attach-disabled {
+    pointer-events: none;
 }
 
 .cm-text-input {

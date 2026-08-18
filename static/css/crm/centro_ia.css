@@ -1,0 +1,411 @@
+.cia-hero {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    color: #fff;
+    border-radius: .75rem;
+    padding: 1.5rem 1.75rem;
+    margin-bottom: 1.25rem;
+}
+
+.cia-hero h4 {
+    margin: 0 0 .35rem;
+    font-weight: 600;
+}
+
+.cia-hero p {
+    margin: 0;
+    opacity: .9;
+    font-size: .9rem;
+}
+
+.cia-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: .65rem;
+    margin-bottom: 1.25rem;
+}
+
+.cia-card-head {
+    padding: .85rem 1.1rem;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    flex-wrap: wrap;
+}
+
+.cia-card-head h6 {
+    margin: 0;
+    font-weight: 600;
+    font-size: .95rem;
+}
+
+.cia-card-head small {
+    display: block;
+    color: #6b7280;
+    font-weight: 400;
+    margin-top: .15rem;
+}
+
+.cia-card-body {
+    padding: 1.1rem;
+}
+
+.cia-param label {
+    font-size: .82rem;
+    font-weight: 600;
+    margin-bottom: .2rem;
+    display: block;
+}
+
+.cia-param .form-text {
+    font-size: .74rem;
+    line-height: 1.35;
+}
+
+.cia-param input[type="number"],
+.cia-param input[type="text"] {
+    width: 100%;
+    border: 1px solid #d1d5db;
+    border-radius: .4rem;
+    padding: .35rem .55rem;
+    font-size: .88rem;
+}
+
+.cia-param {
+    margin-bottom: 1rem;
+}
+
+.cia-badge {
+    display: inline-block;
+    font-size: .7rem;
+    font-weight: 600;
+    padding: .15rem .5rem;
+    border-radius: 1rem;
+    line-height: 1.5;
+}
+
+.cia-badge-embed {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.cia-badge-default {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.cia-badge-hereda {
+    background: #f3f4f6;
+    color: #4b5563;
+}
+
+.cia-badge-propio {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.cia-tabla {
+    width: 100%;
+    font-size: .85rem;
+}
+
+.cia-tabla th {
+    font-weight: 600;
+    color: #374151;
+    border-bottom: 2px solid #e5e7eb;
+    padding: .5rem .6rem;
+    text-align: left;
+}
+
+.cia-tabla td {
+    border-bottom: 1px solid #f3f4f6;
+    padding: .55rem .6rem;
+    vertical-align: middle;
+}
+
+.cia-tabla tbody tr:hover {
+    background: #fafafa;
+}
+
+.cia-vacio {
+    color: #6b7280;
+    font-size: .87rem;
+    padding: .85rem 0;
+    margin: 0;
+}
+
+.cia-resultado {
+    font-size: .82rem;
+    border-radius: .4rem;
+    padding: .5rem .7rem;
+    margin-bottom: .35rem;
+}
+
+.cia-resultado-ok {
+    background: #f0fdf4;
+    color: #166534;
+}
+
+.cia-resultado-error {
+    background: #fef2f2;
+    color: #991b1b;
+}
+
+@media (max-width: 767.98px) {
+    .cia-hero {
+        padding: 1.15rem;
+    }
+
+    .cia-tabla {
+        font-size: .8rem;
+    }
+}
+
+.cia-tabs .nav-link {
+    font-size: .88rem;
+    font-weight: 600;
+    color: #6b7280;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    padding: .55rem .9rem;
+}
+
+.cia-tabs .nav-link.active {
+    color: #4f46e5;
+    border-bottom-color: #4f46e5;
+    background: transparent;
+}
+
+.cia-unidad {
+    font-weight: 400;
+    color: #9ca3af;
+    font-size: .78rem;
+    margin-left: .3rem;
+}
+
+.cia-acciones {
+    white-space: nowrap;
+}
+
+.cia-acciones .btn {
+    margin-left: .2rem;
+}
+
+.cia-icon-btn {
+    border: 0;
+    background: transparent;
+    color: #6b7280;
+    width: 28px;
+    height: 28px;
+    border-radius: .35rem;
+    font-size: .8rem;
+}
+
+.cia-icon-btn:hover {
+    background: #f3f4f6;
+    color: #111827;
+}
+
+.cia-agentes-lista {
+    max-height: 190px;
+    overflow-y: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: .45rem;
+    padding: .5rem .7rem;
+}
+
+.cia-fragmento {
+    border-left: 3px solid #4f46e5;
+    background: #f8f9fc;
+    border-radius: .35rem;
+    padding: .55rem .7rem;
+    margin-bottom: .5rem;
+    font-size: .84rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.cia-fragmento-meta {
+    font-size: .72rem;
+    color: #6b7280;
+    margin-bottom: .25rem;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+.cia-optim-dias {
+    width: auto;
+}
+
+.cia-optim-resumen {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: .75rem;
+    margin-bottom: 1rem;
+}
+
+.cia-optim-resumen > div {
+    background: #f8f9fc;
+    border: 1px solid #e5e7eb;
+    border-radius: .5rem;
+    padding: .7rem .85rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.cia-optim-resumen span {
+    font-size: .74rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #6b7280;
+}
+
+.cia-optim-resumen b {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #111827;
+    font-variant-numeric: tabular-nums;
+}
+
+.cia-optim-resumen small {
+    font-size: .74rem;
+    color: #6b7280;
+}
+
+.cia-optim-agente {
+    border: 1px solid #e5e7eb;
+    border-radius: .6rem;
+    padding: .9rem 1rem;
+    margin-bottom: .9rem;
+}
+
+.cia-optim-agente-cab {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: .75rem;
+    margin-bottom: .6rem;
+}
+
+.cia-optim-agente-cab h6 {
+    margin: 0 0 .15rem;
+    font-weight: 600;
+}
+
+.cia-optim-agente-cab small {
+    color: #6b7280;
+    font-size: .78rem;
+}
+
+.cia-saturacion {
+    background: #eef2ff;
+    color: #4338ca;
+    border-radius: 999px;
+    padding: .2rem .6rem;
+    font-size: .74rem;
+    font-weight: 600;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.cia-optim-presu {
+    margin-bottom: .75rem;
+}
+
+.cia-optim-presu small {
+    color: #6b7280;
+    font-size: .78rem;
+}
+
+.cia-barra {
+    display: flex;
+    height: 10px;
+    border-radius: 999px;
+    overflow: hidden;
+    margin: .35rem 0 .4rem;
+    background: #f1f3f9;
+}
+
+.cia-barra-tramo {
+    display: block;
+    height: 100%;
+}
+
+.cia-barra-leyenda {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem .9rem;
+    font-size: .74rem;
+    color: #6b7280;
+}
+
+.cia-punto {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    margin-right: .35rem;
+}
+
+.cia-tramo-0 { background: #4f46e5; }
+.cia-tramo-1 { background: #7c3aed; }
+.cia-tramo-2 { background: #0ea5e9; }
+.cia-tramo-3 { background: #14b8a6; }
+
+.cia-hallazgo {
+    border-left: 3px solid #cbd5e1;
+    background: #f8f9fc;
+    border-radius: .35rem;
+    padding: .6rem .8rem;
+    margin-bottom: .55rem;
+}
+
+.cia-hallazgo p {
+    margin: .3rem 0 .5rem;
+    font-size: .82rem;
+    color: #374151;
+}
+
+.cia-hallazgo-cab {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: .6rem;
+    font-size: .88rem;
+}
+
+.cia-sev-alta { border-left-color: #dc2626; }
+.cia-sev-media { border-left-color: #f59e0b; }
+.cia-sev-baja { border-left-color: #94a3b8; }
+
+.cia-ahorro {
+    background: #ecfdf5;
+    color: #047857;
+    border-radius: 999px;
+    padding: .15rem .55rem;
+    font-size: .74rem;
+    font-weight: 600;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.cia-aplicado {
+    color: #047857;
+    font-size: .8rem;
+    font-weight: 600;
+}
+
+.cia-sugerencias {
+    margin: .5rem 0 .25rem;
+    padding-left: 1.1rem;
+    font-size: .82rem;
+    color: #374151;
+}
+
+.cia-sugerencias li {
+    margin-bottom: .3rem;
+}
+
+.cia-revision:not(:empty) {
+    margin-top: .5rem;
+}

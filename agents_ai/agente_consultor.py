@@ -1,19 +1,31 @@
 import logging
 import os
-import re
-import threading
-import unicodedata
 import json
 from dataclasses import dataclass
 
 from langchain_core.prompts import PromptTemplate
-from .providers import get_provider
-from langchain_community.vectorstores import FAISS
+from .providers import get_provider, get_llm_cached, get_embeddings_cached
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from langchain_core.tools import tool
 
 from whatsapp.models import ConversacionWhatsApp
-from .memoria_django import DjangoChatMessageHistory
+from .memoria.historial import DjangoChatMessageHistory
+from .consultor.clasificacion import (
+    normalizar_texto,
+    _es_saludo,
+    _es_ack_simple,
+    _es_consulta_amplia,
+    _GREETING_WORDS,
+)
+from .consultor.retrieval import (
+    _get_vectorstore_cached,
+    invalidate_vectorstore_cache,
+    _get_bm25_cached,
+    _hybrid_search,
+    _dedup_preservando_orden,
+    _trim_contexto,
+    _extraer_seccion_relevante,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,229 +63,69 @@ _MAX_STATIC_CHARS  = 1_200  # máx chars del contexto estático en Modo B (suple
 _HISTORY_TURNS     = 3      # turnos de historial (bajado 5->3; evita inflar el prompt en charlas largas)
 _USER_SNIPPET      = 150    # chars por mensaje de usuario en historial
 _AI_SNIPPET        = 400    # chars por respuesta IA en historial
-_MAX_OUTPUT_TOKENS = 1200   # tope de salida (bajado 3000->1200; corta runaways de respuestas)
+_MAX_OUTPUT_TOKENS = 3000   # tokens de salida — techo para consultas amplias (menús completos con precios)
+_MAX_OUTPUT_TOKENS_CORTO = 1200  # techo para consultas específicas — mensajes de WhatsApp cortos, evita sobre-generación
 _TOPIC_ANCHOR_CHARS = 180   # chars del primer mensaje sustantivo como ancla de tema
-# Para consultas amplias en Modo A (sin FAISS) se envía el contexto_estatico completo sin cap
+_UMBRAL_DISTANCIA  = 1.4    # distancia L2² máx de un chunk relevante (embeddings normalizados: ≈ coseno 0.3)
+_TEMPERATURE_TOOLS = 0.2    # temperatura máx durante tool-calling — argumentos deterministas
+_MAX_STATIC_AMPLIA = 12_000 # techo del contexto estático completo en consultas amplias (Modo A)
+# Techo del volcado de las fuentes API. Es el único bloque del prompt que no
+# tenía ninguno: entraba entero en cada mensaje. Medido, un catálogo conectado
+# por API mandaba 49.868 chars (~12.500 tokens) en TODAS las llamadas.
+_MAX_API_CHARS = 12_000
 
-# Palabras que NO se añaden como ancla semántica al query FAISS
-_GREETING_WORDS = frozenset({
-    'hola', 'hi', 'hello', 'hey', 'buenas', 'buenos', 'saludos',
-    'ok', 'okay', 'si', 'sí', 'no', 'gracias', 'thanks',
-})
+# Palabras que aparecen en casi cualquier pregunta y no sirven para elegir qué
+# ítem del catálogo mostrar. Sin esto, "cuanto cuesta X" matchearía todo ítem
+# que diga "cuesta".
+_PALABRAS_VACIAS = frozenset("""
+para pero como cuando donde cual cuales cuanto cuanta cuantos cuantas quien
+tienen tiene tengo hay sobre desde hasta esta este estos estas eso esa ese
+quiero necesito saber puedo podes podrias decime dime hola buenas gracias
+informacion info precio precios valor valores costo costos cuesta cuestan
+curso cursos programa programas ustedes nosotros mismo tambien algun alguna
+""".split())
 
-# Mensajes de confirmación breve — se salta FAISS, solo historial
-_ACK_RE = re.compile(
-    r'^(ok|okay|okey|entendido|perfecto|excelente|bien|claro|ya|dale|listo|genial|'
-    r'super|chévere|chevere|gracias|thanks|de acuerdo|muy bien|está bien|👍|'
-    r'de acuerdo|eso es todo|nada más|nada mas)[\s!.,]*$',
-    re.IGNORECASE | re.UNICODE,
-)
-
-# ---------------------------------------------------------------------------
-# FAISS in-memory cache — keyed by path, invalidated cuando index.faiss cambia
-# ---------------------------------------------------------------------------
-_faiss_cache: dict[str, tuple[float, object]] = {}
-_cache_lock = threading.Lock()
-
-
-def _get_vectorstore_cached(path: str, embeddings) -> object | None:
-    """Carga FAISS desde disco con cache basado en mtime."""
-    index_file = os.path.join(path, 'index.faiss')
-    try:
-        mtime = os.path.getmtime(index_file)
-    except OSError:
-        return None
-
-    with _cache_lock:
-        cached = _faiss_cache.get(path)
-        if cached is not None and cached[0] == mtime:
-            return cached[1]
-        vs = FAISS.load_local(path, embeddings, allow_dangerous_deserialization=True)
-        _faiss_cache[path] = (mtime, vs)
-        return vs
+# Por debajo de 4 letras una palabra casi nunca identifica un ítem y sí produce
+# coincidencias por azar.
+_LARGO_MINIMO_TERMINO = 4
 
 
-def invalidate_vectorstore_cache(path: str) -> None:
-    """Llamar después de reconstruir un vectorstore para forzar recarga."""
-    with _cache_lock:
-        _faiss_cache.pop(path, None)
+def _terminos_utiles(pregunta: str) -> set:
+    """Palabras de la pregunta que sirven para buscar en el catálogo."""
+    return {
+        t for t in normalizar_texto(pregunta or '').split()
+        if len(t) >= _LARGO_MINIMO_TERMINO and t not in _PALABRAS_VACIAS
+    }
 
 
-# ---------------------------------------------------------------------------
-# Detección de saludos y acks — sin llamada al LLM
-# ---------------------------------------------------------------------------
-_GREETING_RE = re.compile(
-    r'^(hola+|hi+|hello+|hey+|ey+|buenas?|buenos\s+d[ií]as?|buenas?\s+tardes?'
-    r'|buenas?\s+noches?|buen\s+d[ií]a|saludos?|qu[eé]\s+tal|c[oó]mo\s+est[aá]s?'
-    r'|good\s+morning|good\s+afternoon|good\s+evening)\W*$',
-    re.IGNORECASE | re.UNICODE,
-)
+def _partir_items_api(bloque: str) -> tuple:
+    """Separa el volcado en (cabecera, [ítems]).
 
-
-def _es_saludo(texto: str) -> bool:
-    return bool(_GREETING_RE.match(texto.strip()))
-
-
-def _es_ack_simple(texto: str) -> bool:
-    """True si el mensaje es una confirmación breve que no necesita buscar en FAISS."""
-    t = texto.strip()
-    return len(t) <= 30 and bool(_ACK_RE.match(t))
-
-
-_AMPLIA_RE = re.compile(
-    r'(men[uú]|carta|qu[eé]\s+tiene[sn]?|qu[eé]\s+ofrecen?|lista\s+de|cat[aá]logo'
-    r'|todas?\s+(las?|los?)\s+opciones?|todo\s+lo\s+que|todos?\s+(los?|las?)\s+platos?'
-    r'|qu[eé]\s+hay|productos?|servicios?|precios?\s+de\s+todo|todo\s+el\s+men[uú]'
-    r'|qu[eé]\s+venden?|qu[eé]\s+sirven?|qu[eé]\s+tienen\s+disponible)',
-    re.IGNORECASE | re.UNICODE,
-)
-
-
-def _es_consulta_amplia(texto: str) -> bool:
-    """True si el usuario pide información amplia (menú completo, catálogo, lista de productos)."""
-    return bool(_AMPLIA_RE.search(texto.strip()))
-
-
-# ---------------------------------------------------------------------------
-# Utilidades
-# ---------------------------------------------------------------------------
-
-def normalizar_texto(texto: str) -> str:
-    texto = unicodedata.normalize('NFKD', texto).encode('ascii', 'ignore').decode('utf-8')
-    texto = re.sub(r'[^a-zA-Z0-9\s]', '', texto)
-    return texto.lower()
-
-
-def _dedup_preservando_orden(docs) -> list:
-    """Elimina chunks duplicados respetando el ranking MMR."""
-    seen = set()
-    result = []
-    for d in docs:
-        key = d.page_content
-        if key not in seen:
-            seen.add(key)
-            result.append(d)
-    return result
-
-
-_STOP_WORDS_ES = frozenset({
-    'dame', 'quiero', 'tienes', 'tiene', 'puedo', 'como', 'para', 'cual',
-    'que', 'del', 'los', 'las', 'una', 'uno', 'con', 'sin', 'por', 'pero',
-    'hay', 'hay', 'este', 'esta', 'ese', 'esa', 'algo', 'todo',
-})
-
-
-def _extraer_seccion_relevante(texto: str, query: str, max_chars: int) -> str:
+    Un ítem arranca con "— " y arrastra sus líneas de continuación (la
+    descripción va indentada). La cabecera son las líneas "## ..." del principio,
+    que le dicen al modelo cuándo mirar esa fuente: se conservan siempre, porque
+    sin ellas el bloque llega sin contexto de qué es.
     """
-    Mode A (sin FAISS): extrae la sección del documento más relevante al query.
-    Busca keywords del query en el texto, retrocede al encabezado de sección más
-    cercano (===, ---, ###) e incluye prefijo del documento + sección encontrada.
-    Si no hay match, devuelve los primeros max_chars.
-    """
-    palabras = [
-        w for w in re.findall(r'\w+', query.lower())
-        if len(w) > 3 and w not in _STOP_WORDS_ES
-    ]
-    if not palabras:
-        return texto[:max_chars]
-
-    # Posición del primer keyword encontrado en el documento
-    mejor_pos = len(texto)
-    for palabra in palabras:
-        pos = texto.lower().find(palabra)
-        if 0 <= pos < mejor_pos:
-            mejor_pos = pos
-
-    if mejor_pos == len(texto):
-        return texto[:max_chars]
-
-    # Retroceder al inicio de sección más cercano (=== o ---) antes del match
-    _SEPARADORES = re.compile(r'(?m)^(?:===|---|###|\*\*\*)')
-    seccion_inicio = 0
-    for m in _SEPARADORES.finditer(texto):
-        if m.start() <= mejor_pos:
-            seccion_inicio = m.start()
+    cabecera, items, actual = [], [], None
+    for linea in (bloque or '').splitlines():
+        if linea.startswith('— '):
+            if actual is not None:
+                items.append('\n'.join(actual))
+            actual = [linea]
+        elif actual is not None:
+            actual.append(linea)
         else:
-            break
+            cabecera.append(linea)
+    if actual is not None:
+        items.append('\n'.join(actual))
+    return '\n'.join(cabecera).strip(), items
+_RESUMEN_CADA_N    = 6      # mensajes entre refrescos del resumen rodante (patrón backmanageria)
+_RESUMEN_MAX_CHARS = 700    # techo del resumen rodante reinyectado al historial
+_FAQ_MATCH_RATIO   = 0.92   # similitud mínima para responder una FAQ directa sin LLM
 
-    # Prefijo del documento (primeras líneas con el nombre/encabezado)
-    prefijo_fin = min(300, seccion_inicio)
-    prefijo = texto[:prefijo_fin].strip()
-    presupuesto_seccion = max_chars - len(prefijo) - 10  # margen para "\n...\n"
-    seccion = texto[seccion_inicio: seccion_inicio + presupuesto_seccion]
-
-    if prefijo and not seccion.startswith(prefijo):
-        return f"{prefijo}\n...\n{seccion}"
-    return seccion
-
-
-def _build_bm25(vs):
-    """
-    Construye un índice BM25 desde los documentos almacenados en el docstore FAISS.
-    BM25 busca por keywords exactas; complementa la búsqueda semántica de FAISS.
-    Devuelve None si rank_bm25 no está instalado o el vectorstore está vacío.
-    """
-    if not vs:
-        return None
-    try:
-        from langchain_community.retrievers import BM25Retriever
-        docs = [d for d in vs.docstore._dict.values() if getattr(d, 'page_content', '').strip()]
-        if not docs:
-            return None
-        retriever = BM25Retriever.from_documents(docs)
-        retriever.k = _FAISS_K
-        return retriever
-    except Exception as e:
-        logger.debug("BM25 no disponible (rank_bm25 no instalado?): %s", e)
-        return None
-
-
-def _hybrid_search(vs, bm25, query: str, k: int, lambda_mult: float) -> list:
-    """
-    Búsqueda híbrida BM25 + FAISS MMR.
-    - BM25 : recupera por keywords exactas (nombres de productos, términos específicos)
-    - FAISS: recupera por similitud semántica
-    Los resultados BM25 van primero (mayor precisión exacta), luego FAISS.
-    Duplicados eliminados por contenido.
-    """
-    docs_kw  = []
-    docs_sem = []
-
-    if bm25:
-        try:
-            bm25.k = k
-            docs_kw = bm25.get_relevant_documents(query)
-        except Exception as e:
-            logger.debug("BM25 search error: %s", e)
-
-    if vs:
-        try:
-            docs_sem = vs.max_marginal_relevance_search(
-                query, k=k, fetch_k=k * 3, lambda_mult=lambda_mult
-            )
-        except Exception as e:
-            logger.debug("FAISS MMR search error: %s", e)
-
-    return _dedup_preservando_orden(docs_kw + docs_sem)
-
-
-def _trim_contexto(docs, max_chars: int = _MAX_CONTEXT_CHARS) -> str:
-    """Une los chunks más relevantes hasta el techo de caracteres."""
-    partes = []
-    total = 0
-    for d in docs:
-        chunk = d.page_content.strip()
-        if not chunk:
-            continue
-        if total + len(chunk) > max_chars:
-            restante = max_chars - total
-            if restante > 200:
-                partes.append(chunk[:restante])
-            break
-        partes.append(chunk)
-        total += len(chunk)
-    return "\n\n".join(partes)
-
+# La clasificación de mensajes (saludos/acks/consultas amplias) vive en
+# consultor/clasificacion.py y el retrieval (cache FAISS, BM25, híbrida,
+# recortes) en consultor/retrieval.py.
 
 # ---------------------------------------------------------------------------
 # AgenteConsultor
@@ -293,11 +145,13 @@ class AgenteConsultor:
         detectar_fin: bool = False,
         perfil=None,
         agente=None,
+        base_url=None,
     ):
         # Provider: acepta string ('gemini', 'openai') o int (2, 3) — ver providers/__init__.py
         self._provider_obj = get_provider(provider)
         self.provider = self._provider_obj.name  # mantiene API pública previa para compat
         self.apikey = apikey
+        self.base_url = (base_url or '').strip() or None
         self.model_name = model_name or self.default_model()
         self.vectorstore_path = vectorstore_path
         self.vectorstore_enlaces_path = vectorstore_enlaces_path
@@ -306,12 +160,27 @@ class AgenteConsultor:
         self.perfil = perfil  # PerfilNegocioIA — usado por herramientas de tool-calling
         self.agente = agente  # AgentesIA — usado para cargar HerramientaAgente dinámicas
 
-        # Configuración avanzada — lee del agente si está seteado, sino usa el constante
+        # Configuración avanzada — cascada agente → perfil (Centro de IA) →
+        # plataforma → constante de este módulo. Un campo NULL en el agente
+        # significa "heredar", no "cero": la resolución vive en crm/ia_config.py.
+        _params = {}
+        try:
+            from crm.ia_config import parametros_efectivos
+            _params = parametros_efectivos(
+                agente=agente,
+                perfil_id=getattr(perfil, 'id', None) if agente is None else None,
+            )
+        except Exception as exc:
+            logger.debug('No se pudo resolver el Centro de IA, se usan constantes: %s', exc)
+
         def _cfg(field, default):
-            if agente is None:
-                return default
-            val = getattr(agente, field, None)
-            return val if val else default
+            # Los campos heredables salen resueltos del Centro de IA; el resto
+            # (ej. `temperature`) se sigue leyendo directo del agente.
+            if field in _params:
+                val = _params[field]
+            else:
+                val = getattr(agente, field, None) if agente is not None else None
+            return val if val is not None else default
 
         self.cfg_faiss_k           = _cfg('cfg_faiss_k', _FAISS_K)
         self.cfg_faiss_fetch_k     = _cfg('cfg_faiss_fetch_k', _FAISS_FETCH_K)
@@ -321,7 +190,14 @@ class AgenteConsultor:
         self.cfg_user_snippet      = _cfg('cfg_user_snippet', _USER_SNIPPET)
         self.cfg_ai_snippet        = _cfg('cfg_ai_snippet', _AI_SNIPPET)
         self.cfg_max_output_tokens = _cfg('cfg_max_output_tokens', _MAX_OUTPUT_TOKENS)
+        self.cfg_max_output_tokens_corto = _cfg('cfg_max_output_tokens_corto', _MAX_OUTPUT_TOKENS_CORTO)
         self.cfg_topic_anchor_chars = _cfg('cfg_topic_anchor_chars', _TOPIC_ANCHOR_CHARS)
+        self.cfg_umbral_distancia  = _cfg('cfg_umbral_distancia', _UMBRAL_DISTANCIA)
+        self.cfg_max_static_amplia = _cfg('cfg_max_static_amplia', _MAX_STATIC_AMPLIA)
+        self.cfg_max_api_chars     = _cfg('cfg_max_api_chars', _MAX_API_CHARS)
+        self.cfg_faqs_en_prompt    = _cfg('faqs_en_prompt', 5)
+        self.cfg_memoria_rag_activa = _cfg('memoria_rag_activa', True)
+        self.desglose_prompt = {}
 
         # Persona del bot — si el agente no tiene los campos (agentes viejos), defaults neutros.
         # Si el agente tiene un `personalidad_preset` distinto de 'personalizado',
@@ -356,12 +232,19 @@ class AgenteConsultor:
         except (TypeError, ValueError):
             self.cfg_temperature = 0.75
 
+        # Memoria RAG por agente — aprende de conversaciones previas. El valor
+        # sale de la cascada: NULL en el agente significa heredar del Centro de
+        # IA, NO desactivar. Sigue exigiendo que haya un agente concreto.
+        self.cfg_memoria_activa = agente is not None and bool(self.cfg_memoria_rag_activa)
+
         self.embeddings = self._get_embeddings()
         self.llm = self._get_llm()
         self.vectorstore = self._load_vectorstore()
         self.vectorstore_enlaces = self._load_vectorstore_enlaces()
-        self._bm25 = _build_bm25(self.vectorstore)
-        self._bm25_enlaces = _build_bm25(self.vectorstore_enlaces)
+        self._bm25 = _get_bm25_cached(self.vectorstore_path, self.vectorstore, self.cfg_faiss_k)
+        self._bm25_enlaces = _get_bm25_cached(
+            self.vectorstore_enlaces_path, self.vectorstore_enlaces, self.cfg_faiss_k
+        )
         self.conversacion: ConversacionWhatsApp = conversacion
 
         # Historial — acceso directo, sin ConversationBufferMemory (era dead code)
@@ -385,6 +268,8 @@ class AgenteConsultor:
             'historial_contacto',
             # Horario laboral + primer mensaje (agregadas para agentes que las usen)
             'fuera_horario', 'horario_atencion', 'es_primer_mensaje',
+            # Canal de la conversación (whatsapp/instagram/tiktok/messenger)
+            'canal',
         }
         _tpl_text = prompt_template_text
         if _tpl_text:
@@ -402,8 +287,8 @@ class AgenteConsultor:
         self._prompt_tpl = PromptTemplate.from_template(f'{_tpl_text}\n')
 
         self.listas_memoria: dict = {}
+        self._listas_cargadas = False  # lazy — solo el flujo con tools las necesita
         self._faq_ids_usadas: list = []  # rellenado por _construir_contexto
-        self._cargar_listas_desde_memoria()
 
         # ── RAG Weaviate multi-tenant (capa transversal anti-alucinación) ──
         # Si la empresa del agente tiene un tenant con documentos indexados y hay
@@ -420,19 +305,13 @@ class AgenteConsultor:
                         getattr(self.agente, 'id', '?'), self.agente_tenant_id)
 
     def _resolver_embed_key(self) -> str:
-        """Busca una API key Gemini activa del perfil para generar embeddings del RAG.
-        Gemini se usa solo para embeddings; el LLM de respuesta puede ser cualquiera."""
+        """API key con la que se generan los embeddings del RAG.
+        La elige el Centro de IA (crm/ia_config.py); el LLM de respuesta puede
+        ser de otro proveedor."""
         if not self.empresa_id:
             return ''
-        try:
-            from crm.models import ApiKeyIA
-            ak = (ApiKeyIA.objects
-                  .filter(perfil_id=self.empresa_id, proveedor=2, estado=True, status=True)
-                  .order_by('-id').first())
-            return ak.descripcion if ak else ''
-        except Exception as exc:
-            logger.debug("No se pudo resolver embed_key Gemini: %s", exc)
-            return ''
+        from crm.ia_config import resolver_key_embeddings_str
+        return resolver_key_embeddings_str(self.empresa_id)
 
     def _detectar_weaviate(self) -> bool:
         if not (self.agente_tenant_id and self.embed_key):
@@ -502,27 +381,72 @@ class AgenteConsultor:
     def default_model(self) -> str:
         return self._provider_obj.default_model()
 
+    _PROVEEDORES_CON_EMBEDDINGS = (2, 3, 8)
+
     def _get_embeddings(self):
-        # Algunos providers (Ollama) no proveen embeddings. En ese caso el agente
-        # no usa FAISS local: el RAG va por Weaviate, que genera sus embeddings con
-        # Gemini aparte (ver _resolver_embed_key / weaviate_rag).
+        # Providers sin API de embeddings (Claude, DeepSeek, Huawei) no bloquean
+        # el chat: se busca otra API Key del agente que sí soporte embeddings
+        # (Gemini/OpenAI/Ollama) para mantener FAISS y memoria; si no hay, el RAG
+        # cae a Weaviate (embeddings Gemini aparte) y el agente sigue en Modo A
+        # (contexto estático + FAQs).
         try:
-            return self._provider_obj.get_embeddings(self.apikey)
-        except NotImplementedError:
-            logger.info(
-                "Provider '%s' sin embeddings; FAISS local deshabilitado para este agente "
-                "(usa Weaviate si tiene tenant con datos).", self.provider,
-            )
+            return get_embeddings_cached(self._provider_obj, self.apikey, base_url=self.base_url)
+        except NotImplementedError as exc:
+            if self.agente is not None:
+                try:
+                    keys = self.agente.apikey.filter(
+                        estado=True, status=True,
+                        proveedor__in=self._PROVEEDORES_CON_EMBEDDINGS,
+                    ).exclude(descripcion='')
+                    for k in keys:
+                        try:
+                            return get_embeddings_cached(
+                                get_provider(k.proveedor),
+                                k.descripcion,
+                                base_url=(getattr(k, 'base_url', '') or None),
+                            )
+                        except Exception:
+                            continue
+                except Exception:
+                    pass
+            logger.warning("Provider %s sin embeddings y sin key alternativa — se omite FAISS: %s",
+                           self.provider, exc)
             return None
 
     def _get_llm(self):
         # Temperature configurable por agente. Default 0.75 = humano natural.
         # Cada preset puede pisar este valor (ej: formal=0.50, vendedor=0.90).
-        return self._provider_obj.get_llm(
+        return get_llm_cached(
+            self._provider_obj,
             apikey=self.apikey,
             model_name=self.model_name,
             max_output_tokens=self.cfg_max_output_tokens,
             temperature=self.cfg_temperature,
+            base_url=self.base_url,
+        )
+
+    def _llm_para_pregunta(self, pregunta: str):
+        # Cap de salida por tipo de consulta: las amplias (menú/catálogo) pueden
+        # ser largas y conservan el techo alto; las específicas usan un techo
+        # menor porque una respuesta de WhatsApp no necesita 3000 tokens. Evita
+        # sobre-generación (costo de salida) y baja la latencia. get_llm_cached
+        # cachea por config, así que solo se crean dos clientes por agente.
+        try:
+            amplia = _es_consulta_amplia(pregunta or '')
+        except Exception:
+            amplia = False
+        if amplia:
+            return self.llm
+        max_corto = min(self.cfg_max_output_tokens, self.cfg_max_output_tokens_corto)
+        if max_corto >= self.cfg_max_output_tokens:
+            return self.llm
+        return get_llm_cached(
+            self._provider_obj,
+            apikey=self.apikey,
+            model_name=self.model_name,
+            max_output_tokens=max_corto,
+            temperature=self.cfg_temperature,
+            base_url=self.base_url,
         )
 
     def _load_vectorstore(self):
@@ -622,6 +546,21 @@ class AgenteConsultor:
             'primera_vez_hoy': primera_vez_hoy,
         }
 
+    def _canal_conversacion(self) -> str:
+        """Canal por el que atiende esta conversación: whatsapp/instagram/tiktok/messenger.
+
+        Los proveedores internos baileys y meta son ambos 'whatsapp' de cara al
+        prompt — al agente le importa la red social, no el transporte.
+        """
+        try:
+            sesion = self.conversacion.sesion if self.conversacion else None
+            proveedor = (getattr(sesion, 'proveedor', '') or '').lower()
+            if proveedor in ('instagram', 'tiktok', 'messenger'):
+                return proveedor
+        except Exception:
+            pass
+        return 'whatsapp'
+
     def _vars_horario(self) -> dict:
         fuera = 'false'
         etiqueta = '(no configurado)'
@@ -653,16 +592,25 @@ class AgenteConsultor:
 
     def _contexto_previo(self) -> str:
         """
-        Devuelve los últimos N turnos como texto compacto.
+        Devuelve los últimos N turnos como texto compacto, precedidos por el
+        resumen rodante de lo que ya salió de la ventana (continuidad barata).
         Trunca para minimizar tokens: usuario → _USER_SNIPPET chars, IA → _AI_SNIPPET chars.
         """
         h = self._historia
         if not h:
             return ""
 
+        resumen = ""
+        try:
+            data = h.get_resumen_rodante()
+            if data and (data.get('texto') or '').strip():
+                resumen = f"Resumen de lo conversado antes: {data['texto'].strip()}\n"
+        except Exception:
+            resumen = ""
+
         mensajes = h.get_recent(self.cfg_history_turns * 2)
         if not mensajes:
-            return ""
+            return resumen
 
         partes = []
         for msg in mensajes:
@@ -673,7 +621,7 @@ class AgenteConsultor:
                 t = msg.content[:self.cfg_ai_snippet]
                 partes.append(f"A: {t}{'…' if len(msg.content) > self.cfg_ai_snippet else ''}")
 
-        return "Historial reciente:\n" + "\n".join(partes) + "\n\n"
+        return resumen + "Historial reciente:\n" + "\n".join(partes) + "\n\n"
 
     def _tema_inicial(self) -> str:
         """Primer mensaje sustantivo del usuario en esta conversación.
@@ -745,6 +693,9 @@ class AgenteConsultor:
     # ------------------------------------------------------------------
 
     def _cargar_listas_desde_memoria(self):
+        if self._listas_cargadas:
+            return
+        self._listas_cargadas = True
         h = self._historia
         if not h:
             return
@@ -777,9 +728,11 @@ class AgenteConsultor:
         if self.agente is None:
             return "", []
         try:
-            top_n = max(0, int(getattr(self.agente, 'faqs_en_prompt', 10) or 0))
+            # Resuelto en __init__ por la cascada del Centro de IA: NULL en el
+            # agente significa heredar, no "cero FAQs".
+            top_n = max(0, int(self.cfg_faqs_en_prompt or 0))
         except Exception:
-            top_n = 10
+            top_n = 5
         if top_n == 0:
             return "", []
         try:
@@ -821,6 +774,7 @@ class AgenteConsultor:
         _presupuesto = self.cfg_max_context_chars
         _es_amplia = False
         _query_faiss = pregunta
+        _query_vector = None
 
         if _es_ack:
             contexto = ""
@@ -841,9 +795,27 @@ class AgenteConsultor:
                 _lambda = 0.65
                 _presupuesto = self.cfg_max_context_chars
 
-            docs = _hybrid_search(self.vectorstore, self._bm25, _query_faiss, _k, _lambda)
+            # UNA sola llamada de embedding del query, compartida entre
+            # documentos, enlaces y memoria (evita 2 roundtrips extra por mensaje).
+            if self.embeddings is not None and (
+                self.vectorstore is not None or self.vectorstore_enlaces is not None
+                or self._memoria_disponible()
+            ):
+                try:
+                    _query_vector = self.embeddings.embed_query(_query_faiss)
+                except Exception as exc:
+                    logger.debug("embed_query falló — búsqueda estándar: %s", exc)
+
+            # Umbral solo en consultas específicas — en amplias (menú/catálogo)
+            # se quiere TODO el corpus aunque la distancia sea alta.
+            _umbral = None if es_consulta_amplia else self.cfg_umbral_distancia
+            docs = _hybrid_search(
+                self.vectorstore, self._bm25, _query_faiss, _k, _lambda,
+                query_vector=_query_vector, umbral_distancia=_umbral,
+            )
             docs_enlaces = _hybrid_search(
-                self.vectorstore_enlaces, self._bm25_enlaces, _query_faiss, _k, _lambda
+                self.vectorstore_enlaces, self._bm25_enlaces, _query_faiss, _k, _lambda,
+                query_vector=_query_vector, umbral_distancia=_umbral,
             )
             logger.debug(
                 "Hybrid: %d docs + %d enlaces (amplia=%s, bm25=%s)",
@@ -860,11 +832,13 @@ class AgenteConsultor:
                     "Prohibido usar conocimiento externo o inventar datos."
                 )
 
+        self.desglose_prompt = {'chars_docs': len(contexto) if not _sin_datos else 0}
+
         if self.contexto_estatico:
             sin_faiss = not contexto
             if sin_faiss:
                 if _es_amplia:
-                    contexto = self.contexto_estatico
+                    contexto = self.contexto_estatico[:self.cfg_max_static_amplia]
                 else:
                     contexto = _extraer_seccion_relevante(
                         self.contexto_estatico, _query_faiss, _presupuesto
@@ -884,8 +858,14 @@ class AgenteConsultor:
                     len(estatico_trim), len(faiss_trim), len(contexto), _presupuesto,
                 )
 
+        self.desglose_prompt['chars_estatico'] = (
+            len(contexto) - self.desglose_prompt['chars_docs']
+            if self.contexto_estatico else 0
+        )
+
         # ── FAQ top-N inyectadas al inicio del contexto ────────────────
         bloque_faq, faq_ids = self._construir_bloque_faq()
+        self.desglose_prompt['chars_faq'] = len(bloque_faq)
         if bloque_faq:
             contexto = f"{bloque_faq}\n\n{contexto}" if contexto else bloque_faq
             # Incrementar hits en background (no bloquear respuesta)
@@ -894,13 +874,78 @@ class AgenteConsultor:
                 _sin_datos = False  # Tenemos FAQ como respaldo
 
         # ── APIs externas (fuentes tipo=1 fetch en vivo, sin embeddings) ──
-        bloque_apis = self._construir_bloque_apis()
+        bloque_apis = self._construir_bloque_apis(pregunta)
+        self.desglose_prompt['chars_apis'] = len(bloque_apis)
         if bloque_apis:
             contexto = f"{contexto}\n\n{bloque_apis}" if contexto else bloque_apis
             if _sin_datos:
                 _sin_datos = False
 
+        # ── Memoria RAG — respuestas aprendidas en conversaciones previas ──
+        self.desglose_prompt['chars_memoria'] = 0
+        if not _es_ack:
+            bloque_memoria = self._construir_bloque_memoria(_query_faiss, _query_vector)
+            self.desglose_prompt['chars_memoria'] = len(bloque_memoria or '')
+            if bloque_memoria:
+                contexto = f"{contexto}\n\n{bloque_memoria}" if contexto else bloque_memoria
+
+        self.desglose_prompt['chars_contexto_total'] = len(contexto)
         return contexto, _sin_datos
+
+    def _memoria_disponible(self) -> bool:
+        if not (self.cfg_memoria_activa and self.agente is not None):
+            return False
+        try:
+            from .memoria.rag_conversaciones import memoria_existe
+            return memoria_existe(self.agente.id)
+        except Exception:
+            return False
+
+    def _construir_bloque_memoria(self, query: str, query_vector=None) -> str:
+        """Bloque compacto con pares pregunta→respuesta de conversaciones previas."""
+        if not (self.cfg_memoria_activa and self.agente is not None and self.embeddings is not None):
+            return ''
+        try:
+            from .memoria.rag_conversaciones import recuperar_memoria
+            conv_id = str(self.conversacion.id) if self.conversacion else None
+            return recuperar_memoria(
+                self.agente.id, self.embeddings, query,
+                excluir_conversacion=conv_id,
+                query_vector=query_vector,
+                umbral_distancia=self.cfg_umbral_distancia,
+            )
+        except Exception as exc:
+            logger.debug("Memoria RAG no disponible: %s", exc)
+            return ''
+
+    def _memorizar_interaccion(self, pregunta: str, respuesta: str, sin_datos: bool) -> None:
+        """Indexa el par pregunta→respuesta en la memoria del agente (background).
+
+        Debounce por agente (cache 10s): en ráfagas de mensajes se descartan
+        escrituras intermedias para no apilar hilos ni reescribir el índice
+        en cada mensaje.
+        """
+        if sin_datos or not respuesta:
+            return
+        if not (self.cfg_memoria_activa and self.agente is not None and self.embeddings is not None):
+            return
+        # Solo conversaciones REALES de WhatsApp alimentan la memoria — los
+        # chats de prueba/simulador/voz usan SimpleNamespace y quedan fuera
+        # para no contaminar el conocimiento de producción.
+        if not isinstance(self.conversacion, ConversacionWhatsApp):
+            return
+        try:
+            from django.core.cache import cache
+            if not cache.add(f'memoria_rag_write_{self.agente.id}_{self.conversacion.id}', 1, 10):
+                return
+            from .memoria.rag_conversaciones import guardar_interaccion_async
+            conv_id = str(self.conversacion.id) if self.conversacion else None
+            guardar_interaccion_async(
+                self.agente.id, self.embeddings, pregunta, respuesta,
+                conversacion_id=conv_id,
+            )
+        except Exception as exc:
+            logger.debug("No se pudo memorizar la interacción: %s", exc)
 
     def _construir_contexto_weaviate(self, pregunta: str, contexto_previo: str) -> tuple[str, bool]:
         """Contexto desde el tenant Weaviate de la empresa (RAG transversal anti-delirio).
@@ -923,23 +968,131 @@ class AgenteConsultor:
             contexto = f"{bloque_faq}\n\n{contexto}"
             self._faq_ids_usadas = faq_ids
             _sin_datos = False
-        bloque_apis = self._construir_bloque_apis()
+        bloque_apis = self._construir_bloque_apis(pregunta)
         if bloque_apis:
             contexto = f"{contexto}\n\n{bloque_apis}"
             _sin_datos = False
         return contexto, _sin_datos
 
-    def _construir_bloque_apis(self) -> str:
+    def _construir_bloque_apis(self, pregunta: str = '') -> str:
         """Trae el texto de las fuentes API (tipo=1) sin recurrir a embeddings.
         Usa el cache configurado por fuente (`usar_cache`, `tiempo_cache_horas`).
+
+        Ante una pregunta puntual devuelve solo los ítems que tienen que ver con
+        ella; ante una pregunta amplia ("qué cursos tienen"), la lista completa
+        recortada al tope. Ver `_filtrar_items_api`.
         """
         if self.agente is None:
             return ''
         try:
-            return self.agente.fetch_contexto_apis() or ''
+            bloque = self.agente.fetch_contexto_apis() or ''
         except Exception as exc:
             logger.debug("No se pudo obtener contexto de APIs: %s", exc)
             return ''
+        if not bloque:
+            return ''
+        if pregunta and not _es_consulta_amplia(pregunta):
+            filtrado = self._filtrar_items_api(bloque, pregunta)
+            if filtrado:
+                return filtrado
+        return self._recortar_bloque_apis(bloque)
+
+    def _filtrar_items_api(self, bloque: str, pregunta: str) -> str:
+        """Se queda con los ítems del catálogo que hablan de lo que se preguntó.
+
+        El volcado completo era el gasto más grande del prompt y además el que
+        peor hacía responder al agente: 97 cursos para contestar por uno solo.
+        Acá se elige por coincidencia de palabras, sin embeddings — el nombre del
+        curso está literalmente en la pregunta ("cuánto cuesta el diplomado en
+        oncología"), así que lo léxico alcanza y no cuesta ni una llamada.
+
+        Las preguntas amplias no pasan por acá: para "qué cursos tienen" hay que
+        mandar la lista, no un pedazo. Esa decisión la toma el llamador con
+        `_es_consulta_amplia`, el mismo criterio que ya usa el resto del motor.
+
+        Si nada coincide devuelve '' y el llamador manda la lista recortada: es
+        preferible que el modelo vea una muestra y pueda ofrecer alternativas
+        antes que dejarlo sin nada.
+        """
+        cabecera, items = _partir_items_api(bloque)
+        if not items:
+            return ''
+
+        terminos = _terminos_utiles(pregunta)
+        if not terminos:
+            return ''
+
+        puntuados = []
+        for orden, item in enumerate(items):
+            texto = normalizar_texto(item)
+            puntaje = sum(1 for t in terminos if t in texto)
+            if puntaje:
+                puntuados.append((-puntaje, orden, item))
+        if not puntuados:
+            return ''
+
+        puntuados.sort()
+        # El presupuesto es una fracción del tope: si la pregunta es puntual, no
+        # hay razón para acercarse al techo del volcado completo.
+        presupuesto = max(1500, (self.cfg_max_api_chars or _MAX_API_CHARS) // 4)
+        elegidos, usado = [], len(cabecera)
+        for _, _, item in puntuados:
+            if usado + len(item) > presupuesto:
+                break
+            elegidos.append(item)
+            usado += len(item) + 1
+        if not elegidos:
+            return ''
+
+        logger.info(
+            'Catálogo API filtrado para el agente %s: %d de %d ítems, %d chars '
+            '(el volcado completo son %d).',
+            getattr(self.agente, 'id', '?'), len(elegidos), len(items), usado, len(bloque),
+        )
+        partes = [cabecera] if cabecera else []
+        partes.extend(elegidos)
+        partes.append(
+            '[Se muestran los ítems relacionados con la consulta. Hay más en el '
+            'catálogo: si el cliente pregunta por otro, pedile el nombre concreto.]'
+        )
+        return '\n'.join(partes)
+
+    def _recortar_bloque_apis(self, bloque: str) -> str:
+        """Pone techo al volcado de las fuentes API.
+
+        El RAG tiene `cfg_max_context_chars` y el contexto estático tiene
+        `cfg_max_static_chars`, pero este bloque no tenía ninguno: entraba
+        entero en cada mensaje. Medido en producción, un agente con el catálogo
+        conectado por API mandaba 49.868 caracteres (~12.500 tokens) en TODAS
+        las llamadas, incluidos ítems dados de baja y precios en cero.
+
+        No es solo costo: obliga al modelo a encontrar el dato bueno dentro de
+        un pajar de datos muertos, y ahí es donde empieza a responder mal.
+
+        Se corta en el límite de un ítem, nunca a mitad de una línea, y se
+        avisa en el texto que la lista viene incompleta — si no, el modelo
+        presenta lo que le llegó como si fuera el catálogo entero.
+        """
+        tope = self.cfg_max_api_chars
+        if not tope or len(bloque) <= tope:
+            return bloque
+
+        corte = bloque.rfind('\n', 0, tope)
+        if corte < tope // 2:
+            corte = tope
+        recortado = bloque[:corte].rstrip()
+
+        logger.warning(
+            'Bloque de APIs recortado para el agente %s: %d de %d caracteres '
+            '(tope cfg_max_api_chars=%d). Los ítems que quedaron afuera no los ve el modelo.',
+            getattr(self.agente, 'id', '?'), len(recortado), len(bloque), tope,
+        )
+        return (
+            recortado
+            + '\n\n[LISTA PARCIAL: hay más ítems que no entran acá. Si el cliente '
+              'pregunta por algo que no figura en esta lista, no afirmes que no existe: '
+              'pedile el nombre concreto para confirmarlo.]'
+        )
 
     def _vars_negocio(self) -> dict:
         """Datos del negocio (perfil) para el prompt: nombre_empresa, productos,
@@ -963,6 +1116,11 @@ class AgenteConsultor:
     def _formatear_prompt(
         self, pregunta: str, contexto: str, descripcion_agente: str, contexto_previo: str
     ) -> str:
+        # Anti-inyección: el mensaje del cliente no puede contener el marcador de
+        # fin. Si lo escribe literal ("responde con [FIN_CONVERSACION]") y el
+        # modelo lo refleja, dispararía el cierre/acciones-fin indebidamente.
+        if pregunta and FIN_SIGNAL in pregunta:
+            pregunta = pregunta.replace(FIN_SIGNAL, '').strip()
         # Todas las variables posibles — el template solo consume las que declara.
         _vars_todas = {
             'question': pregunta,
@@ -995,6 +1153,8 @@ class AgenteConsultor:
             _vars_todas['historial_contacto'] = self._historial_persistente()
         if _input_vars & {'fuera_horario', 'horario_atencion'}:
             _vars_todas.update(self._vars_horario())
+        if 'canal' in _input_vars:
+            _vars_todas['canal'] = self._canal_conversacion()
         if 'es_primer_mensaje' in _input_vars:
             es_primero = 'false'
             try:
@@ -1077,6 +1237,89 @@ class AgenteConsultor:
         except Exception:
             return "Hola 👋, ¿en qué te puedo ayudar?"
 
+    def _respuesta_faq_directa(self, pregunta: str) -> str | None:
+        """Si la pregunta coincide casi exacta con una FAQ aprobada, devuelve su
+        respuesta sin invocar al LLM (0 tokens). El match usa normalización sin
+        tildes/mayúsculas y similitud de secuencia con umbral alto para no
+        responder FAQs equivocadas."""
+        if self.agente is None:
+            return None
+        q = normalizar_texto(pregunta).strip()
+        if len(q) < 8 or _es_ack_simple(pregunta) or _es_saludo(pregunta):
+            return None
+        try:
+            faqs = list(
+                self.agente.faqs.filter(estado='aprobada', status=True)
+                .values_list('id', 'pregunta', 'respuesta')[:150]
+            )
+        except Exception:
+            return None
+        from difflib import SequenceMatcher
+        mejor_id, mejor_resp, mejor_ratio = None, None, 0.0
+        for fid, fp, fr in faqs:
+            fpn = normalizar_texto(fp or '').strip()
+            if not fpn or not (fr or '').strip():
+                continue
+            if fpn == q:
+                mejor_id, mejor_resp, mejor_ratio = fid, fr, 1.0
+                break
+            ratio = SequenceMatcher(None, q, fpn).ratio()
+            if ratio > mejor_ratio:
+                mejor_id, mejor_resp, mejor_ratio = fid, fr, ratio
+        if mejor_resp and mejor_ratio >= _FAQ_MATCH_RATIO:
+            try:
+                from django.db.models import F
+                from crm.models import FaqAgente
+                FaqAgente.objects.filter(pk=mejor_id).update(hits=F('hits') + 1)
+            except Exception as exc:
+                logger.debug("No se pudo incrementar hit de FAQ directa: %s", exc)
+            logger.debug("FAQ directa sin LLM (ratio=%.2f, faq=%s)", mejor_ratio, mejor_id)
+            return mejor_resp.strip()
+        return None
+
+    def _actualizar_resumen_rodante(self) -> tuple[int, int]:
+        """Mantiene un resumen compacto de los turnos que salieron de la ventana
+        reciente (patrón backmanageria: refresco throttleado cada
+        _RESUMEN_CADA_N mensajes, salida capada). Devuelve (tokens_in,
+        tokens_out) del refresco, o (0, 0) si no tocó resumir."""
+        h = self._historia
+        if not h:
+            return 0, 0
+        try:
+            total = h.count_conversacion()
+            ventana = self.cfg_history_turns * 2
+            if total <= ventana or total % _RESUMEN_CADA_N != 0:
+                return 0, 0
+            data = h.get_resumen_rodante() or {}
+            hasta_previo = int(data.get('hasta') or 0)
+            corte = total - ventana
+            if corte <= hasta_previo:
+                return 0, 0
+            rotados = h.get_range(hasta_previo, corte)
+            if not rotados:
+                return 0, 0
+            lineas = []
+            for m in rotados:
+                prefijo = 'U' if isinstance(m, HumanMessage) else 'A'
+                lineas.append(f"{prefijo}: {m.content[:200]}")
+            base = (data.get('texto') or '')[:_RESUMEN_MAX_CHARS]
+            prompt = (
+                "Resume en máximo 5 líneas los datos útiles para continuar esta "
+                "conversación (nombres, pedidos, cantidades, decisiones, datos ya "
+                "entregados). Sin saludos ni relleno.\n"
+                + (f"Resumen previo: {base}\n" if base else "")
+                + "Mensajes nuevos:\n" + "\n".join(lineas)
+                + "\nResumen actualizado:"
+            )
+            ai_message = self.llm.invoke(prompt)
+            texto = self._extraer_texto(ai_message)[:_RESUMEN_MAX_CHARS]
+            if texto:
+                h.set_resumen_rodante(texto, corte)
+            return self._extraer_tokens(ai_message)
+        except Exception as exc:
+            logger.debug("Resumen rodante omitido: %s", exc)
+            return 0, 0
+
     # ------------------------------------------------------------------
     # Consulta principal — 1 llamada LLM
     # ------------------------------------------------------------------
@@ -1092,11 +1335,26 @@ class AgenteConsultor:
                 h.add_ai_message(bienvenida)
             return ConsultaResultado(respuesta=bienvenida)
 
+        respuesta_faq = self._respuesta_faq_directa(pregunta)
+        if respuesta_faq is not None:
+            h = self._chat_history()
+            if h:
+                h.add_user_message(pregunta)
+                h.add_ai_message(respuesta_faq)
+            t_res_in, t_res_out = self._actualizar_resumen_rodante()
+            return ConsultaResultado(
+                respuesta=respuesta_faq,
+                tokens_entrada=t_res_in, tokens_salida=t_res_out,
+                tokens_total=t_res_in + t_res_out,
+            )
+
         contexto, _sin_datos = self._construir_contexto(pregunta, contexto_previo)
         prompt_final = self._formatear_prompt(pregunta, contexto, descripcion_agente, contexto_previo)
+        self.desglose_prompt['chars_historial'] = len(contexto_previo)
+        self.desglose_prompt['chars_prompt_total'] = len(prompt_final)
 
         try:
-            ai_message = self.llm.invoke(prompt_final)
+            ai_message = self._llm_para_pregunta(pregunta).invoke(prompt_final)
             respuesta = self._extraer_texto(ai_message)
         except Exception as exc:
             logger.error("Error invocando LLM: %s", exc)
@@ -1114,10 +1372,13 @@ class AgenteConsultor:
             h.add_ai_message(respuesta)
 
         self._incrementar_hits_faqs()
+        self._memorizar_interaccion(pregunta, respuesta, _sin_datos)
+        t_res_in, t_res_out = self._actualizar_resumen_rodante()
 
         return ConsultaResultado(
             respuesta=respuesta, fin_detectado=fin_detectado,
-            tokens_entrada=t_in, tokens_salida=t_out, tokens_total=t_in + t_out,
+            tokens_entrada=t_in + t_res_in, tokens_salida=t_out + t_res_out,
+            tokens_total=t_in + t_out + t_res_in + t_res_out,
             sin_datos=_sin_datos, prompt_enviado=prompt_final,
         )
 
@@ -1254,6 +1515,7 @@ class AgenteConsultor:
         en un loop acotado a 3 iteraciones. Mantiene fallback al parseo JSON legacy
         para prompts de agentes antiguos que siguen emitiendo JSON en vez de tool calls.
         """
+        self._cargar_listas_desde_memoria()
         contexto_previo = self._contexto_previo()
 
         bienvenida = self._saludo_primer_mensaje(pregunta)
@@ -1270,7 +1532,19 @@ class AgenteConsultor:
         tools = self._build_tools()
         tool_map = {t.name: t for t in tools}
         try:
-            llm_con_tools = self.llm.bind_tools(tools)
+            # Tool-calling con temperatura baja: los argumentos de las tools
+            # (fechas, cantidades, ids de servicio) necesitan determinismo;
+            # con la temperatura de charla el modelo inventa args y fuerza
+            # iteraciones extra del loop (= llamadas LLM extra).
+            _llm_tools = get_llm_cached(
+                self._provider_obj,
+                apikey=self.apikey,
+                model_name=self.model_name,
+                max_output_tokens=self.cfg_max_output_tokens,
+                temperature=min(self.cfg_temperature, _TEMPERATURE_TOOLS),
+                base_url=self.base_url,
+            )
+            llm_con_tools = _llm_tools.bind_tools(tools)
         except Exception as exc:
             logger.warning("bind_tools no soportado — fallback a consultar() estándar: %s", exc)
             return self._consultar_con_listas_legacy(pregunta, descripcion_agente)
@@ -1284,7 +1558,20 @@ class AgenteConsultor:
             try:
                 ai_message = llm_con_tools.invoke(mensajes)
             except Exception as exc:
-                logger.error("Error invocando LLM con tools (iter=%d): %s", iteracion, exc)
+                # El proveedor ya facturó los tokens de las iteraciones previas;
+                # los adjuntamos a la excepción y los logueamos para que el
+                # consumo parcial no quede sin rastro (contabilidad/alertas).
+                if t_in_acc or t_out_acc:
+                    logger.warning(
+                        "LLM con tools falló en iter=%d con consumo parcial in=%d out=%d",
+                        iteracion, t_in_acc, t_out_acc,
+                    )
+                    try:
+                        exc.tokens_parciales = (t_in_acc, t_out_acc)
+                    except Exception:
+                        pass
+                else:
+                    logger.error("Error invocando LLM con tools (iter=%d): %s", iteracion, exc)
                 raise
             t_in, t_out = self._extraer_tokens(ai_message)
             t_in_acc += t_in
@@ -1330,12 +1617,14 @@ class AgenteConsultor:
             h.add_ai_message(respuesta)
 
         self._incrementar_hits_faqs()
+        self._memorizar_interaccion(pregunta, respuesta, _sin_datos)
+        t_res_in, t_res_out = self._actualizar_resumen_rodante()
 
         return ConsultaResultado(
             respuesta=respuesta, fin_detectado=fin_detectado,
-            tokens_entrada=t_in_acc, tokens_salida=t_out_acc,
-            tokens_total=t_in_acc + t_out_acc, sin_datos=_sin_datos,
-            prompt_enviado=prompt_final,
+            tokens_entrada=t_in_acc + t_res_in, tokens_salida=t_out_acc + t_res_out,
+            tokens_total=t_in_acc + t_out_acc + t_res_in + t_res_out,
+            sin_datos=_sin_datos, prompt_enviado=prompt_final,
         )
 
     def _incrementar_hits_faqs(self) -> None:
@@ -1374,6 +1663,7 @@ class AgenteConsultor:
 
     def _consultar_con_listas_legacy(self, pregunta: str, descripcion_agente: str = '') -> ConsultaResultado:
         """Ruta de fallback cuando bind_tools no está soportado por el proveedor."""
+        self._cargar_listas_desde_memoria()
         resultado = self.consultar(pregunta, descripcion_agente)
         tools = self._build_tools()
         tool_map = {t.name: t for t in tools}

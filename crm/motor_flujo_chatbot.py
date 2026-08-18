@@ -32,6 +32,7 @@ import logging
 import re
 import time as _time
 import traceback as _traceback
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -258,7 +259,7 @@ def resolver_expresion(valor: Any, contexto: dict) -> Any:
 # ─────────────────────────────────────────────────────────────────────
 
 def _valida_cedula_ec(cedula: str) -> bool:
-    if len(cedula) != 10 or not cedula.isdigit():
+    if len(cedula) != 10 or not cedula.isdecimal():
         return False
     d = [int(c) for c in cedula]
     if d[2] >= 6:
@@ -300,6 +301,20 @@ def normalizar_numero(texto: str) -> str:
     return signo + t
 
 
+def _normalizar_texto(texto: str) -> str:
+    """Minúsculas, sin tildes y sin espacios sobrantes.
+
+    Sirve para comparar la entrada del cliente contra etiquetas/keywords sin
+    que una tilde o una mayúscula rompa la coincidencia: 'informacion' debe
+    matchear 'Información', 'BECAS' debe matchear 'becas'.
+    """
+    t = (texto or '').strip().lower()
+    if not t:
+        return ''
+    t = unicodedata.normalize('NFKD', t)
+    return ''.join(c for c in t if not unicodedata.combining(c))
+
+
 def validar_entrada(tipo: str, expresion: str, texto: str) -> bool:
     t = (texto or '').strip()
     if tipo in ('', 'none', None):
@@ -316,7 +331,7 @@ def validar_entrada(tipo: str, expresion: str, texto: str) -> bool:
     if tipo == 'cedula':
         return _valida_cedula_ec(t)
     if tipo == 'ruc':
-        return len(t) == 13 and t.isdigit()
+        return len(t) == 13 and t.isdecimal()
     if tipo == 'regex':
         try:
             return bool(re.match(expresion or '.*', t))
@@ -361,6 +376,11 @@ def evaluar_condicion(cond: dict, contexto: dict) -> bool:
             if op == '>=': return a >= b
             if op == '<=': return a <= b
         except TypeError:
+            # Tipos incomparables (ej. número vs texto que no es numérico). No
+            # es un error del sistema pero sí una condición mal armada: la
+            # dejamos en False y la registramos para poder diagnosticarla.
+            logger.warning(
+                'Condición %r no comparable: izq=%r der=%r → False', op, izq, der)
             return False
 
     if op in ('contiene', 'no_contiene'):
@@ -393,6 +413,24 @@ def _aplicar_credencial(cred, headers: dict, query: dict) -> None:
         query[s.get('nombre_param', 'api_key')] = s.get('valor', '')
     elif tipo == 'custom_header':
         headers.update(s.get('headers') or {})
+
+
+_CLAVES_SECRETAS = ('api_key', 'apikey', 'api-key', 'token', 'access_token',
+                    'key', 'secret', 'password', 'passwd', 'pwd', 'auth', 'signature')
+
+
+def _redactar_secretos(query):
+    """Devuelve una copia de `query` con los valores de parámetros sensibles
+    reemplazados por '***', para no persistir credenciales en TrazaMensajeIA."""
+    if not isinstance(query, dict):
+        return query
+    limpio = {}
+    for k, v in query.items():
+        if any(sec in str(k).lower() for sec in _CLAVES_SECRETAS):
+            limpio[k] = '***'
+        else:
+            limpio[k] = v
+    return limpio
 
 
 def ejecutar_http(nodo, contexto: dict, _traza_extra: Optional[dict] = None):
@@ -438,7 +476,7 @@ def ejecutar_http(nodo, contexto: dict, _traza_extra: Optional[dict] = None):
     if _traza_extra is not None:
         _traza_extra.update({
             'url': url, 'metodo': metodo,
-            'query': query, 'request_body': body,
+            'query': _redactar_secretos(query), 'request_body': body,
         })
 
     # Timeout: prefiere el del nodo (cfg.timeout_seg) si está definido — útil
@@ -512,6 +550,7 @@ class MotorFlujo:
         # True cuando _elegir_departamento determina que hay >1 depto activo y
         # ninguno matcheó → caller debe presentar meta-menú al usuario.
         self.pendiente_seleccion = False
+        self._hijo_menu_elegido = None
         # Timeline de trazabilidad — lista de dicts consumida por las vistas de prueba.
         # Se popula siempre (overhead despreciable) para permitir debugging en prod.
         self.trace: list[dict] = []
@@ -705,7 +744,8 @@ class MotorFlujo:
                 )
             else:
                 # Limitar a 10 ítems (regla Meta).
-                rows = [{'id': o['id'], 'title': o.get('title', '')[:24],
+                from meta.whatsapp import titulo_boton_interactivo
+                rows = [{'id': o['id'], 'title': titulo_boton_interactivo(o.get('title'), limite=24),
                          'description': (o.get('description') or '')[:72]}
                         for o in opciones[:10] if o.get('id')]
                 resp = self.ws.send_interactive_list(
@@ -751,16 +791,18 @@ class MotorFlujo:
 
     def _elegir_departamento(self):
         deptos = self._departamentos_activos()
-        txt = self.texto.lower()
+        txt = _normalizar_texto(self.texto)
 
-        # 1) palabras clave
+        # 1) palabras clave (sin tildes ni mayúsculas, para no fallar por acentos)
         for d in deptos:
             palabras = d.get_palabras_clave()
-            if palabras and any(p in txt for p in palabras):
+            if palabras and any((np := _normalizar_texto(p)) and np in txt for p in palabras):
                 return d
 
         # 2) selector numérico (compat con el menú clásico de departamentos)
-        if txt.isdigit():
+        # `isdecimal()`, no `isdigit()`: '³' y '²' pasan isdigit() pero
+        # revientan en int(). Un cliente mando '³' y tumbo el flujo entero.
+        if txt.isdecimal():
             idx = int(txt) - 1
             if 0 <= idx < len(deptos):
                 return deptos[idx]
@@ -789,6 +831,8 @@ class MotorFlujo:
         return None
 
     def _avanzar(self, etiqueta: str):
+        hijo_especifico = getattr(self, '_hijo_menu_elegido', None)
+        self._hijo_menu_elegido = None
         nodo = self.estado.nodo_actual
         if not nodo:
             return None
@@ -797,10 +841,47 @@ class MotorFlujo:
             return conn.nodo_destino
         # Fallback legacy: árbol por opcion_padre cuando la etiqueta es default
         if etiqueta == '':
+            # Menú de varias opciones elegido por texto/número: navegar al hijo
+            # elegido puntualmente, no al primero del árbol.
+            if hijo_especifico:
+                esp = nodo.subopciones.filter(status=True, id=hijo_especifico).first()
+                if esp:
+                    return esp
             return nodo.subopciones.filter(status=True).order_by('orden').first()
         # Si no hay conexión específica, caer a la default
         conn_def = nodo.salidas.filter(status=True, etiqueta='').order_by('orden').first()
         return conn_def.nodo_destino if conn_def else None
+
+    # ── Anti-rebobinado (botones viejos de WhatsApp) ─────────────────
+
+    def _destinos_directos(self, nodo) -> set:
+        """IDs de nodos directamente alcanzables desde `nodo` (aristas de salida
+        + subopciones legacy). Sirve para distinguir un botón legítimo del nodo
+        actual de un botón viejo de un menú anterior."""
+        ids = set()
+        if not nodo:
+            return ids
+        for c in nodo.salidas.filter(status=True):
+            if c.nodo_destino_id:
+                ids.add(c.nodo_destino_id)
+        for h in nodo.subopciones.filter(status=True):
+            ids.add(h.id)
+        return ids
+
+    def _marcar_historial(self, nodo):
+        """Registra el nodo en el historial de visitados de la conversación.
+        Lo usa la guarda anti-rebobinado: si el cliente toca un botón viejo del
+        chat de WhatsApp cuyo nodo YA pasó, el flujo no se reinicia desde ahí."""
+        if not nodo:
+            return
+        hist = list((self.estado.variables or {}).get('__historial') or [])
+        if hist and hist[-1] == nodo.id:
+            return
+        hist.append(nodo.id)
+        if len(hist) > 100:
+            hist = hist[-100:]
+        self.estado.set_variable('__historial', hist)
+        self.estado.save()
 
     # ── Reset configurable por depto ─────────────────────────────────
 
@@ -874,6 +955,23 @@ class MotorFlujo:
                     except (ValueError, IndexError):
                         pass
             if objetivo:
+                # Anti-rebobinado: si el botón apunta a un nodo que YA pasó (está
+                # en el historial) y NO es alcanzable desde el nodo actual, es un
+                # botón viejo del chat de WhatsApp. No reiniciar el flujo desde
+                # ahí — reorientar al cliente al punto donde va.
+                historial = (self.estado.variables or {}).get('__historial') or []
+                actual_id = getattr(self.estado.nodo_actual, 'id', None)
+                if (objetivo.id != actual_id and objetivo.id in historial
+                        and objetivo.id not in self._destinos_directos(self.estado.nodo_actual)):
+                    self._trace('boton_obsoleto',
+                                f'Botón obsoleto ignorado: "{objetivo.nombre}" ya fue visitado',
+                                True, {'boton_id': self.boton_id, 'destino_id': objetivo.id,
+                                       'actual_id': actual_id})
+                    nodo_actual = self.estado.nodo_actual
+                    if nodo_actual and nodo_actual.tipo_nodo in ('menu', 'pregunta'):
+                        self.enviar('Esa opción ya la procesamos. Sigamos por aquí:')
+                        self._presentar_nodo_input(nodo_actual)
+                    return
                 self._trace('salto_boton_id', f'Salto directo a "{objetivo.nombre}"',
                             True, {'boton_id': self.boton_id, 'destino_id': objetivo.id,
                                    'desde_id': getattr(self.estado.nodo_actual, 'id', None)})
@@ -988,16 +1086,17 @@ class MotorFlujo:
         asigna el departamento y arranca su nodo de inicio."""
         deptos = self._departamentos_activos()
         t = self.texto.strip()
-        t_low = t.lower()
+        t_norm = _normalizar_texto(t)
         elegido = None
 
-        if t.isdigit():
+        if t.isdecimal():
             idx = int(t) - 1
             if 0 <= idx < len(deptos):
                 elegido = deptos[idx]
-        if not elegido:
+        if not elegido and t_norm:
             for d in deptos:
-                if d.nombre.lower() == t_low or t_low in d.nombre.lower():
+                dn = _normalizar_texto(d.nombre)
+                if dn == t_norm or t_norm in dn:
                     elegido = d
                     break
 
@@ -1050,6 +1149,7 @@ class MotorFlujo:
                 return
 
             nodo = self.estado.nodo_actual
+            self._marcar_historial(nodo)
             tipo = nodo.tipo_nodo
             pide_input = tipo in ('pregunta', 'menu')
 
@@ -1078,9 +1178,59 @@ class MotorFlujo:
                 'siguiente_id': siguiente.id if siguiente else None,
                 'siguiente_nombre': getattr(siguiente, 'nombre', None),
             })
+            if siguiente is None and etiqueta == 'timeout':
+                # Se agotaron los reintentos y el nodo no tiene salida 'timeout'
+                # configurada → handoff en vez de dejar al cliente en silencio.
+                self._trace('timeout_sin_arista',
+                            'Reintentos agotados sin salida "timeout" → handoff',
+                            True, {'desde_id': nodo.id})
+                self._forzar_handoff('reintentos_agotados')
+                return
             self.estado.nodo_actual = siguiente
             self.estado.intentos = 0
             self.estado.save()
+
+    # ── Handoff forzado (sin nodo handoff) ───────────────────────────
+
+    def _forzar_handoff(self, motivo='timeout', mensaje=None):
+        """Transfiere a un agente humano sin requerir un nodo `handoff`.
+        Se usa cuando se agotan los reintentos y el flujo no tiene una salida
+        'timeout' — evita dejar al cliente atascado en silencio."""
+        msg = (mensaje or getattr(self.session, 'mensaje_handoff', '')
+               or 'No pude entender tu respuesta. Te comunico con un asesor para continuar.')
+        # Intentamos asignar ANTES de fijar en_handoff: si no hay ningún asesor
+        # disponible, dejar en_handoff=True apagaba el bot y nadie tomaba la
+        # conversación → cliente atascado sin bot ni humano. En ese caso NO
+        # entramos en handoff y dejamos que el flujo/IA siga respondiendo.
+        agente = None
+        try:
+            from crm.helpers_asignacion import auto_asignar_agente
+            # `avisar_si_ya_asignado`: en sesiones con `auto_asignar_round_robin`
+            # la conversación llega con asesor desde el primer mensaje. No se
+            # reasigna, pero el asesor que ya la tiene debe enterarse y el
+            # cliente recibir el handoff igual.
+            agente = auto_asignar_agente(
+                self.conversation, motivo=motivo, avisar_si_ya_asignado=True,
+            )
+        except Exception:
+            logger.exception('Auto-asignación fallida (%s) conv=%s',
+                             motivo, self.conversation.id)
+        if not agente:
+            logger.warning('Handoff sin asesor disponible conv=%s motivo=%s — no se fija en_handoff',
+                           self.conversation.id, motivo)
+            self._trace('handoff_sin_asesor',
+                        f'Handoff solicitado ({motivo}) pero no hay asesor disponible', False,
+                        {'motivo': motivo})
+            aviso = 'En este momento no hay un asesor disponible. Te responderemos apenas se libere uno.'
+            self.enviar(aviso)
+            return
+        if msg:
+            self.enviar(msg)
+        self.handoff = True
+        self.estado.en_handoff = True
+        self.estado.save()
+        self._trace('handoff_auto', f'Handoff automático ({motivo})', True,
+                    {'motivo': motivo, 'agente': getattr(agente, 'username', '')})
 
     # ── Presentación de nodos de input ───────────────────────────────
 
@@ -1191,6 +1341,12 @@ class MotorFlujo:
         cfg = nodo.config or {}
         if not cfg.get('notificar_asesor'):
             return
+        if getattr(self, '_fin_asignado_nodo_id', None) == nodo.id:
+            self._trace('notificar_asesor',
+                        'Notificación al departamento omitida: el agente asignado '
+                        'ya recibió notificación y correo con el link', True,
+                        {'nodo_id': nodo.id})
+            return
         if self.skip_side_effects:
             self._trace('side_effect_skipped',
                         'Notificación a asesor OMITIDA (dry-run)', True,
@@ -1247,6 +1403,7 @@ class MotorFlujo:
                     return 'timeout'
                 self.estado.save()
                 self.enviar(nodo.mensaje_error or 'Dato inválido, intenta de nuevo.')
+                self._presentar_nodo_input(nodo)
                 return None
             if nodo.variable_destino:
                 valor = self.texto
@@ -1272,7 +1429,7 @@ class MotorFlujo:
                             False, {'nodo_id': nodo.id})
                 return ''
             t = self.texto.strip()
-            t_low = t.lower()
+            t_norm = _normalizar_texto(t)
             elegida = None
             # Pase 0: boton_id de Meta interactive (más confiable que texto).
             if self.boton_id:
@@ -1298,24 +1455,24 @@ class MotorFlujo:
                         pass
             if elegida:
                 pass  # ya matcheó por boton_id
-            elif t.isdigit():
+            elif t.isdecimal():
                 idx = int(t) - 1
                 if 0 <= idx < len(opciones):
                     elegida = opciones[idx]
             else:
-                # Pase 1: match exacto contra etiqueta o valor (case-insensitive).
+                # Pase 1: match exacto contra etiqueta o valor (sin tildes/mayúsculas).
                 # Pase 2: substring del valor o etiqueta (cubre "becas" → "Información de becas").
                 for op in opciones:
-                    et = str(op.get('etiqueta', '')).lower()
-                    va = str(op.get('valor', '')).lower()
-                    if t_low == et or (va and t_low == va):
+                    et = _normalizar_texto(str(op.get('etiqueta', '')))
+                    va = _normalizar_texto(str(op.get('valor', '')))
+                    if t_norm and (t_norm == et or (va and t_norm == va)):
                         elegida = op
                         break
                 if not elegida:
                     for op in opciones:
-                        et = str(op.get('etiqueta', '')).lower()
-                        va = str(op.get('valor', '')).lower()
-                        if (va and va in t_low) or (et and t_low in et):
+                        et = _normalizar_texto(str(op.get('etiqueta', '')))
+                        va = _normalizar_texto(str(op.get('valor', '')))
+                        if (va and va in t_norm) or (et and t_norm in et):
                             elegida = op
                             break
             if not elegida:
@@ -1328,7 +1485,8 @@ class MotorFlujo:
                     self.estado.save()
                     return 'timeout'
                 self.estado.save()
-                self.enviar(nodo.mensaje_error or 'Opción no válida. Elige el número de la opción.')
+                self.enviar(nodo.mensaje_error or 'Opción no válida. Estas son las opciones disponibles:')
+                self._presentar_nodo_input(nodo)
                 return None
             valor_elegido = elegida.get('valor', elegida.get('etiqueta', ''))
             # Atajo "valor por defecto": si el cliente eligió la opción Sí del
@@ -1360,8 +1518,10 @@ class MotorFlujo:
                                'valor': valor_a_guardar if valor_a_guardar is not None else '(no asignado)',
                                'es_default_si': es_default_si,
                                'es_default_otra': es_default_otra})
-            # Salida explícita o fallback por etiqueta del hijo legacy
-            return elegida.get('salida') or ''
+            # Salida explícita o, si no hay, navegación al hijo elegido puntual
+            salida_menu = elegida.get('salida') or ''
+            self._hijo_menu_elegido = elegida.get('_hijo_id') if not salida_menu else None
+            return salida_menu
 
         if tipo == 'set_variable':
             ctx = self.contexto()
@@ -1482,18 +1642,24 @@ class MotorFlujo:
                         logger.exception('Error enviando correo (nodo %s)', nodo.id)
             if etq == 'error' and err:
                 logger.warning('Nodo http %s falló: %s', nodo.id, err)
-                _notificar_excepcion_chatbot(
-                    nodo, self.conversation, etapa='http',
-                    error_msg=err,
-                    traceback_text=traza_extra.get('traceback', ''),
-                    extra={
-                        'url': traza_extra.get('url'),
-                        'metodo': traza_extra.get('metodo'),
-                        'query': traza_extra.get('query'),
-                        'request_body': traza_extra.get('request_body'),
-                        'response_body': traza_extra.get('response_body'),
-                    },
-                )
+                # Email SOLO para fallas técnicas reales (red/timeout → hay
+                # traceback). Los errores de negocio (HTTP 4xx / success:false,
+                # ej. "cédula no encontrada") NO mandan correo: ya quedan en la
+                # traza (/whatsapp/trazas/) y el flujo los maneja con su rama
+                # `error`. Esto evita el spam de mails por casos esperados.
+                if traza_extra.get('traceback'):
+                    _notificar_excepcion_chatbot(
+                        nodo, self.conversation, etapa='http',
+                        error_msg=err,
+                        traceback_text=traza_extra.get('traceback', ''),
+                        extra={
+                            'url': traza_extra.get('url'),
+                            'metodo': traza_extra.get('metodo'),
+                            'query': traza_extra.get('query'),
+                            'request_body': traza_extra.get('request_body'),
+                            'response_body': traza_extra.get('response_body'),
+                        },
+                    )
             return etq
 
         if tipo == 'funcion':
@@ -1617,6 +1783,13 @@ class MotorFlujo:
             self.handoff = True
             self.estado.en_handoff = True
             self.estado.save()
+            try:
+                from crm.helpers_asignacion import auto_asignar_agente
+                auto_asignar_agente(
+                    self.conversation, motivo='handoff', avisar_si_ya_asignado=True,
+                )
+            except Exception:
+                logger.exception('Auto-asignación fallida en handoff conv=%s', self.conversation.id)
             self._trace('handoff', 'Transferido a agente humano', True, {'nodo_id': nodo.id})
             return ''
 
@@ -1624,6 +1797,20 @@ class MotorFlujo:
             mensaje = cfg.get('mensaje') or nodo.respuesta or self.session.mensaje_despedida or ''
             if mensaje:
                 self.enviar(mensaje)
+            if (cfg.get('notificar_asesor') and not self.skip_side_effects
+                    and not self.conversation.asignado_a_id):
+                try:
+                    from crm.helpers_asignacion import auto_asignar_agente
+                    asignado = auto_asignar_agente(self.conversation, motivo='fin_flujo')
+                except Exception:
+                    asignado = None
+                    logger.exception('Auto-asignación fallida en fin conv=%s',
+                                     self.conversation.id)
+                if asignado:
+                    self._fin_asignado_nodo_id = nodo.id
+                    self._trace('fin_asignacion',
+                                f'Conversación asignada a {asignado} (menor carga 24h)',
+                                True, {'nodo_id': nodo.id, 'agente_id': asignado.id})
             self.finalizado = True
             self.estado.finalizado = True
             self.estado.save()
@@ -1661,6 +1848,14 @@ def procesar_mensaje_tradicional(session, conversation, contacto, texto, boton_i
     if (session.modo_bot or 'ia') != 'tradicional':
         return ResultadoFlujo(manejado=False)
 
+    # get_or_create es race-safe para la creación (EstadoFlujoChatbot.conversacion
+    # es OneToOne único). No envolvemos el turno en una transacción con
+    # select_for_update: motor.ejecutar() hace I/O HTTP (envíos a WhatsApp y nodos
+    # http de hasta 15s), y mantener el lock + una conexión del pool durante esa
+    # latencia agota conexiones bajo carga; peor aún, un fallo de ORM a mitad de
+    # turno haría rollback de mensajes ya enviados → respuestas duplicadas.
+    # La serialización estricta por conversación (dos mensajes casi simultáneos)
+    # requiere un rediseño con flag de claim y queda como trabajo futuro.
     estado, _ = EstadoFlujoChatbot.objects.get_or_create(conversacion=conversation)
 
     # Ya está en handoff humano: el motor no responde hasta que humanos lo liberen.
@@ -1713,8 +1908,8 @@ def reiniciar_flujo_tradicional(conversation, depto=None) -> ResultadoFlujo:
     from whatsapp.services import get_whatsapp_service
 
     session = conversation.sesion
-    if (session.modo_bot or 'ia') != 'tradicional':
-        return ResultadoFlujo(manejado=False, error='La sesión no es tradicional.')
+    if (session.modo_bot or 'ia') not in ('tradicional', 'hibrido'):
+        return ResultadoFlujo(manejado=False, error='La sesión no tiene flujo de chatbot.')
 
     contacto = conversation.contacto
     if contacto is None:
@@ -1722,7 +1917,10 @@ def reiniciar_flujo_tradicional(conversation, depto=None) -> ResultadoFlujo:
 
     estado, _ = EstadoFlujoChatbot.objects.get_or_create(conversacion=conversation)
 
-    depto_objetivo = depto or estado.departamento or session.departamento_default
+    # Prioriza el flujo CONFIGURADO en la sesión (`departamento_default`) por
+    # sobre el depto en el que quedó el cliente: reiniciar tiene que devolverlo
+    # al primer mensaje del flujo de entrada, no al submenú donde se atascó.
+    depto_objetivo = depto or session.departamento_default or estado.departamento
     if depto_objetivo is None:
         return ResultadoFlujo(
             manejado=False,

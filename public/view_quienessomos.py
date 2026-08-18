@@ -16,4 +16,4 @@ def quienessomos(request):
     elif request.method == 'GET':
         if 'action' in request.GET:
             data["action"] = action = request.GET['action']
-    return render(request, 'public/quienessomos.html', data)
+    return render(request, 'public/landing/quienessomos.html', data)

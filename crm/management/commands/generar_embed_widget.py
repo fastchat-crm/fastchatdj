@@ -29,7 +29,7 @@ class Command(BaseCommand):
         if not agente:
             raise CommandError(f"No existe un AgentesIA activo con id={opts['agente_id']}.")
 
-        apikey = agente.apikey.filter(estado=True, status=True).first()
+        apikey = agente.apikey_activa()
         if not apikey:
             self.stderr.write(self.style.WARNING(
                 'AVISO: el agente no tiene ApiKeyIA activa; el widget respondera con error '

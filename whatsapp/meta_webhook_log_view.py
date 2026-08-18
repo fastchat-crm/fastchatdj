@@ -14,6 +14,7 @@ import json
 from datetime import datetime, timedelta
 
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
@@ -169,7 +170,12 @@ def meta_webhook_log(request, sesion_id: int):
         )
         qs = _filtrar(qs, request)
         qs = qs.order_by('-recibido_en', '-id')
-        eventos = list(qs[:500])
+        try:
+            num_pagina = int(request.GET.get('page') or 1)
+        except (TypeError, ValueError):
+            num_pagina = 1
+        pagina = Paginator(qs, 100).get_page(num_pagina)
+        eventos = list(pagina.object_list)
 
         # Métricas del día (sobre el queryset sin filtros, para barra de resumen)
         qs_dia = EventoMetaRecibido.objects.filter(config_meta=config, recibido_en__date=fecha)
@@ -182,10 +188,17 @@ def meta_webhook_log(request, sesion_id: int):
         )
         ultimo_id = eventos[0].id if eventos else 0
     else:
+        pagina = None
         eventos = []
         total_dia = total_ok = total_firma_mal = total_error = 0
         tipos_disponibles = []
         ultimo_id = 0
+
+    # Querystring sin `page` para que los links de paginación conserven
+    # fecha y filtros activos.
+    params_sin_page = request.GET.copy()
+    params_sin_page.pop('page', None)
+    querystring = params_sin_page.urlencode()
 
     contexto = {
         'titulo':            f'Auditoría webhook · {sesion.nombre or sesion.numero or "sesión"}',
@@ -203,6 +216,8 @@ def meta_webhook_log(request, sesion_id: int):
         'total_firma_mal':   total_firma_mal,
         'total_error':       total_error,
         'ultimo_id':         ultimo_id,
+        'pagina':            pagina,
+        'querystring':       querystring,
         'filtro_tipo':       request.GET.get('tipo') or '',
         'filtro_firma':      request.GET.get('firma') or '',
         'filtro_proc':       request.GET.get('proc') or '',

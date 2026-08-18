@@ -88,6 +88,165 @@ def validar_messenger_desde_graph(session, config_fb, timeout=10):
     }
 
 
+def _graph_get_usuario(access_token, objeto_id, listas_campos, timeout=4):
+    """GET /{objeto_id} probando sets de campos en orden (el set completo puede
+    fallar por permisos). Devuelve `(data|None, error:str)` con el error crudo
+    de Graph (código + mensaje) para diagnóstico."""
+    ultimo_error = ''
+    for campos in listas_campos:
+        try:
+            r = requests.get(
+                build_graph_url(f'/{objeto_id}'),
+                params={'access_token': access_token, 'fields': campos},
+                timeout=timeout,
+            )
+        except Exception as e:
+            return None, f'Error de conexión con Graph: {e}'
+        if r.status_code == 200:
+            return r.json(), ''
+        try:
+            err = (r.json().get('error') or {})
+            ultimo_error = f"HTTP {r.status_code} — código {err.get('code')}"
+            if err.get('error_subcode'):
+                ultimo_error += f'.{err.get("error_subcode")}'
+            ultimo_error += f": {err.get('message', '')}"
+        except Exception:
+            ultimo_error = f'HTTP {r.status_code}: {r.text[:200]}'
+        ultimo_error = ultimo_error[:400]
+    return None, ultimo_error
+
+
+def diagnosticar_token(access_token, timeout=4):
+    """GET /me con el token: dice a qué página/cuenta pertenece y si sigue
+    vivo. Complemento del error 100 al pedir un PSID — distingue 'token de
+    otra página / token muerto' de 'falta de permisos de la app'."""
+    if not access_token:
+        return 'sin access_token configurado'
+    try:
+        r = requests.get(
+            build_graph_url('/me'),
+            params={'access_token': access_token, 'fields': 'id,name'},
+            timeout=timeout,
+        )
+    except Exception as e:
+        return f'no se pudo verificar el token: {e}'
+    if r.status_code == 200:
+        data = r.json()
+        return f"token válido, pertenece a: {data.get('name', '?')} (id {data.get('id', '?')})"
+    try:
+        err = (r.json().get('error') or {})
+        return f"token inválido — código {err.get('code')}: {err.get('message', '')}"[:300]
+    except Exception:
+        return f'token inválido — HTTP {r.status_code}'
+
+
+def obtener_perfil_usuario_messenger(config_fb, psid, timeout=4):
+    """User Profile API de Messenger para un PSID.
+
+    Messenger solo expone nombre y foto del usuario (`first_name`, `last_name`,
+    `profile_pic`) — NO hay username, email ni teléfono en esta API.
+    Devuelve dict {'ok', 'error', 'nombre', 'username', 'foto', 'raw'}.
+    """
+    if not (config_fb and config_fb.access_token and psid):
+        return {'ok': False, 'error': 'Sin ConfigMessenger/access_token o PSID vacío.',
+                'nombre': '', 'username': '', 'foto': '', 'raw': {}}
+    data, error = _graph_get_usuario(
+        config_fb.access_token, psid,
+        ('first_name,last_name,profile_pic', 'name,profile_pic'),
+        timeout=timeout,
+    )
+    if not data:
+        # Fallback: con la app en modo desarrollo / sin Advanced Access de
+        # pages_messaging, GET /{psid} devuelve 100.33 para usuarios sin rol
+        # en la app. El endpoint de Conversations de la página sí expone el
+        # nombre del participante con acceso estándar.
+        nombre_conv = _nombre_desde_conversations(config_fb, psid, timeout=timeout)
+        if nombre_conv:
+            return {
+                'ok':       True,
+                'error':    '',
+                'nombre':   nombre_conv,
+                'username': '',
+                'foto':     '',
+                'raw':      {'name': nombre_conv, 'fuente': 'conversations_fallback'},
+            }
+        return {'ok': False, 'error': error, 'nombre': '', 'username': '', 'foto': '', 'raw': {}}
+    nombre = (data.get('name')
+              or ' '.join(x for x in (data.get('first_name'), data.get('last_name')) if x)).strip()
+    return {
+        'ok':       True,
+        'error':    '',
+        'nombre':   nombre,
+        'username': '',
+        'foto':     data.get('profile_pic') or '',
+        'raw':      data,
+    }
+
+
+def _nombre_desde_conversations(config_fb, psid, timeout=4):
+    """GET /{page_id}/conversations?user_id={psid}&fields=participants — devuelve
+    el nombre del participante que no es la página, o '' si no se pudo."""
+    try:
+        r = requests.get(
+            build_graph_url(f'/{config_fb.page_id}/conversations'),
+            params={
+                'access_token': config_fb.access_token,
+                'user_id': psid,
+                'fields': 'participants',
+            },
+            timeout=timeout,
+        )
+    except Exception:
+        return ''
+    if r.status_code != 200:
+        return ''
+    try:
+        for conv in (r.json().get('data') or []):
+            for p in ((conv.get('participants') or {}).get('data') or []):
+                if str(p.get('id')) == str(psid) and p.get('name'):
+                    return p['name'].strip()
+                if str(p.get('id')) != str(config_fb.page_id) and p.get('name'):
+                    return p['name'].strip()
+    except Exception:
+        return ''
+    return ''
+
+
+def obtener_perfil_usuario_instagram(config_ig, igsid, timeout=4):
+    """User Profile API de Instagram Messaging para un IGSID.
+
+    Expone `name`, `username`, `profile_pic` y (según permisos de la app)
+    `follower_count`, `is_user_follow_business`, `is_business_follow_user`.
+    NO hay email ni teléfono. Si el set completo falla (permisos), reintenta
+    con el set mínimo. Devuelve dict {'ok', 'error', 'nombre', 'username', 'foto', 'raw'}.
+    """
+    if not (config_ig and config_ig.access_token and igsid):
+        return {'ok': False, 'error': 'Sin ConfigInstagram/access_token o IGSID vacío.',
+                'nombre': '', 'username': '', 'foto': '', 'raw': {}}
+    data, error = _graph_get_usuario(
+        config_ig.access_token, igsid,
+        ('name,username,profile_pic,follower_count,is_user_follow_business,is_business_follow_user',
+         'name,username,profile_pic'),
+        timeout=timeout,
+    )
+    if not data:
+        return {'ok': False, 'error': error, 'nombre': '', 'username': '', 'foto': '', 'raw': {}}
+    username = data.get('username') or ''
+    nombre = (data.get('name') or '').strip()
+    if nombre and username:
+        nombre = f'{nombre} (@{username})'
+    elif username:
+        nombre = f'@{username}'
+    return {
+        'ok':       True,
+        'error':    '',
+        'nombre':   nombre,
+        'username': username,
+        'foto':     data.get('profile_pic') or '',
+        'raw':      data,
+    }
+
+
 def sincronizar_meta_desde_graph(session, config, timeout=10):
     """Consulta Graph API con `config.access_token + phone_number_id` y persiste
     `display_phone_number` / `quality_rating` / `messaging_limit_tier` /

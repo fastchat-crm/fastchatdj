@@ -17,8 +17,8 @@ Endpoints cubiertos:
     POST /whatsapp/webhook_handler/batch/      (Baileys batch)
     GET  /whatsapp/meta_webhook/               (Meta handshake)
     POST /whatsapp/meta_webhook/               (Meta evento)
-    POST /whatsapp/instagram_webhook/          (Instagram DM)
-    POST /whatsapp/messenger_webhook/          (Messenger)
+    POST /instagram/webhook/                   (Instagram DM)
+    POST /facebook/webhook/                     (Messenger)
     POST /whatsapp/conversaciones/             (saliente: action=send)
 """
 import hashlib
@@ -401,7 +401,7 @@ def meta_ctwa_referral():
 
 
 def instagram_webhook():
-    url = f"{BASE_URL}/whatsapp/instagram_webhook/"
+    url = f"{BASE_URL}/instagram/webhook/"
     payload = {
         "object": "instagram",
         "entry": [{
@@ -426,7 +426,7 @@ def instagram_webhook():
 
 
 def messenger_webhook():
-    url = f"{BASE_URL}/whatsapp/messenger_webhook/"
+    url = f"{BASE_URL}/facebook/webhook/"
     payload = {
         "object": "page",
         "entry": [{

@@ -1,0 +1,48 @@
+.vd-card {
+    border: 1px solid #e5e7eb;
+    border-radius: .5rem;
+    padding: .6rem .75rem;
+    margin-bottom: .6rem;
+    background: #fff;
+}
+
+.vd-nombre {
+    font-weight: 600;
+    font-size: .9rem;
+    word-break: break-all;
+}
+
+.vd-estado {
+    font-size: .78rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.vd-ok { color: #16a34a; }
+.vd-warn { color: #d97706; }
+.vd-err { color: #dc2626; }
+.vd-info { color: #2563eb; }
+
+.vd-errtext {
+    color: #b91c1c;
+    word-break: break-word;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.vd-preview {
+    margin-top: .5rem;
+    max-height: 260px;
+    overflow: auto;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: .4rem;
+    padding: .6rem;
+    font-size: .78rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.vd-toggle {
+    font-size: .8rem;
+    text-decoration: none;
+}

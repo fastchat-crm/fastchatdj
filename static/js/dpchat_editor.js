@@ -948,17 +948,21 @@
         var qEl = $('#dp-filter-q');
         var ftEl = $('#dp-filter-fulltext');
         var tipoEl = $('#dp-filter-tipo');
+        var funcionEl = $('#dp-filter-funcion');
         if (!qEl || !tipoEl) return;
         var q = (qEl.value || '').toLowerCase().trim();
         var qFull = (ftEl && ftEl.value || '').toLowerCase().trim();
         var tipo = tipoEl.value || '';
+        var funcion = (funcionEl && funcionEl.value) || '';
         var cards = $$('.dp-node-card');
         var visibles = 0;
         cards.forEach(function (c) {
             var tipoNodo = c.getAttribute('data-tipo') || '';
+            var funcionNodo = c.getAttribute('data-funcion') || '';
             var nombre = (c.querySelector('.dp-node-title') || {}).textContent || '';
             var preview = (c.querySelector('.dp-node-preview') || {}).textContent || '';
             var matchTipo = !tipo || tipoNodo === tipo;
+            var matchFuncion = !funcion || funcionNodo === funcion;
             var matchTexto = !q ||
                 nombre.toLowerCase().indexOf(q) >= 0 ||
                 preview.toLowerCase().indexOf(q) >= 0;
@@ -974,7 +978,7 @@
                 }
                 matchFull = hay.indexOf(qFull) >= 0;
             }
-            var ok = matchTipo && matchTexto && matchFull;
+            var ok = matchTipo && matchFuncion && matchTexto && matchFull;
             c.classList.toggle('dp-hidden', !ok);
             if (ok) visibles++;
         });
@@ -1010,6 +1014,7 @@
         var q = $('#dp-filter-q');
         var ft = $('#dp-filter-fulltext');
         var tipo = $('#dp-filter-tipo');
+        var funcion = $('#dp-filter-funcion');
         var clear = $('#dp-filter-clear');
         if (q) q.addEventListener('input', aplicarFiltros);
         if (ft) ft.addEventListener('input', aplicarFiltros);
@@ -1017,10 +1022,12 @@
             aplicarFiltros();
             refrescarLegendCounts();
         });
+        if (funcion) funcion.addEventListener('change', aplicarFiltros);
         if (clear) clear.addEventListener('click', function () {
             if (q) q.value = '';
             if (ft) ft.value = '';
             if (tipo) tipo.value = '';
+            if (funcion) funcion.value = '';
             aplicarFiltros();
             refrescarLegendCounts();
         });

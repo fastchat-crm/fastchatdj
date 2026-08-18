@@ -538,9 +538,10 @@ def addData(request, data):
     # WEB PUSH
     webpush_settings = getattr(settings, 'WEBPUSH_SETTINGS', {})
     # ------FILTRO HECHOS EN LOS LISTADOS
+    from django.utils.html import escape as _escape_html
     data['dict_url_vars_input'] = mark_safe(
         '<input type="hidden" name="dict_url_vars" id="id_dict_url_vars" value="{}" />'.format(
-            request.GET.get('dict_url_vars') or ""))
+            _escape_html(request.GET.get('dict_url_vars') or "")))
     if request.GET.get('dict_url_vars'):
         try:
             dict_url_vars_completo = request.GET.get('dict_url_vars') or "{}"
@@ -586,8 +587,13 @@ def addData(request, data):
         if request.user.cambio_clave and request.path != '/changepass/':
             data['activar_cambio_clave'] = request.user.cambio_clave
         if not 'perfilprincipal' in request.session:
-            request.session['perfilprincipal'] = request.user.get_perfil_per()
-        data['perfilprincipal'] = request.session['perfilprincipal'] if 'perfilprincipal' in request.session else None
+            perfil_principal = request.user.get_perfil_per()
+            request.session['perfilprincipal'] = perfil_principal.id if perfil_principal else None
+        if request.session.get('perfilprincipal'):
+            from autenticacion.models import PerfilPersona
+            data['perfilprincipal'] = PerfilPersona.objects.filter(id=request.session['perfilprincipal']).first()
+        else:
+            data['perfilprincipal'] = None
         get_filtros_anteriores(request, data, None)
         data["fecha_session_expira"] = (request.session.model.objects.get(
             pk=request.session.session_key).expire_date - timezone.now()).seconds
@@ -705,8 +711,10 @@ def encrypt_sesion_id(pk):
 
 
 def decrypt_sesion_id(token, default=None):
-    """Inversa de encrypt_sesion_id. Si el token no parece firmado, intenta int() directo
-    (tolerante con tabs abiertas / links viejos en claro)."""
+    """Inversa de encrypt_sesion_id. Si el token no parece firmado, intenta int()
+    directo (tolerante con tabs abiertas / links viejos en claro). NOTA: el id de
+    sesión NO es secreto; la autorización real la hace `leer_sesion_id` validando
+    que la sesión resuelta sea visible para el usuario (evita IDOR)."""
     if token in (None, ''):
         return default
     if isinstance(token, int):
@@ -717,18 +725,62 @@ def decrypt_sesion_id(token, default=None):
             return int(valor)
         except (TypeError, ValueError):
             return default
-    # Fallback: id crudo
+    # Fallback: id crudo (uso interno legítimo: selector de sesión en el inbox)
     try:
         return int(token)
     except (TypeError, ValueError):
         return default
 
 
-def leer_sesion_id(request, default=None):
-    """Lee el id de sesión desde request.GET, probando 'sesion' y 'sesion_id'.
-    Soporta valor cifrado (nuevo) o crudo (legacy, durante rollout)."""
+WA_SESION_ACTIVA_KEY = 'wa_sesion_id'
+
+
+def leer_sesion_id(request, default=None, persistir=True):
+    """Resuelve el id de sesión activa para la request.
+
+    Prioridad:
+      1. Querystring 'sesion'/'sesion_id' (deep-link). Acepta token cifrado o
+         id crudo. Si viene, además fija la sesión global en request.session.
+      2. Selección global del usuario en request.session[WA_SESION_ACTIVA_KEY].
+         Valor 0/None significa "Todas las sesiones" → se devuelve default.
+    """
     raw = request.GET.get('sesion') or request.GET.get('sesion_id') or ''
-    return decrypt_sesion_id(raw, default=default)
+    sid = decrypt_sesion_id(raw, default=None)
+    if sid is not None:
+        # Autorización: solo se acepta/persiste un id de sesión que el usuario
+        # tenga permitido ver. Un id ajeno pasado en la URL se ignora (IDOR).
+        if _sesion_visible_para(request, sid):
+            if persistir and hasattr(request, 'session'):
+                request.session[WA_SESION_ACTIVA_KEY] = sid
+            return sid
+    if hasattr(request, 'session'):
+        gsid = request.session.get(WA_SESION_ACTIVA_KEY)
+        if gsid:
+            return gsid
+    return default
+
+
+def _sesion_visible_para(request, sid):
+    """True si la sesión WhatsApp `sid` es visible para el usuario de la request.
+    Best-effort: ante cualquier error o usuario anónimo, deniega."""
+    user = getattr(request, 'user', None)
+    if not user or not getattr(user, 'is_authenticated', False):
+        return False
+    try:
+        from whatsapp.permisos_sesion import sesiones_visibles
+        return sesiones_visibles(user).filter(id=sid).exists()
+    except Exception:
+        return False
+
+
+def set_wa_sesion_activa(request, sid):
+    """Fija la sesión global del usuario. sid entero válido, o 0 para 'Todas'."""
+    try:
+        sid = int(sid or 0)
+    except (TypeError, ValueError):
+        sid = 0
+    request.session[WA_SESION_ACTIVA_KEY] = sid
+    return sid
 
 
 def postFormJson(request, nombre_post_aud, Forms=(), link_listado='', varurl=""):
@@ -882,12 +934,50 @@ def formatear_nombres(cadena):
     return re.sub("\s+", " ", cadena.strip())
 
 
+_FILTROS_SEGUROS = {
+    'upper': lambda v: str(v).upper(),
+    'lower': lambda v: str(v).lower(),
+    'title': lambda v: str(v).title(),
+    'capfirst': lambda v: str(v)[:1].upper() + str(v)[1:],
+    'strip': lambda v: str(v).strip(),
+}
+
+
 def renderizar_texto_dinamico(template_str, variables_contexto):
-    from django.template import Template, Context
+    """Sustituye `{{ variable }}` y `{{ variable|filtro }}` en un texto editable
+    por staff (ej. body de mailing). NO usa el motor Django Template completo a
+    propósito: ese permite tags `{% %}`, acceso a métodos de los objetos del
+    contexto y filtros arbitrarios → SSTI / exfiltración de datos. Aquí solo se
+    resuelven variables planas del contexto con una whitelist de filtros."""
+    import re as _re
+
+    if not template_str:
+        return template_str or ''
+
+    def _resolver(nombre):
+        # Soporta acceso por punto sobre dicts/objetos simples del contexto.
+        valor = variables_contexto
+        for parte in str(nombre).split('.'):
+            if isinstance(valor, dict):
+                valor = valor.get(parte, '')
+            else:
+                valor = getattr(valor, parte, '')
+            if callable(valor):  # nunca invocamos métodos
+                return ''
+        return '' if valor is None else valor
+
+    def _sub(match):
+        expr = match.group(1).strip()
+        if '|' in expr:
+            nombre, _, filtro = expr.partition('|')
+            valor = _resolver(nombre.strip())
+            fn = _FILTROS_SEGUROS.get(filtro.strip())
+            return fn(valor) if fn else str(valor)
+        return str(_resolver(expr))
+
     try:
-        django_template = Template(template_str)
-        contexto = Context(variables_contexto)
-        return django_template.render(contexto)
+        # Solo {{ ... }} sin llaves/tags anidados; ignora cualquier {% %}.
+        return _re.sub(r'\{\{\s*([^{}%]+?)\s*\}\}', _sub, str(template_str))
     except Exception as e:
         return f"Error processing template: {e}"
 
@@ -971,6 +1061,31 @@ def logCron(proceso, detalle, exito=False):
             detalle=detalle,
             conexito=exito
         )
+        # Aviso por correo solo ante fallo (y solo cuando es un log nuevo, así la
+        # deduplicación de 3h evita spam). No agrega crons: es event-driven.
+        if not exito:
+            _notificar_fallo_cron(proceso, detalle)
+
+
+def _notificar_fallo_cron(proceso, detalle):
+    """Manda un correo a los responsables cuando un proceso/cron falla.
+    Best-effort: si el correo falla, no rompe el logueo del cron."""
+    try:
+        from django.conf import settings
+        from django.core.mail import send_mail
+        destinatarios = getattr(settings, 'CHATBOT_ERROR_NOTIFY_EMAILS', []) or []
+        if not destinatarios:
+            return
+        asunto = f'[fastchat] Falló el proceso: {proceso}'
+        cuerpo = (
+            f'El proceso "{proceso}" reportó un fallo.\n\n'
+            f'Detalle:\n{detalle}\n\n'
+            f'Fecha: {timezone.now():%Y-%m-%d %H:%M}\n\n'
+            f'Aviso automático. Se deduplica: máximo 1 correo cada 3h por el mismo error.'
+        )
+        send_mail(asunto, cuerpo, settings.DEFAULT_FROM_EMAIL, destinatarios, fail_silently=True)
+    except Exception:
+        pass
 
 
 def notificacion(titulo, cuerpo, destinatario, url, prioridad, tipo=1, request=None):

@@ -1,0 +1,34 @@
+{% extends 'public/landing/baselanding.html' %}
+
+{% block title %}{{ titulo }} · MensajerIA{% endblock %}
+
+{% block content %}
+
+<section class="legal">
+    <div class="wrap wrap-narrow">
+        <span class="section-eyebrow">Plataforma</span>
+        <h1 class="legal-title">Acerca de MensajerIA</h1>
+        <p class="legal-updated">Estado del servicio y qué hay detrás de la plataforma</p>
+
+        <div class="legal-card">
+            <h2>Qué es MensajerIA</h2>
+            <p>MensajerIA es un CRM omnicanal con inteligencia artificial: unifica WhatsApp, Instagram, Facebook Messenger y TikTok en una sola bandeja, con agentes IA entrenables, flujos visuales, secuencias automáticas, campañas segmentadas y un pipeline de ventas que reporta conversiones a Meta.</p>
+
+            <h2>Canales disponibles</h2>
+            <ul>
+                <li><b>WhatsApp</b> — API oficial de Meta (Cloud API) y conexión por QR en el mismo panel.</li>
+                <li><b>Instagram</b> — DMs, comentarios de publicaciones y reglas comentario→DM.</li>
+                <li><b>Facebook</b> — Messenger y comentarios del feed de tu página.</li>
+                <li><b>TikTok</b> — Business Messaging (beta): pre-registro hoy, activación al aprobarse tu cuenta.</li>
+            </ul>
+
+            <h2>Estado del servicio</h2>
+            <p>La plataforma opera 24/7 con monitoreo permanente de webhooks, sesiones y consumo de IA. Si detectas una interrupción o un comportamiento inesperado, escríbenos y nuestro equipo lo revisa con trazabilidad mensaje a mensaje.</p>
+
+            <h2>Contacto</h2>
+            <p>¿Dudas, soporte o una demo? Visita <a href="/quienes-somos/">Quiénes somos / Contacto</a> o solicita una demo desde la <a href="/#cta">página principal</a>.</p>
+        </div>
+    </div>
+</section>
+
+{% endblock %}

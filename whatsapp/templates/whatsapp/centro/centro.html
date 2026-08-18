@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+
+{% block head %}
+    <link rel="stylesheet" href="/static/css/whatsapp/centro.css?v1.0">
+{% endblock %}
+
+{% block content %}
+    <div class="container-fluid p-0">
+
+        <div class="centro-header">
+            <i class="{{ guia.icono }}"></i>
+            <div>
+                <h4 class="mb-1">{{ guia.titulo }}</h4>
+                <span class="text-muted">{{ guia.descripcion }}</span>
+            </div>
+        </div>
+
+        <div class="alert alert-info d-flex align-items-center gap-3 mb-4">
+            <i class="fa fa-route fa-2x"></i>
+            <div>
+                <strong>¿Cómo usar esta guía?</strong><br>
+                <small>
+                    Los módulos están ordenados por fases: sigue el orden de arriba hacia abajo la primera vez.
+                    <span class="badge bg-danger">Esencial</span> = sin esto el canal no opera ·
+                    <span class="badge bg-primary">Recomendado</span> = suma mucho apenas estés operando ·
+                    <span class="badge bg-secondary">Avanzado</span> = actívalo cuando el volumen lo pida.
+                </small>
+            </div>
+        </div>
+
+        {% for fase in guia.fases %}
+            <div class="centro-fase">
+                <div class="centro-fase-titulo">{{ fase.titulo }}</div>
+                <div class="centro-fase-desc">{{ fase.descripcion }}</div>
+                <div class="row g-3">
+                    {% for m in fase.modulos %}
+                        <div class="col-md-6 col-xl-4">
+                            <div class="card centro-card">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <span class="centro-icono"><i class="{{ m.icono }}"></i></span>
+                                        {% if m.nivel == 'esencial' %}
+                                            <span class="badge bg-danger">Esencial</span>
+                                        {% elif m.nivel == 'recomendado' %}
+                                            <span class="badge bg-primary">Recomendado</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Avanzado</span>
+                                        {% endif %}
+                                    </div>
+                                    <h6 class="mb-0">{{ m.nombre }}</h6>
+                                    <div><small>{{ m.para_que }}</small></div>
+                                    <div class="centro-cuando"><strong>Cuándo:</strong> {{ m.cuando }}</div>
+                                    <div class="mt-auto pt-2">
+                                        <a href="{{ m.url }}" class="btn btn-sm btn-primary">
+                                            Abrir módulo <i class="fa fa-arrow-right ms-1"></i>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% endblock %}

@@ -52,7 +52,7 @@ def process_incoming_message(session, event_data, channel_layer):
         if not getattr(session, 'activo', True):
             return JsonResponse({'status': 'ok', 'session_inactive': True})
 
-        print('process_incoming_message', event_data)
+        logger.debug('process_incoming_message %s', event_data)
         # Extraer datos del mensaje
         message_id = event_data.get('id')
         from_number = event_data.get('from')
@@ -77,7 +77,7 @@ def process_incoming_message(session, event_data, channel_layer):
             return
 
         # Buscar o crear la conversación
-        contacto, _ = Contacto.objects.get_or_create(
+        contacto, contacto_es_nuevo = Contacto.objects.get_or_create(
             sesion=session, from_number=from_number
         )
         contacto.estado = 'activo'
@@ -132,6 +132,22 @@ def process_incoming_message(session, event_data, channel_layer):
 
         contacto.save()
 
+        # Automatizaciones: un contacto nuevo puede disparar acciones (etiquetar,
+        # asignar, dar la bienvenida por correo). `disparar` no ejecuta nada de
+        # forma síncrona — crea la ejecución y el cron la procesa —, así que no
+        # agrega latencia al webhook ni puede romperlo.
+        if contacto_es_nuevo:
+            from automatizacion.motor import disparar
+            from automatizacion.models import EVENTO_CONTACTO_CREADO
+            disparar(EVENTO_CONTACTO_CREADO, {
+                'contacto_id': contacto.id,
+                'contacto_nombre': contacto.contacto_nombre or '',
+                'numero': contacto.contacto_numero or '',
+                'canal': contacto.canal or '',
+                'sesion_id': session.id,
+                'sesion': session.nombre or '',
+            })
+
         # Determinar el tipo de mensaje y su contenido
         message_type = 'texto'
         message_text = ''
@@ -181,13 +197,40 @@ def process_incoming_message(session, event_data, channel_layer):
                 if detected_media_key == 'stickerMessage' and not filename.lower().endswith('.png'):
                     filename = f'{filename}.png'
                 file_url = save_media_file(media_data, filename)
+                if media_data and file_url is None:
+                    # La decodificación del adjunto falló: sin esta traza el
+                    # mensaje quedaba como "imagen"/"documento" sin archivo y
+                    # sin ninguna señal de error (media perdida en silencio).
+                    logger.error(
+                        "Media no decodificable de %s tipo=%s filename=%s — mensaje sin adjunto",
+                        from_number, type_name, filename,
+                    )
+                    try:
+                        _traza(
+                            etapa='error_general', sesion=session, numero=from_number,
+                            nivel='error',
+                            detalle=f'Adjunto {type_name} no decodificable (filename={filename}); mensaje sin archivo.',
+                        )
+                    except Exception:
+                        pass
 
         # Actualizar la conversación con el último mensaje
         contacto.ultimo_mensaje = message_text[:100] + ('...' if len(message_text) > 100 else '')
         contacto.fecha_ultimo_mensaje = message_date
         contacto.save()
 
-        # Guard de idempotencia: si ya procesamos este mensaje_id, no duplicar
+        # Guard de idempotencia en dos capas. Meta y Baileys REENVÍAN webhooks
+        # (reintentos, reconexiones): sin esto la IA responde dos veces y cobra
+        # tokens dobles.
+        # Capa 1 — candado atómico en cache (SET NX, TTL 60s): cierra la carrera
+        # de dos entregas simultáneas del mismo mensaje, que pasan ambas el
+        # .exists() antes de que ninguna guarde. TTL corto a propósito: si el
+        # procesamiento falla antes de guardar, el reintento de Meta debe poder
+        # procesarse — los duplicados tardíos los frena la capa 2.
+        if message_id and not cache.add(f'msg_dedup_{session.id}_{message_id}', 1, 60):
+            logger.warning(f"Mensaje duplicado ignorado (candado cache): {message_id}")
+            return
+        # Capa 2 — respaldo en BD para reenvíos tardíos (minutos u horas después).
         if message_id and MensajeWhatsApp.objects.filter(
             mensaje_id_externo=message_id, conversacion__contacto__sesion=session
         ).exists():
@@ -196,6 +239,11 @@ def process_incoming_message(session, event_data, channel_layer):
 
         try:
             conversation, created = ConversacionWhatsApp.obtener_o_crear_activa(contacto)
+            # `order` (orden del inbox, -order) se recalcula DENTRO de save()
+            # desde contacto.fecha_ultimo_mensaje (recién actualizado arriba).
+            # Sin este save las conversaciones existentes no suben al tope al
+            # recibir mensajes: obtener_o_crear_activa retorna sin guardar.
+            conversation.save(update_fields=['order'])
             if created:
                 logger.info("Nueva conversación creada #%s para contacto %s", conversation.id, contacto.id)
                 # Hereda canal del contacto
@@ -249,11 +297,88 @@ def process_incoming_message(session, event_data, channel_layer):
             )
             raise
 
-        # Renovar ventana de expiración con cada mensaje entrante del cliente
+        # Renovar ventana de expiración con cada mensaje entrante del cliente.
+        # min_sesion == 0 → sin cierre automático (fecha_hora_expira=None):
+        # la conversación solo la termina el usuario o el cliente al reescribir
+        # tras un cierre manual.
+        # Se pone True si el cliente respondió a una plantilla de reconexión
+        # enviada sobre una conversación caducada (bot tradicional/híbrido): tras
+        # persistir el entrante, reiniciamos el flujo del bot desde nodo_inicio.
+        _auto_reiniciar_flujo = False
         if from_number != session.numero:  # sólo mensajes del cliente
-            min_sesion = int(getattr(session, 'min_sesion', None) or 10)
-            conversation.fecha_hora_expira = timezone.now() + timedelta(minutes=min_sesion)
-            conversation.save(update_fields=['fecha_hora_expira'])
+            min_sesion = int(getattr(session, 'min_sesion', None) or 0)
+            conversation.fecha_hora_expira = (
+                timezone.now() + timedelta(minutes=min_sesion)
+            ) if min_sesion > 0 else None
+            campos_conv = ['fecha_hora_expira']
+            # El cliente respondió: habilitar de nuevo el nudge de reconexión.
+            if getattr(conversation, 'reconexion_enviada', False):
+                conversation.reconexion_enviada = False
+                campos_conv.append('reconexion_enviada')
+            # El agente mandó una plantilla de reconexión a una caducada y el
+            # cliente respondió: reactivar el bot y reiniciar el flujo (el
+            # ai_activo=False lo dejó el envío de la plantilla, no un humano).
+            if getattr(conversation, 'reiniciar_flujo_al_responder', False) \
+                    and (session.modo_bot or '') in ('tradicional', 'hibrido'):
+                conversation.reiniciar_flujo_al_responder = False
+                campos_conv.append('reiniciar_flujo_al_responder')
+                if not conversation.ai_activo:
+                    conversation.ai_activo = True
+                    campos_conv.append('ai_activo')
+                _auto_reiniciar_flujo = True
+                _traza(
+                    etapa='webhook_recibido', sesion=session, conversacion=conversation,
+                    numero=from_number, nivel='info',
+                    detalle={'accion': 'reinicio_flujo_por_reconexion', 'bot_reactivado': True},
+                )
+            # El asesor la marcó RESUELTA y el cliente volvió a escribir:
+            # se reabre y el bot retoma la palabra (el ai_activo=False que
+            # dejó el asesor al responder ya cumplió su función). Si el
+            # cliente necesita humano, el flujo hará handoff de nuevo.
+            if getattr(conversation, 'estado_atencion', '') == 'resuelta':
+                conversation.estado_atencion = 'abierta'
+                campos_conv.append('estado_atencion')
+                if not conversation.ai_activo:
+                    conversation.ai_activo = True
+                    campos_conv.append('ai_activo')
+                _traza(
+                    etapa='webhook_recibido', sesion=session, conversacion=conversation,
+                    numero=from_number, nivel='info',
+                    detalle={'accion': 'reabierta_por_cliente_tras_resuelta', 'bot_reactivado': True},
+                )
+            # El cliente reaparece tras un silencio largo con el bot apagado.
+            # El ai_activo=False lo dejó un asesor al atender, pero eso fue hace
+            # rato: la conversación ya caducó o se cerró y nadie está mirando.
+            # Sin esto el cliente que vuelve días después queda en silencio
+            # total, esperando a un asesor que ya dio el caso por terminado.
+            #
+            # Se mide contra el ÚLTIMO mensaje ya guardado (el entrante actual
+            # todavía no se creó, se crea más abajo). No sirve
+            # `contacto.fecha_ultimo_mensaje`: ya se actualizó a este mensaje.
+            if not conversation.ai_activo:
+                horas_reactivar = int(getattr(session, 'horas_reactivar_bot', None) or 0)
+                if horas_reactivar > 0:
+                    fecha_previa = (
+                        MensajeWhatsApp.objects
+                        .filter(conversacion=conversation)
+                        .order_by('-fecha')
+                        .values_list('fecha', flat=True)
+                        .first()
+                    )
+                    silencio = timezone.now() - fecha_previa if fecha_previa else None
+                    if silencio is not None and silencio >= timedelta(hours=horas_reactivar):
+                        conversation.ai_activo = True
+                        campos_conv.append('ai_activo')
+                        _traza(
+                            etapa='webhook_recibido', sesion=session, conversacion=conversation,
+                            numero=from_number, nivel='info',
+                            detalle={
+                                'accion': 'bot_reactivado_por_inactividad',
+                                'horas_silencio': round(silencio.total_seconds() / 3600, 1),
+                                'umbral_horas': horas_reactivar,
+                            },
+                        )
+            conversation.save(update_fields=campos_conv)
 
         # Crear el mensaje
         message = MensajeWhatsApp.objects.create(
@@ -315,6 +440,141 @@ def process_incoming_message(session, event_data, channel_layer):
 
         transaction.on_commit(_broadcast_message_events)
 
+        # Reinicio de flujo por reconexión: el cliente respondió a la plantilla
+        # que el agente envió sobre una conversación caducada. Reiniciamos el
+        # flujo tradicional desde nodo_inicio (menú de bienvenida) en vez de
+        # dejar que el motor procese el texto suelto del cliente en el nodo
+        # donde había quedado. Corta el pipeline normal del bot.
+        if _auto_reiniciar_flujo:
+            try:
+                from crm.motor_flujo_chatbot import reiniciar_flujo_tradicional
+                _res_reinicio = reiniciar_flujo_tradicional(conversation)
+                _err_reinicio = getattr(_res_reinicio, 'error', None)
+                _n_reinicio = len(getattr(_res_reinicio, 'respuestas', []) or [])
+                _traza(
+                    etapa='motor_flujo', sesion=session, conversacion=conversation, mensaje=message,
+                    numero=from_number, nivel=('error' if _err_reinicio else 'info'),
+                    detalle={
+                        'accion': 'reinicio_flujo_por_reconexion',
+                        'respuestas': _n_reinicio,
+                        'error': _err_reinicio or '',
+                    },
+                )
+                if _err_reinicio:
+                    # Reinicio controlado que no pudo enviar (ventana Meta, Node
+                    # caído, sin departamento de entrada, etc.): queda registrado
+                    # en /whatsapp/trazas/ para diagnóstico del asesor.
+                    logger.warning(
+                        'Reinicio flujo por reconexión conv=%s NO envió: %s',
+                        conversation.id, _err_reinicio,
+                    )
+                else:
+                    logger.info(
+                        'Reinicio flujo por reconexión conv=%s OK (%s mensaje/s)',
+                        conversation.id, _n_reinicio,
+                    )
+            except Exception as _ex_reinicio:
+                logger.exception('Auto-reinicio de flujo falló conv=%s: %s',
+                                 conversation.id, _ex_reinicio)
+                _traza(
+                    etapa='error_general', sesion=session, conversacion=conversation, mensaje=message,
+                    numero=from_number, nivel='error',
+                    detalle={
+                        'accion': 'reinicio_flujo_por_reconexion',
+                        'error': f'{type(_ex_reinicio).__name__}: {str(_ex_reinicio)[:500]}',
+                    },
+                )
+            return JsonResponse({'status': 'ok', 'modo': 'reinicio_flujo_por_reconexion'})
+
+        if from_number != session.numero:
+            _contact_label = (
+                getattr(contacto, 'contacto_nombre', None)
+                or getattr(contacto, 'contacto_numero', None)
+                or from_number
+                or 'Contacto'
+            )
+            _preview = (message_text or '').strip()[:120]
+            _sesion_label = (
+                getattr(session, 'nombre', None)
+                or getattr(session, 'numero', None)
+                or 'WhatsApp'
+            )
+            _push_url = '/whatsapp/conversaciones/'
+            _is_new_conv = bool(created)
+
+            def _push_to_team():
+                throttle_key = f'wa_push_throttle_{_conv_id}'
+                if not _is_new_conv and cache.get(throttle_key):
+                    return
+                try:
+                    from pwa.notificaciones import enviar_push_usuario
+                except Exception:
+                    return
+                from .models import ConversacionWhatsApp, PerfilSesionWhatsApp
+                from autenticacion.models import Usuario
+                targets = set()
+                if _is_new_conv:
+                    # Conversación nueva: avisar al dueño de la sesión + equipo
+                    # (una sola vez por conversación).
+                    if session.usuario_id:
+                        targets.add(session.usuario_id)
+                    try:
+                        team_ids = list(
+                            PerfilSesionWhatsApp.objects
+                            .filter(sesion_id=session.id, status=True,
+                                    usuario__status=True, usuario__is_active=True)
+                            .values_list('usuario_id', flat=True)
+                        )
+                        targets.update(team_ids)
+                    except Exception:
+                        logger.exception('Push: error fetching team for sesion=%s', session.id)
+                else:
+                    # Mensaje en conversación existente: push SOLO al asesor
+                    # asignado — el resto del equipo ya no recibe push por cada
+                    # mensaje. Sin asignado no se pushea: el bot atiende y el
+                    # handoff dispara su propia notificación de asignación
+                    # (crm.helpers_asignacion.notificar_agente_asignado).
+                    # Se relee de BD porque la asignación pudo ocurrir en este
+                    # mismo request después de capturar la closure.
+                    asignado_id = (
+                        ConversacionWhatsApp.objects
+                        .filter(pk=_conv_id)
+                        .values_list('asignado_a_id', flat=True)
+                        .first()
+                    )
+                    if asignado_id:
+                        targets.add(asignado_id)
+                if not targets:
+                    return
+                if _is_new_conv:
+                    head = f'Nueva conversación · {_sesion_label}'
+                    tag = f'wa-newconv-{_conv_id}'
+                    tipo = 'wa.conversacion.nueva'
+                else:
+                    head = f'Nuevo mensaje · {_sesion_label}'
+                    tag = f'wa-msg-{_conv_id}'
+                    tipo = 'wa.mensaje.nuevo'
+                body = f'{_contact_label}: {_preview}' if _preview else _contact_label
+                for u in Usuario.objects.filter(id__in=targets):
+                    try:
+                        enviar_push_usuario(
+                            u,
+                            head=head,
+                            body=body,
+                            url=_push_url,
+                            tag=tag,
+                            extra={
+                                'tipo': tipo,
+                                'sesion_id': _session_id,
+                                'conversacion_id': _conv_id,
+                            },
+                        )
+                    except Exception:
+                        logger.exception('Push failed user=%s conv=%s', u.id, _conv_id)
+                cache.set(throttle_key, 1, 30)
+
+            transaction.on_commit(_push_to_team)
+
         # ── Cortar envío si Node ya nos avisó que está rate-limited ──
         # Evita amplificar la saturación enviando bienvenida/IA/avisos durante la ventana.
         _rate_info = cache.get(f'wa_rate_limited_{session.id}')
@@ -343,6 +603,21 @@ def process_incoming_message(session, event_data, channel_layer):
             return JsonResponse({'status': 'ok', 'rate_limited': True, 'retry_after_s': _retry_s})
 
         whatsapp_service = get_whatsapp_service(session)
+
+        # ── GUARD: opt-out (BAJA/STOP) — respetar de inmediato, sin pasar por el bot ──
+        try:
+            from .opt_out import procesar_mensaje_entrante as _procesar_opt_out
+            _resultado_baja = _procesar_opt_out(contacto, message_text or '', whatsapp_service, session)
+            if _resultado_baja:
+                _traza(
+                    etapa='webhook_recibido', sesion=session, conversacion=conversation,
+                    mensaje=message, numero=from_number, nivel='warning',
+                    detalle={'opt_out': _resultado_baja, 'texto': (message_text or '')[:80]},
+                )
+                return JsonResponse({'status': 'ok', 'opt_out': _resultado_baja})
+        except Exception:
+            logger.exception("Guard opt-out falló (continúa flujo normal)")
+
         primer_mensaje = not conversation.bienvenida_enviado
         numero_opcion_respondido = (message_text or '').replace(' ', '')
         numero_opcion_respondido = numero_opcion_respondido.isdigit() and numero_opcion_respondido or -1
@@ -370,10 +645,17 @@ def process_incoming_message(session, event_data, channel_layer):
             logger.warning("Guard horario falló (continúa flujo normal): %s", _h_ex)
         # ─────────────────────────────────────────────────────────────────
 
-        _ia_activa = bool(session.agente_ia and session.agente_ia.apikey.filter(estado=True).exists())
-        if not conversation.bienvenida_enviado:
+        _ia_activa = bool(session.agente_ia and session.agente_ia.apikey.filter(estado=True, status=True).exists())
+        # Claim atómico anti doble-bienvenida: dos mensajes del cliente en ráfaga
+        # (IDs distintos, ambos pasan el dedup) leían bienvenida_enviado=False a
+        # la vez y ambos enviaban. El UPDATE condicional solo deja pasar a uno.
+        _claim_bienvenida = (
+            ConversacionWhatsApp.objects
+            .filter(pk=conversation.pk, bienvenida_enviado=False)
+            .update(bienvenida_enviado=True)
+        )
+        if _claim_bienvenida:
             conversation.bienvenida_enviado = True
-            conversation.save()
             if conversation.sesion.mensaje_bienvenida:
                 whatsapp_service.send_text_message(conversation.sesion.session_id, contacto.from_number, conversation.sesion.mensaje_bienvenida, simularEscritura=True)
 
@@ -400,7 +682,7 @@ def process_incoming_message(session, event_data, channel_layer):
         # Log diagnóstico cuando la IA no está activa — ayuda a detectar cambios de agente sin keys
         if not _ia_activa and session.agente_ia:
             _keys_total = session.agente_ia.apikey.count()
-            _keys_activas = session.agente_ia.apikey.filter(estado=True).count()
+            _keys_activas = session.agente_ia.apikey.filter(estado=True, status=True).count()
             logger.warning(
                 "Sesión %s: agente '%s' (id=%s) tiene %d/%d API Keys activas — IA desactivada",
                 session.session_id, session.agente_ia.nombre, session.agente_ia.id,
@@ -434,6 +716,55 @@ def process_incoming_message(session, event_data, channel_layer):
                     pass
 
         # ────────────────────────────────────────────────────────────
+        # Secuencias drip: el contacto escribió → salir de las secuencias
+        # con salir_al_responder=True (un UPDATE, no corta el pipeline).
+        # ────────────────────────────────────────────────────────────
+        try:
+            from .funciones_secuencias import cancelar_por_respuesta
+            cancelar_por_respuesta(contacto)
+        except Exception as _ex_seq:
+            logger.exception("Salida de secuencias por respuesta falló: %s", _ex_seq)
+
+        # ────────────────────────────────────────────────────────────
+        # Growth links: si el texto trae (ref: codigo) de un enlace de
+        # captación, aplica etiqueta/secuencia. Corre DESPUÉS de la salida
+        # de secuencias para que este mismo mensaje no cancele lo que el
+        # enlace acaba de inscribir. Con respuesta fija corta el pipeline.
+        # ────────────────────────────────────────────────────────────
+        if message_type == 'texto' and message_text:
+            try:
+                from .funciones_growth import procesar_growth_link
+                _resp_growth = procesar_growth_link(contacto, message_text)
+            except Exception as _ex_growth:
+                logger.exception("Growth link falló (continúa flujo normal): %s", _ex_growth)
+                _resp_growth = None
+            if _resp_growth:
+                whatsapp_service.send_text_message(
+                    conversation.sesion.session_id, contacto.from_number,
+                    _resp_growth, simularEscritura=True,
+                )
+                return JsonResponse({'status': 'ok', 'modo': 'growth_link'})
+
+        # ────────────────────────────────────────────────────────────
+        # Respuesta a recordatorio de turno (confirmar/cancelar).
+        # Captura determinista SIN tokens LLM: el recordatorio del cron
+        # promete estas palabras y deben funcionar con cualquier modo_bot.
+        # ────────────────────────────────────────────────────────────
+        if message_type == 'texto' and message_text:
+            _resp_turno = None
+            try:
+                from agenda.respuestas_recordatorio import procesar_respuesta_recordatorio
+                _resp_turno = procesar_respuesta_recordatorio(contacto, message_text)
+            except Exception as _ex_turno:
+                logger.exception("Respuesta a recordatorio falló (continúa flujo normal): %s", _ex_turno)
+            if _resp_turno:
+                whatsapp_service.send_text_message(
+                    conversation.sesion.session_id, contacto.from_number,
+                    _resp_turno, simularEscritura=True,
+                )
+                return JsonResponse({'status': 'ok', 'modo': 'respuesta_recordatorio'})
+
+        # ────────────────────────────────────────────────────────────
         # Motor del chatbot TRADICIONAL (flujo/API, estilo n8n).
         # Se activa SÓLO si la sesión lo pide por su `modo_bot`. No
         # interfiere con el pipeline IA: si no maneja el mensaje y el
@@ -447,7 +778,7 @@ def process_incoming_message(session, event_data, channel_layer):
                 detalle={'modo_bot': 'ninguno', 'accion': 'mensaje_guardado_sin_respuesta'},
             )
             return JsonResponse({'status': 'ok', 'modo': 'ninguno', 'sin_respuesta': True})
-        if _modo_bot == 'tradicional':
+        if _modo_bot in ('tradicional', 'hibrido'):
             if not conversation.ai_activo:
                 _traza(
                     etapa='motor_flujo_pausado', sesion=session, conversacion=conversation, mensaje=message,
@@ -459,7 +790,7 @@ def process_incoming_message(session, event_data, channel_layer):
                         'motivo': 'bot_pausado_por_asesor_humano',
                     },
                 )
-                return JsonResponse({'status': 'ok', 'modo': 'tradicional_pausado'})
+                return JsonResponse({'status': 'ok', 'modo': f'{_modo_bot}_pausado'})
             _ex_motor = None
             try:
                 from crm.motor_flujo_chatbot import procesar_mensaje_tradicional
@@ -492,10 +823,19 @@ def process_incoming_message(session, event_data, channel_layer):
 
             # El motor manejó la conversación → cortar aquí.
             if _res_motor and (_res_motor.manejado or _res_motor.handoff or _res_motor.finalizado):
-                return JsonResponse({'status': 'ok', 'modo': 'tradicional'})
+                return JsonResponse({'status': 'ok', 'modo': _modo_bot})
 
             # Modo tradicional puro: sin match → no delegamos a IA.
-            return JsonResponse({'status': 'ok', 'modo': 'tradicional_sin_match'})
+            if _modo_bot == 'tradicional':
+                return JsonResponse({'status': 'ok', 'modo': 'tradicional_sin_match'})
+
+            # Modo híbrido: sin match en el flujo → cae al pipeline IA de abajo.
+            _traza(
+                etapa='hibrido_fallback_ia', sesion=session, conversacion=conversation, mensaje=message,
+                numero=from_number, nivel='info',
+                detalle={'modo_bot': 'hibrido', 'accion': 'sin_match_delegado_a_ia',
+                         'fallback_ia_flag': bool(_res_motor and _res_motor.fallback_ia)},
+            )
 
         departamentos = conversation.sesion.departamentos.all().annotate(
             numero_opcion=Window(
@@ -509,7 +849,7 @@ def process_incoming_message(session, event_data, channel_layer):
             _traza(
                 etapa='agente_asignado', sesion=session, conversacion=conversation, mensaje=message,
                 numero=from_number, nivel='info',
-                detalle={'agente': agente.nombre, 'agente_id': agente.id, 'keys_activas': agente.apikey.filter(estado=True).count()},
+                detalle={'agente': agente.nombre, 'agente_id': agente.id, 'keys_activas': agente.apikey.filter(estado=True, status=True).count()},
             )
 
             # ── Detección de reintento ────────────────────────────────────
@@ -579,7 +919,7 @@ def process_incoming_message(session, event_data, channel_layer):
                 )
                 respuesta_enviada = False
                 resultado = None
-                _keys_activas_qs = agente.apikey.filter(estado=True)
+                _keys_activas_qs = agente.apikey.filter(estado=True, status=True)
                 if not _keys_activas_qs.exists():
                     _traza(
                         etapa='sin_respuesta', sesion=session, conversacion=conversation, mensaje=message,
@@ -620,6 +960,7 @@ def process_incoming_message(session, event_data, channel_layer):
                             detectar_fin=detectar_fin_llm,
                             perfil=agente.perfil,
                             agente=agente,
+                            base_url=(getattr(apikey, 'base_url', '') or None),
                         )
                         _traza(
                             etapa='llm_invocado', sesion=session, conversacion=conversation, mensaje=message,
@@ -638,6 +979,7 @@ def process_incoming_message(session, event_data, channel_layer):
                                 'preview': (resultado.respuesta or '')[:300],
                                 'tokens_total': getattr(resultado, 'tokens_total', 0),
                                 'apikey_id': apikey.id,
+                                'pesos_prompt': getattr(consultor, 'desglose_prompt', None) or None,
                             },
                         )
                         # ── Envío humanizado (burbujas + delays) ──────────────
@@ -704,7 +1046,19 @@ def process_incoming_message(session, event_data, channel_layer):
                                     es_automatico=True,
                                 )
                             except Exception:
-                                pass
+                                # El cliente ya recibió la burbuja; si el registro
+                                # local falla, dejamos traza en vez de tragar el
+                                # error en silencio (si no, el historial pierde el
+                                # mensaje y el echo del webhook puede duplicarlo).
+                                logger.exception(
+                                    "No se pudo persistir burbuja IA conv=%s (ya enviada al cliente)",
+                                    conversation.id,
+                                )
+                                _traza(
+                                    etapa='error_general', sesion=session, conversacion=conversation,
+                                    numero=from_number, nivel='error',
+                                    detalle='Fallo al persistir burbuja IA ya enviada al cliente',
+                                )
                             _previa = _burbuja
                         send_result = _ultimo_send
                         respuesta_enviada = True
@@ -806,8 +1160,18 @@ def process_incoming_message(session, event_data, channel_layer):
                 fin_detectado = fin_por_frase or (resultado is not None and resultado.fin_detectado)
                 if fin_detectado and regla_fin and respuesta_enviada:
                     try:
+                        # estado_conversacion=1 junto a conversacion_finalizada:
+                        # sin ambos, la conv queda en estado inconsistente
+                        # (finalizada=True, estado=0) → invisible en activas Y en
+                        # finalizadas, y el próximo mensaje crea una conv huérfana.
                         conversation.conversacion_finalizada = True
-                        conversation.save(update_fields=['conversacion_finalizada'])
+                        conversation.estado_conversacion = 1
+                        if conversation.fecha_fin_conversacion is None:
+                            conversation.fecha_fin_conversacion = timezone.now()
+                        conversation.save(update_fields=[
+                            'conversacion_finalizada', 'estado_conversacion',
+                            'fecha_fin_conversacion',
+                        ])
                         contexto_fin = {
                             'nombre_contacto': contacto.contacto_nombre or '',
                             'numero': contacto.contacto_numero or '',
@@ -945,8 +1309,69 @@ def process_incoming_message(session, event_data, channel_layer):
             pass
 
 
+# Adjuntos de IG/Messenger vienen del CDN de Meta. Restringimos la descarga a
+# esos hosts (anti-SSRF: la URL llega en el payload del webhook) y ponemos tope
+# de tamaño (anti-DoS por memoria).
+_META_CDN_HOSTS = ('fbcdn.net', 'fbsbx.com', 'cdninstagram.com')
+_MAX_MEDIA_BYTES = 25 * 1024 * 1024
+
+
+def _host_media_permitido(url):
+    from urllib.parse import urlparse
+    host = (urlparse(url).hostname or '').lower()
+    return any(host == d or host.endswith('.' + d) for d in _META_CDN_HOSTS)
+
+
+def _descargar_media_url(url, filename):
+    """Descarga los bytes de un adjunto entregado como URL (Instagram/Messenger
+    entregan la media por URL del CDN de Meta, no en base64).
+
+    Blindado: solo https a hosts del CDN de Meta, sin seguir redirects (evita
+    SSRF a servicios internos/metadata) y con tope de tamaño por streaming."""
+    try:
+        if not str(url).lower().startswith('https://'):
+            logger.warning("Media URL rechazada (no https): %s", str(url)[:120])
+            return None
+        if not _host_media_permitido(url):
+            logger.warning("Media URL rechazada (host fuera del CDN de Meta): %s", str(url)[:120])
+            return None
+        import mimetypes
+        import requests
+        with requests.get(url, timeout=20, stream=True, allow_redirects=False) as r:
+            r.raise_for_status()
+            clen = r.headers.get('content-length')
+            if clen and clen.isdigit() and int(clen) > _MAX_MEDIA_BYTES:
+                logger.warning("Media excede el tope (%s bytes): %s", clen, str(url)[:120])
+                return None
+            trozos = []
+            total = 0
+            for trozo in r.iter_content(8192):
+                total += len(trozo)
+                if total > _MAX_MEDIA_BYTES:
+                    logger.warning("Media supera el tope durante la descarga: %s", str(url)[:120])
+                    return None
+                trozos.append(trozo)
+            contenido = b''.join(trozos)
+        if '.' not in filename:
+            ctype = (r.headers.get('content-type') or '').split(';')[0].strip()
+            ext = mimetypes.guess_extension(ctype) if ctype else None
+            if ext:
+                filename = f'{filename}{ext}'
+        return ContentFile(contenido, filename)
+    except Exception as e:
+        logger.exception("No se pudo descargar media desde URL %s: %s", str(url)[:120], e)
+        return None
+
+
 def save_media_file(media_base64, filename):
     try:
+        # Instagram/Messenger entregan el adjunto como URL (dict {'url': ...})
+        # en vez de base64: se descargan los bytes del CDN de Meta y se guardan
+        # igual que el resto. Antes reventaba en b64decode y la media se perdía.
+        if isinstance(media_base64, dict) and media_base64.get('url'):
+            return _descargar_media_url(media_base64['url'], filename)
+        if isinstance(media_base64, str) and media_base64.startswith(('http://', 'https://')):
+            return _descargar_media_url(media_base64, filename)
         file_data = base64.b64decode(media_base64)
         return ContentFile(file_data, filename)
     except Exception as e:

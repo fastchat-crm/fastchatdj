@@ -24,17 +24,31 @@ _DEFAULT_MODEL_BY_PROVIDER = {
     3: 'gpt-4o-mini',
     4: 'claude-haiku-4-5-20251001',
     5: 'gpt-oss:20b',
+    6: 'deepseek-chat',
+    7: 'DeepSeek-V3',
+    8: 'llama3.1',
 }
+
+
+def _construir_llm_prueba(filtro, modelo_test, max_tokens=10):
+    from agents_ai.providers import get_provider
+    try:
+        proveedor = get_provider(filtro.proveedor)
+    except ValueError:
+        proveedor = get_provider('openai')
+    return proveedor.get_llm(
+        apikey=filtro.descripcion,
+        model_name=modelo_test,
+        max_output_tokens=max_tokens,
+        temperature=0,
+        base_url=(getattr(filtro, 'base_url', '') or None),
+    )
 
 
 def _probar_apikey_simple(filtro):
     modelo_test = (filtro.modelo or '').strip() or _DEFAULT_MODEL_BY_PROVIDER.get(filtro.proveedor, 'gpt-4o-mini')
     try:
-        from agents_ai.providers import get_provider
-        llm = get_provider(filtro.proveedor).get_llm(
-            apikey=filtro.descripcion, model_name=modelo_test,
-            max_output_tokens=20, temperature=0,
-        )
+        llm = _construir_llm_prueba(filtro, modelo_test, max_tokens=10)
         _t0 = time.time()
         llm.invoke('Responde solo: ok')
         lat = int((time.time() - _t0) * 1000)
@@ -214,21 +228,29 @@ def entrenamiento_ia_view(request):
                 except (AgentesIA.DoesNotExist, KeyError, ValueError):
                     return JsonResponse({'error': True, 'message': 'Agente no encontrado.'})
                 _r = _idx.reindexar_agente(_ag)
+                _errores = _r.get('errores') or []
                 if _r.get('ok') and _r.get('indexados'):
                     _m = f"RAG actualizado: {_r.get('indexados')} fragmentos indexados."
+                    _err_flag = False
                 elif _r.get('necesita_gemini'):
-                    _m = "Agrega una API Key Gemini al perfil para activar los embeddings del RAG."
+                    _m = "Agrega una API Key Gemini activa al perfil para los embeddings del RAG."
+                    _err_flag = True
+                elif _errores:
+                    _m = "No se pudo indexar al RAG: " + (_errores[0].get('error') or 'error desconocido') + "."
+                    _err_flag = True
                 elif _r.get('ok'):
-                    _m = "Sin fragmentos nuevos (verifica que Weaviate esté activo y que las fuentes tengan texto)."
+                    _m = "Sin fragmentos nuevos: verifica que Weaviate esté activo y que las fuentes tengan texto."
+                    _err_flag = True
                 else:
                     _m = f"No se pudo indexar: {_r.get('error', 'error desconocido')}."
+                    _err_flag = True
                 try:
                     from agents_ai import weaviate_rag as _wv2
                     _fuentes = _wv2.resumen_fuentes(_ag.id)
                 except Exception:
                     _fuentes = []
                 return JsonResponse({
-                    'error': not _r.get('ok', False),
+                    'error': _err_flag,
                     'message': _m,
                     'indexados': _r.get('indexados', 0),
                     'total_tenant': _r.get('total_tenant'),
@@ -272,8 +294,23 @@ def entrenamiento_ia_view(request):
                 except Exception:
                     _fuentes = []
                 if _r.get('necesita_gemini'):
-                    return JsonResponse({'error': True, 'message': 'Documento subido, pero falta una API Key Gemini en el perfil para indexarlo al RAG.', 'fuentes': _fuentes})
-                return JsonResponse({'error': False, 'message': 'Documento "' + _f.name + '" subido e indexado.', 'total_tenant': _r.get('total_tenant'), 'fuentes': _fuentes})
+                    return JsonResponse({'error': True, 'message': 'Documento subido, pero falta una API Key Gemini activa en el perfil para indexarlo al RAG.', 'fuentes': _fuentes})
+                _errores = _r.get('errores') or []
+                if _errores:
+                    return JsonResponse({
+                        'error': True,
+                        'message': 'Documento "' + _f.name + '" subido, pero falló la indexación al RAG: ' + (_errores[0].get('error') or 'error desconocido') + '. El archivo quedó guardado; revísalo en "Ver data".',
+                        'total_tenant': _r.get('total_tenant'),
+                        'fuentes': _fuentes,
+                    })
+                if not _r.get('indexados'):
+                    return JsonResponse({
+                        'error': True,
+                        'message': 'Documento "' + _f.name + '" subido, pero no se indexó ningún fragmento. Verifica que Weaviate esté activo y que el archivo tenga texto extraíble (revísalo en "Ver data").',
+                        'total_tenant': _r.get('total_tenant'),
+                        'fuentes': _fuentes,
+                    })
+                return JsonResponse({'error': False, 'message': 'Documento "' + _f.name + '" subido e indexado (' + str(_r.get('indexados')) + ' fragmentos).', 'total_tenant': _r.get('total_tenant'), 'fuentes': _fuentes})
             try:
                 with transaction.atomic():
                     if action == 'addagente':
@@ -361,6 +398,156 @@ def entrenamiento_ia_view(request):
                         log(f"Elimino un agente {filtro.__str__()}", request, "del", obj=filtro.id)
                         messages.success(request, f"Registro Eliminado")
                         res_json = {"error": False}
+                    elif action == 'eval_pregunta_save':
+                        from crm.models import PreguntaEvaluacionAgente
+                        agente = AgentesIA.objects.get(pk=int(request.POST['agente_id']), perfil=perfil)
+                        texto_pregunta = (request.POST.get('pregunta') or '').strip()
+                        if not texto_pregunta:
+                            res_json.append({'error': True, 'message': 'La pregunta no puede estar vacía.'})
+                        else:
+                            PreguntaEvaluacionAgente.objects.create(
+                                agente=agente, pregunta=texto_pregunta,
+                                criterio=(request.POST.get('criterio') or '').strip(),
+                            )
+                            res_json.append({'error': False})
+                    elif action == 'eval_pregunta_delete':
+                        from crm.models import PreguntaEvaluacionAgente
+                        filtro = PreguntaEvaluacionAgente.objects.get(
+                            pk=int(request.POST['id']), agente__perfil=perfil)
+                        filtro.status = False
+                        filtro.save(request)
+                        res_json.append({'error': False})
+                    elif action == 'eval_ejecutar':
+                        agente = AgentesIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
+                        apikey_obj = agente.apikey.filter(estado=True, status=True).exclude(descripcion='').first()
+                        if not apikey_obj:
+                            res_json.append({'error': True, 'message': 'El agente no tiene una API Key activa.'})
+                        else:
+                            from crm.funciones_evaluacion_agente import ejecutar_evaluacion
+                            evaluacion = ejecutar_evaluacion(agente, apikey_obj)
+                            if evaluacion is None:
+                                res_json.append({'error': True, 'message': 'El agente no tiene preguntas de evaluación. Agrega al menos una.'})
+                            else:
+                                log(f"Evaluación del agente {agente.nombre}: {evaluacion.score}/10", request, "change", obj=agente.id)
+                                res_json.append({
+                                    'error': False,
+                                    'score': float(evaluacion.score),
+                                    'aprobadas': evaluacion.aprobadas,
+                                    'total': evaluacion.total_preguntas,
+                                    'tokens': evaluacion.tokens_total,
+                                    'resultados': evaluacion.resultados,
+                                })
+                    elif action == 'reprocesar_rag':
+                        filtro = AgentesIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
+                        apikey_obj = (
+                            filtro.apikey.filter(estado=True, proveedor__in=(2, 3, 8)).first()
+                            or filtro.apikey_activa()
+                        )
+                        if not apikey_obj or not apikey_obj.descripcion:
+                            res_json.append({'error': True, 'message': 'El agente no tiene una API Key activa para reprocesar.'})
+                        else:
+                            from agents_ai.rag.reproceso import reprocesar_agente
+                            resultado = reprocesar_agente(filtro, apikey_obj)
+                            log(f"Reproceso RAG del agente {filtro.nombre}", request, "change", obj=filtro.id)
+                            res_json.append({
+                                'error': False,
+                                'ok': resultado['ok'],
+                                'modo': resultado['modo'],
+                                'chunks_total': resultado['chunks_total'],
+                                'etapas': resultado['etapas'],
+                            })
+                    elif action == 'duplicar_agente':
+                        import shutil
+                        from crm.models import FaqAgente, HerramientaAgente
+                        import copy as _copy
+                        original = AgentesIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
+                        orig_id = original.pk
+                        apikeys_orig = list(original.apikey.all())
+
+                        nuevo = _copy.copy(original)
+                        nuevo.pk = None
+                        nuevo.nombre = f"{original.nombre} (copia)"[:250]
+                        nuevo.vectorstore_path = None
+                        nuevo.vectorstore_enlaces_path = None
+                        nuevo.save()
+                        nuevo.apikey.set(apikeys_orig)
+                        # save() con pk=None re-aplica el preset de personalidad —
+                        # restaurar los 5 campos de persona tal como estaban en el original.
+                        nuevo.nombre_bot = original.nombre_bot
+                        nuevo.personalidad = original.personalidad
+                        nuevo.tono = original.tono
+                        nuevo.estilo_escritura = original.estilo_escritura
+                        nuevo.temperature = original.temperature
+                        nuevo.save(update_fields=['nombre_bot', 'personalidad', 'tono',
+                                                  'estilo_escritura', 'temperature'])
+
+                        # Hijos vía bulk_create — NO dispara los save() custom,
+                        # así la copia no re-embebe nada (cero tokens).
+                        detalles = []
+                        for d in original.detalleagentesai_set.filter(status=True):
+                            d.pk = None
+                            d.agente = nuevo
+                            detalles.append(d)
+                        if detalles:
+                            DetalleAgentesAI.objects.bulk_create(detalles)
+
+                        faqs = []
+                        for f in original.faqs.filter(status=True):
+                            f.pk = None
+                            f.agente = nuevo
+                            faqs.append(f)
+                        if faqs:
+                            FaqAgente.objects.bulk_create(faqs)
+
+                        herramientas = []
+                        for h in HerramientaAgente.objects.filter(agente=original, status=True):
+                            h.pk = None
+                            h.agente = nuevo
+                            herramientas.append(h)
+                        if herramientas:
+                            HerramientaAgente.objects.bulk_create(herramientas)
+
+                        regla_orig = ReglaFinConversacion.objects.filter(agente=original, status=True).first()
+                        if regla_orig:
+                            acciones_orig = list(regla_orig.acciones.filter(status=True))
+                            regla_orig.pk = None
+                            regla_orig.agente = nuevo
+                            regla_orig.sesion = None
+                            regla_orig.save()
+                            acciones = []
+                            for a in acciones_orig:
+                                a.pk = None
+                                a.regla = regla_orig
+                                acciones.append(a)
+                            if acciones:
+                                AccionFinConversacion.objects.bulk_create(acciones)
+
+                        # Vectorstores: copytree — cero tokens de embeddings.
+                        base_vs = os.path.join(settings.MEDIA_ROOT, 'vectorstores')
+                        campos_vs = []
+                        if original.vectorstore_path:
+                            src = os.path.join(settings.MEDIA_ROOT, original.vectorstore_path)
+                            dst = os.path.join(base_vs, f'agente_{nuevo.pk}')
+                            if os.path.exists(os.path.join(src, 'index.faiss')):
+                                shutil.copytree(src, dst, dirs_exist_ok=True)
+                                nuevo.vectorstore_path = os.path.relpath(dst, settings.MEDIA_ROOT)
+                                campos_vs.append('vectorstore_path')
+                        if original.vectorstore_enlaces_path:
+                            src = os.path.join(settings.MEDIA_ROOT, original.vectorstore_enlaces_path)
+                            dst = os.path.join(base_vs, f'agente_api_{nuevo.pk}')
+                            if os.path.exists(os.path.join(src, 'index.faiss')):
+                                shutil.copytree(src, dst, dirs_exist_ok=True)
+                                nuevo.vectorstore_enlaces_path = os.path.relpath(dst, settings.MEDIA_ROOT)
+                                campos_vs.append('vectorstore_enlaces_path')
+                        src_mem = os.path.join(base_vs, f'agente_{orig_id}_memoria')
+                        if os.path.exists(os.path.join(src_mem, 'index.faiss')):
+                            shutil.copytree(src_mem, os.path.join(base_vs, f'agente_{nuevo.pk}_memoria'), dirs_exist_ok=True)
+                        if campos_vs:
+                            nuevo.save(update_fields=campos_vs)
+
+                        log(f"Duplico el agente {original.nombre} → {nuevo.nombre}", request, "add", obj=nuevo.id)
+                        messages.success(request, f"Agente duplicado como \"{nuevo.nombre}\" — conocimiento copiado sin gastar tokens.")
+                        res_json.append({'error': False, 'reload': True, 'nuevo_id': nuevo.pk})
                     elif action == 'addapikey':
                         form = ApiKeyIAForm(request.POST, request.FILES, request=request)
                         if form.is_valid():
@@ -534,13 +721,14 @@ def entrenamiento_ia_view(request):
                             filtro.contexto_estatico = texto_completo[:_UMBRAL]
                             if len(texto_completo) > _UMBRAL:
                                 # Construir FAISS para la parte que no cabe
-                                apikey_obj = filtro.apikey.filter(estado=True).first()
+                                apikey_obj = filtro.apikey_activa()
                                 if apikey_obj and apikey_obj.proveedor in (2, 3):
                                     try:
                                         vs_manager = VectorStoreManager(
                                             storage_dir=base_dir,
-                                            provider=apikey_obj.proveedor,  # int — el provider registry lo resuelve
-                                            apikey=apikey_obj.descripcion
+                                            provider=apikey_obj.proveedor,
+                                            apikey=apikey_obj.descripcion,
+                                            base_url=(getattr(apikey_obj, 'base_url', '') or None)
                                         )
                                         documentos = []
                                         for det in detalles_archivo:
@@ -727,23 +915,13 @@ def entrenamiento_ia_view(request):
                     elif action == 'testapikey':
                         from crm.view_chat_agente import _billing_info_por_proveedor
                         filtro = ApiKeyIA.objects.get(pk=int(request.POST['id']), perfil=perfil)
-                        _default_model_by_provider = {
-                            2: 'gemini-2.5-flash',
-                            3: 'gpt-4o-mini',
-                            4: 'claude-haiku-4-5-20251001',
-                            5: 'gpt-oss:20b',
-                        }
                         # Usa el modelo real configurado en la ApiKey — así el test refleja
                         # la quota/plan del modelo que realmente se usa en producción.
-                        modelo_test = (filtro.modelo or '').strip() or _default_model_by_provider.get(filtro.proveedor, 'gpt-4o-mini')
+                        modelo_test = (filtro.modelo or '').strip() or _DEFAULT_MODEL_BY_PROVIDER.get(filtro.proveedor, 'gpt-4o-mini')
                         billing_info = _billing_info_por_proveedor(filtro.proveedor)
                         prompt_prueba = 'Responde solo con la palabra: ok'
                         try:
-                            from agents_ai.providers import get_provider
-                            llm = get_provider(filtro.proveedor).get_llm(
-                                apikey=filtro.descripcion, model_name=modelo_test,
-                                max_output_tokens=20, temperature=0,
-                            )
+                            llm = _construir_llm_prueba(filtro, modelo_test, max_tokens=20)
                             _t0 = time.time()
                             _resp = llm.invoke(prompt_prueba)
                             _lat_ms = int((time.time() - _t0) * 1000)
@@ -973,7 +1151,7 @@ def entrenamiento_ia_view(request):
                         if not pregunta:
                             return JsonResponse({'error': True, 'message': 'Escribe una pregunta.'})
 
-                        apikey_obj = agente.apikey.filter(estado=True).first()
+                        apikey_obj = agente.apikey_activa()
                         if not apikey_obj:
                             return JsonResponse({'error': True, 'message': 'El agente no tiene API Key activa.'})
 
@@ -993,6 +1171,7 @@ def entrenamiento_ia_view(request):
                                 prompt_template_text=(agente.prompt_template or '').strip() or _PTS_EJ.get('es', ''),
                                 contexto_estatico=agente.contexto_estatico or None,
                                 perfil=agente.perfil, agente=agente,
+                                base_url=(getattr(apikey_obj, 'base_url', '') or None),
                             )
                             # Prompt que realmente va al LLM (mismo cálculo que simular_prompt)
                             contexto_real, _sd = consultor._construir_contexto(pregunta, "")
@@ -1057,7 +1236,7 @@ def entrenamiento_ia_view(request):
                         if not mensaje:
                             return JsonResponse({'error': True, 'message': 'Escribe un mensaje.'})
 
-                        apikey_obj = agente.apikey.filter(estado=True).first()
+                        apikey_obj = agente.apikey_activa()
                         if not apikey_obj:
                             return JsonResponse({'error': True, 'message': 'El agente no tiene una API Key activa.'})
 
@@ -1082,6 +1261,7 @@ def entrenamiento_ia_view(request):
                                 prompt_template_text=(agente.prompt_template or '').strip() or PROMPT_TEMPLATES.get('es', ''),
                                 contexto_estatico=agente.contexto_estatico or None,
                                 perfil=agente.perfil, agente=agente,
+                                base_url=(getattr(apikey_obj, 'base_url', '') or None),
                             )
                             resultado = consultor.consultar_con_listas(mensaje, agente.descripcion)
                         except Exception as ex:
@@ -1363,7 +1543,7 @@ def entrenamiento_ia_view(request):
                             except Exception:
                                 data['rag_index_count'] = None
                                 data['rag_fuentes'] = []
-                            _ak = filtro.apikey.filter(estado=True, status=True).first()
+                            _ak = filtro.apikey_activa()
                             if _ak:
                                 data['agente_apikey'] = {'id': _ak.id, 'proveedor': _ak.proveedor, 'modelo': _ak.modelo or ''}
                         data['titulo_pagina'] = f'Editar agente IA — {filtro}' if filtro else 'Nuevo agente IA'
@@ -1421,7 +1601,10 @@ def entrenamiento_ia_view(request):
                         prompt_tpl = filtro.prompt_template or ''
 
                         # ── FAQs aprobadas (top-N se inyectan al prompt) ──
-                        top_n = int(filtro.faqs_en_prompt or 0)
+                        # Cascada del Centro de IA: NULL en el agente = heredar.
+                        from crm.ia_config import parametros_efectivos
+                        _params_ia = parametros_efectivos(agente=filtro)
+                        top_n = int(_params_ia.get('faqs_en_prompt') or 0)
                         faqs_aprob_qs = filtro.faqs.filter(status=True, estado='aprobada').order_by('-prioridad', '-fecha_registro')
                         faqs_aprob_total = faqs_aprob_qs.count()
                         faqs_top = list(faqs_aprob_qs[:top_n].values(
@@ -1511,10 +1694,12 @@ def entrenamiento_ia_view(request):
                             "herramientas_total": len(herramientas_data),
                             # ── Enlaces API externas ─────────────────────
                             "num_enlaces_api": filtro.detalleagentesai_set.filter(status=True, tipo=1, enlace__isnull=False).count(),
-                            # ── Config del agente (para el flujo de lectura) ──
-                            "cfg_history_turns": filtro.cfg_history_turns,
-                            "cfg_max_context_chars": filtro.cfg_max_context_chars,
-                            "cfg_faiss_k": filtro.cfg_faiss_k,
+                            # ── Config efectiva del agente (para el flujo de lectura) ──
+                            # Valores ya resueltos por la cascada del Centro de IA,
+                            # no los crudos: un NULL significa heredar, no cero.
+                            "cfg_history_turns": _params_ia.get('cfg_history_turns'),
+                            "cfg_max_context_chars": _params_ia.get('cfg_max_context_chars'),
+                            "cfg_faiss_k": _params_ia.get('cfg_faiss_k'),
                         })
                     except Exception as ex:
                         return JsonResponse({"result": False, 'message': str(ex)})
@@ -1577,7 +1762,7 @@ def entrenamiento_ia_view(request):
                             return JsonResponse({'result': False, 'message': 'Ingresa una pregunta de ejemplo.'})
 
                         agente = AgentesIA.objects.get(pk=pk, perfil=perfil)
-                        apikey_obj = agente.apikey.filter(estado=True).first()
+                        apikey_obj = agente.apikey_activa()
                         if not apikey_obj:
                             return JsonResponse({'result': False, 'message': 'El agente no tiene API Key activa — necesaria para cargar el vectorstore.'})
 
@@ -1597,6 +1782,7 @@ def entrenamiento_ia_view(request):
                             prompt_template_text=prompt_tpl,
                             contexto_estatico=agente.contexto_estatico or None,
                             perfil=agente.perfil, agente=agente,
+                            base_url=(getattr(apikey_obj, 'base_url', '') or None),
                         )
 
                         contexto, sin_datos = consultor._construir_contexto(pregunta, "")
@@ -1794,6 +1980,192 @@ def entrenamiento_ia_view(request):
                         return JsonResponse({"result": True, 'data': template.render(data)})
                     except Exception as ex:
                         return JsonResponse({"result": False, 'message': str(ex)})
+                elif action == 'eval_datos':
+                    try:
+                        from crm.models import PreguntaEvaluacionAgente, EvaluacionAgente
+                        filtro = AgentesIA.objects.get(pk=int(request.GET['id']), perfil=perfil)
+                        preguntas = list(
+                            PreguntaEvaluacionAgente.objects
+                            .filter(agente=filtro, status=True)
+                            .values('id', 'pregunta', 'criterio')
+                        )
+                        historial = [
+                            {
+                                'id': e.id,
+                                'fecha': e.fecha_registro.strftime('%d/%m/%Y %H:%M') if e.fecha_registro else '',
+                                'score': float(e.score),
+                                'aprobadas': e.aprobadas,
+                                'total': e.total_preguntas,
+                            }
+                            for e in EvaluacionAgente.objects.filter(agente=filtro, status=True)[:10]
+                        ]
+                        ultima = EvaluacionAgente.objects.filter(agente=filtro, status=True).first()
+                        return JsonResponse({
+                            'result': True,
+                            'agente': filtro.nombre,
+                            'preguntas': preguntas,
+                            'historial': historial,
+                            'ultima_resultados': (ultima.resultados if ultima else []),
+                        })
+                    except Exception as ex:
+                        return JsonResponse({'result': False, 'message': str(ex)})
+
+                elif action == 'rag_inspeccionar':
+                    try:
+                        from django.core.cache import cache as _cache
+                        filtro = AgentesIA.objects.get(pk=int(request.GET['id']), perfil=perfil)
+                        q = (request.GET.get('q') or '').strip()
+                        _errores_entrenamiento = _cache.get(f'entrenamiento_errores_{filtro.id}') or []
+
+                        detalles = []
+                        for d in filtro.detalleagentesai_set.filter(status=True):
+                            detalles.append({
+                                'id': d.id,
+                                'tipo': d.get_tipo_display(),
+                                'enlace': d.enlace or '',
+                                'archivo': os.path.basename(d.archivo.name) if d.archivo else '',
+                                'descripcion': (d.descripcion or '')[:160],
+                            })
+
+                        embeddings = None
+                        apikey_obj = filtro.apikey_activa()
+                        if apikey_obj:
+                            try:
+                                from agents_ai.providers import get_provider
+                                embeddings = get_provider(apikey_obj.proveedor).get_embeddings(
+                                    apikey_obj.descripcion,
+                                    base_url=(getattr(apikey_obj, 'base_url', '') or None),
+                                )
+                            except Exception:
+                                embeddings = None
+
+                        def _inspeccionar_vs(path_abs):
+                            resultado = {'chunks_total': 0, 'muestra': []}
+                            if not (path_abs and os.path.exists(os.path.join(path_abs, 'index.faiss')) and embeddings):
+                                return resultado
+                            from itertools import islice
+                            from agents_ai.consultor.retrieval import _get_vectorstore_cached
+                            vs = _get_vectorstore_cached(path_abs, embeddings)
+                            if vs is None:
+                                return resultado
+                            docstore_dict = getattr(getattr(vs, 'docstore', None), '_dict', {}) or {}
+                            resultado['chunks_total'] = len(docstore_dict)
+                            if q:
+                                encontrados = vs.similarity_search(q, k=5)
+                            else:
+                                encontrados = list(islice(docstore_dict.values(), 10))
+                            resultado['muestra'] = [
+                                {
+                                    'contenido': (getattr(doc, 'page_content', '') or '')[:600],
+                                    'metadata': {k: str(v)[:120] for k, v in (getattr(doc, 'metadata', {}) or {}).items()},
+                                }
+                                for doc in encontrados
+                            ]
+                            return resultado
+
+                        vs_path = os.path.join(settings.MEDIA_ROOT, filtro.vectorstore_path) if filtro.vectorstore_path else ''
+                        conocimiento = _inspeccionar_vs(vs_path)
+
+                        from agents_ai.memoria.rag_conversaciones import ruta_memoria_agente
+                        memoria = _inspeccionar_vs(ruta_memoria_agente(filtro.id))
+
+                        return JsonResponse({
+                            'result': True,
+                            'agente': filtro.nombre,
+                            'busqueda': q,
+                            'modo': 'FAISS' if filtro.vectorstore_path else ('Contexto estático' if filtro.contexto_estatico else 'Sin conocimiento'),
+                            'contexto_estatico_chars': len(filtro.contexto_estatico or ''),
+                            'faqs_aprobadas': filtro.faqs.filter(estado='aprobada', status=True).count(),
+                            'fuentes': detalles,
+                            'conocimiento': conocimiento,
+                            'memoria': memoria,
+                            'embeddings_ok': embeddings is not None,
+                            'errores_entrenamiento': _errores_entrenamiento,
+                        })
+                    except Exception as ex:
+                        return JsonResponse({'result': False, 'message': str(ex)})
+
+                elif action == 'rag_ver_data':
+                    try:
+                        filtro = AgentesIA.objects.get(pk=int(request.GET['id']), perfil=perfil)
+                    except (AgentesIA.DoesNotExist, KeyError, ValueError):
+                        return JsonResponse({'result': False, 'message': 'Agente no encontrado.'})
+
+                    from agents_ai import weaviate_rag as _wv
+                    from agents_ai import indexador_conocimiento as _idx
+
+                    weaviate_ok = True
+                    weaviate_error = ''
+                    total_tenant = 0
+                    fuentes_por_source = {}
+                    try:
+                        _cli = _wv.get_client()
+                        try:
+                            if not _cli.is_ready():
+                                weaviate_ok = False
+                                weaviate_error = 'Weaviate respondió pero no está listo (not ready).'
+                        finally:
+                            _cli.close()
+                    except Exception as _exc:
+                        weaviate_ok = False
+                        weaviate_error = str(_exc)
+
+                    if weaviate_ok:
+                        try:
+                            total_tenant = _wv.contar(filtro.id)
+                            for _f in _wv.resumen_fuentes(filtro.id):
+                                fuentes_por_source[_f.get('source')] = _f.get('count', 0)
+                        except Exception as _exc:
+                            weaviate_error = str(_exc)
+
+                    documentos = []
+                    for d in filtro.detalleagentesai_set.filter(status=True).order_by('-id'):
+                        if d.tipo == 2 and d.archivo:
+                            nombre = os.path.basename(d.archivo.name)
+                            try:
+                                download_url = d.archivo.url
+                            except Exception:
+                                download_url = ''
+                        elif d.tipo == 1:
+                            nombre = d.enlace or '(enlace)'
+                            download_url = ''
+                        else:
+                            nombre = 'Texto directo'
+                            download_url = ''
+
+                        texto = ''
+                        if d.tipo in (2, 3):
+                            try:
+                                texto, _cat = _idx._extraer_detalle(d)
+                            except Exception as _exc:
+                                texto = ''
+                        texto = texto or ''
+
+                        documentos.append({
+                            'id': d.id,
+                            'tipo': d.get_tipo_display(),
+                            'tipo_raw': d.tipo,
+                            'nombre': nombre,
+                            'download_url': download_url,
+                            'texto_chars': len(texto),
+                            'texto_preview': texto[:800],
+                            'extraccion_ok': bool(texto.strip()) if d.tipo in (2, 3) else True,
+                            'chunks': fuentes_por_source.get(f'panel_detalle_{d.id}', 0),
+                        })
+
+                    est = (filtro.contexto_estatico or '').strip()
+                    return JsonResponse({
+                        'result': True,
+                        'agente': filtro.nombre,
+                        'weaviate_ok': weaviate_ok,
+                        'weaviate_error': weaviate_error,
+                        'total_tenant': total_tenant,
+                        'documentos': documentos,
+                        'contexto_estatico_chars': len(est),
+                        'contexto_estatico_preview': est[:800],
+                        'contexto_estatico_chunks': fuentes_por_source.get('contexto_estatico', 0),
+                    })
+
                 elif action == 'consumo_apikey':
                     try:
                         from django.db.models import Sum, Count
@@ -1852,6 +2224,9 @@ def entrenamiento_ia_view(request):
                               .annotate(llamadas=Count('id'), total=Sum('tokens_total'))
                               .order_by('-total')
                         )
+                        from agents_ai.consumo import costo_queryset_por_modelo
+                        por_modelo = costo_queryset_por_modelo(qs)
+                        costo_total = round(sum(f['costo_usd'] for f in por_modelo), 4)
                         ORIGEN_LABELS = dict(ConsumoTokenIA._meta.get_field('origen').choices)
                         return JsonResponse({
                             'result': True,
@@ -1863,7 +2238,9 @@ def entrenamiento_ia_view(request):
                                 'entrada': totales['total_entrada'] or 0,
                                 'salida': totales['total_salida'] or 0,
                                 'total': totales['total_tokens'] or 0,
+                                'costo_usd': costo_total,
                             },
+                            'por_modelo': por_modelo,
                             'por_dia': por_dia,
                             'por_agente': [
                                 {'agente': r['agente__nombre'], 'llamadas': r['llamadas'], 'total': r['total'] or 0}
@@ -1904,6 +2281,7 @@ def entrenamiento_ia_view(request):
                             'id', 'fecha', 'tokens_entrada', 'tokens_salida', 'tokens_total',
                             'modelo', 'origen', 'prompt_preview', 'agente__nombre',
                         )
+                        from agents_ai.consumo import costo_usd as _costo_usd
                         ORIGEN_LABELS = dict(ConsumoTokenIA._meta.get_field('origen').choices)
                         return JsonResponse({
                             'result': True,
@@ -1919,6 +2297,7 @@ def entrenamiento_ia_view(request):
                                     'origen_label': str(ORIGEN_LABELS.get(r['origen'], r['origen'] or '')),
                                     'prompt_preview': r['prompt_preview'] or '',
                                     'agente': r['agente__nombre'] or '',
+                                    'costo_usd': _costo_usd(r['modelo'], r['tokens_entrada'], r['tokens_salida']),
                                 }
                                 for r in registros
                             ],
@@ -2082,6 +2461,16 @@ def entrenamiento_ia_view(request):
                     else:
                         modelos_en_uso.append({'provider': prov_lbl, 'modelo': '(default)', 'alias': k.alias or prov_lbl})
                 a.modelos_en_uso = modelos_en_uso
+                # ── Sesiones que usan este agente (por canal) ──────────
+                sesiones_ag = list(
+                    a.sesionwhatsapp_set.filter(status=True, activo=True)
+                    .order_by('proveedor', 'nombre')
+                )
+                a.num_sesiones = len(sesiones_ag)
+                a.sesiones_uso = [
+                    {'nombre': s.nombre or s.numero, 'canal': s.get_proveedor_display()}
+                    for s in sesiones_ag
+                ]
             data['agentes'] = agentes
             data['apis'] = perfil.get_apis()
             # Usuarios para modal de alertas

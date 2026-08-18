@@ -1,0 +1,60 @@
+.centro-fase {
+    margin-bottom: 28px;
+}
+
+.centro-fase-titulo {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 2px;
+}
+
+.centro-fase-desc {
+    color: var(--bs-secondary-color, #6c757d);
+    font-size: 0.9rem;
+    margin-bottom: 14px;
+}
+
+.centro-card {
+    height: 100%;
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 10px;
+    transition: box-shadow .15s ease;
+}
+
+.centro-card:hover {
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .08);
+}
+
+.centro-card .card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.centro-icono {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    background: var(--bs-tertiary-bg, #f0f2f5);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    color: #0d6efd;
+}
+
+.centro-cuando {
+    font-size: 0.85rem;
+    color: var(--bs-secondary-color, #6c757d);
+}
+
+.centro-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+.centro-header i {
+    font-size: 2.2rem;
+}

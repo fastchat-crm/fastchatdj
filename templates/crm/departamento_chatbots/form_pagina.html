@@ -202,7 +202,7 @@
                             <input type="text" id="dp-filter-fulltext" class="form-control form-control-sm"
                                    placeholder="Coincidencia en cualquier campo visible…">
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label class="form-label small mb-1">Tipo de acción / botón</label>
                             <select id="dp-filter-tipo" class="form-select form-select-sm">
                                 <option value="">Todos</option>
@@ -211,7 +211,19 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-md-3 d-flex gap-2">
+                        <div class="col-md-2">
+                            <label class="form-label small mb-1">
+                                <i class="fa fa-bolt me-1"></i> Función del nodo
+                            </label>
+                            <select id="dp-filter-funcion" class="form-select form-select-sm"
+                                    {% if not funciones_en_uso %}disabled{% endif %}>
+                                <option value="">Todas</option>
+                                {% for f in funciones_en_uso %}
+                                    <option value="{{ f.codigo }}" title="{{ f.descripcion }}">{{ f.codigo }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex gap-2">
                             <span class="dp-filter-resumen text-muted small flex-grow-1 align-self-center"
                                   id="dp-filter-resumen"></span>
                             <button type="button" class="btn btn-sm btn-outline-secondary" id="dp-filter-clear">
@@ -268,5 +280,5 @@
 
 {% block jscript %}
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <script src="{% static 'js/dpchat_editor.js' %}?v=18"></script>
+    <script src="{% static 'js/dpchat_editor.js' %}?v=19"></script>
 {% endblock %}

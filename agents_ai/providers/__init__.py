@@ -13,6 +13,7 @@ Cómo agregar un nuevo provider (ej. Claude):
 """
 import hashlib
 import logging
+import threading
 
 import requests
 from django.core.cache import cache
@@ -22,6 +23,9 @@ from .gemini import GeminiProvider
 from .openai import OpenAIProvider
 from .claude import ClaudeProvider
 from .ollama import OllamaProvider
+from .ollama_local import OllamaLocalProvider
+from .deepseek import DeepSeekProvider
+from .huawei import HuaweiProvider
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +36,9 @@ _PROVIDERS: dict[str, BaseProvider] = {
     OpenAIProvider.name: OpenAIProvider(),
     ClaudeProvider.name: ClaudeProvider(),
     OllamaProvider.name: OllamaProvider(),
+    OllamaLocalProvider.name: OllamaLocalProvider(),
+    DeepSeekProvider.name: DeepSeekProvider(),
+    HuaweiProvider.name: HuaweiProvider(),
 }
 
 # Mapeo id (de crm.models.PROVEEDOR_CHOICES) → nombre interno
@@ -40,6 +47,9 @@ PROVEEDOR_ID_TO_NAME: dict[int, str] = {
     3: 'openai',
     4: 'claude',
     5: 'ollama',
+    6: 'deepseek',
+    7: 'huawei',
+    8: 'ollama_local',
 }
 
 
@@ -64,15 +74,95 @@ MODELOS_DISPONIBLES = (
     ('claude-sonnet-4-5',         '[Claude] Sonnet 4.5 — versión anterior'),
     ('claude-opus-4-7',           '[Claude] Opus 4.7 — máxima calidad'),
     ('claude-opus-4-6',           '[Claude] Opus 4.6 — versión anterior'),
-    ('gpt-oss:20b',               '[Ollama] GPT-OSS 20B — rápido y económico (default)'),
-    ('gpt-oss:120b',              '[Ollama] GPT-OSS 120B — alta calidad'),
-    ('gemma3:12b',                '[Ollama] Gemma 3 12B — equilibrado'),
-    ('gemma3:27b',                '[Ollama] Gemma 3 27B — alta calidad'),
-    ('qwen3-next:80b',            '[Ollama] Qwen3-Next 80B — alta calidad'),
-    ('glm-4.7',                   '[Ollama] GLM 4.7 — alta calidad'),
-    ('deepseek-v3.2',            '[Ollama] DeepSeek V3.2 — razonamiento'),
-    ('ministral-3:8b',            '[Ollama] Ministral 3 8B — ligero'),
+    ('gpt-oss:20b',               '[Ollama] GPT-OSS 20B — Cloud, rápido y económico (default)'),
+    ('gpt-oss:120b',              '[Ollama] GPT-OSS 120B — Cloud, alta calidad'),
+    ('gemma3:12b',                '[Ollama] Gemma 3 12B — Cloud, equilibrado'),
+    ('gemma3:27b',                '[Ollama] Gemma 3 27B — Cloud, alta calidad'),
+    ('qwen3-next:80b',            '[Ollama] Qwen3-Next 80B — Cloud, alta calidad'),
+    ('glm-4.7',                   '[Ollama] GLM 4.7 — Cloud, alta calidad'),
+    ('deepseek-v3.2',             '[Ollama] DeepSeek V3.2 — Cloud, razonamiento'),
+    ('ministral-3:8b',            '[Ollama] Ministral 3 8B — Cloud, ligero'),
+    ('deepseek-chat',             '[DeepSeek] V3 Chat — económico (default)'),
+    ('deepseek-reasoner',         '[DeepSeek] R1 Reasoner — razonamiento profundo'),
+    ('DeepSeek-V3',               '[Huawei MaaS] DeepSeek V3 (default)'),
+    ('DeepSeek-R1',               '[Huawei MaaS] DeepSeek R1 — razonamiento'),
+    ('Qwen3-32B',                 '[Huawei MaaS] Qwen3 32B'),
+    ('llama3.1',                  '[Ollama Local] Llama 3.1 — local, sin costo por token (default)'),
+    ('llama3.2',                  '[Ollama Local] Llama 3.2 — local liviano'),
+    ('qwen2.5',                   '[Ollama Local] Qwen 2.5 — local multilingüe'),
+    ('mistral',                   '[Ollama Local] Mistral 7B — local'),
+    ('deepseek-r1',               '[Ollama Local] DeepSeek R1 — razonamiento local'),
 )
+
+
+# ---------------------------------------------------------------------------
+# Cache de clientes LLM / embeddings
+#
+# Antes se instanciaba un cliente nuevo por cada mensaje entrante — handshake
+# TLS y pool de conexiones desde cero en cada llamada. Los clientes LangChain
+# (httpx/grpc por debajo) son thread-safe, así que se reutilizan keyed por su
+# configuración completa. Cap simple para no crecer sin límite si rotan keys.
+# ---------------------------------------------------------------------------
+_MAX_CLIENTES_CACHE = 64
+_llm_cache: dict[tuple, object] = {}
+_emb_cache: dict[tuple, object] = {}
+_clientes_lock = threading.Lock()
+
+
+def _hash_apikey(apikey):
+    """Huella corta de la apikey para usar como parte de la clave de cache.
+
+    Nunca guardamos la apikey en claro dentro del diccionario en memoria: si el
+    proceso se vuelca (core dump, inspección) la clave quedaría expuesta. El hash
+    identifica igual de bien la config sin exponer el secreto.
+    """
+    if apikey is None:
+        return None
+    return hashlib.sha256(str(apikey).encode('utf-8')).hexdigest()
+
+
+def get_llm_cached(provider: BaseProvider, apikey, model_name, max_output_tokens,
+                   temperature=0.1, base_url=None, razonamiento=True):
+    """Devuelve el LLM del provider reutilizando la instancia si la config no cambió.
+
+    `razonamiento` va en la clave de caché: si no estuviera, el primer llamador
+    en pedir una config fijaría el modo de pensamiento para todos los demás que
+    compartan modelo y key.
+    """
+    key = (provider.name, _hash_apikey(apikey), model_name, max_output_tokens, float(temperature),
+           base_url, bool(razonamiento))
+    with _clientes_lock:
+        llm = _llm_cache.get(key)
+        if llm is not None:
+            return llm
+    llm = provider.get_llm(
+        apikey=apikey, model_name=model_name, max_output_tokens=max_output_tokens,
+        temperature=temperature, base_url=base_url, razonamiento=razonamiento,
+    )
+    with _clientes_lock:
+        if len(_llm_cache) >= _MAX_CLIENTES_CACHE:
+            _llm_cache.clear()
+        _llm_cache[key] = llm
+    return llm
+
+
+def get_embeddings_cached(provider: BaseProvider, apikey, base_url=None):
+    """Devuelve los embeddings del provider reutilizando la instancia por config.
+
+    Propaga NotImplementedError de providers sin API de embeddings (Claude,
+    DeepSeek, Huawei) — el caller decide el fallback.
+    """
+    key = (provider.name, _hash_apikey(apikey), base_url)
+    with _clientes_lock:
+        emb = _emb_cache.get(key)
+        if emb is not None:
+            return emb
+    emb = provider.get_embeddings(apikey, base_url=base_url)
+    with _clientes_lock:
+        if len(_emb_cache) >= _MAX_CLIENTES_CACHE:
+            _emb_cache.clear()
+        _emb_cache[key] = emb
+    return emb
 
 
 # Prefijo del label (tal como aparece en MODELOS_DISPONIBLES) → id de proveedor.
@@ -81,6 +171,7 @@ _LABEL_PREFIX_TO_PROVEEDOR_ID: dict[str, int] = {
     '[OpenAI]': 3,
     '[Claude]': 4,
     '[Ollama]': 5,
+    '[Ollama Local]': 8,
 }
 
 _CACHE_TIMEOUT_SEGUNDOS = 1800
@@ -153,6 +244,7 @@ def get_provider(name_or_id) -> BaseProvider:
 
 __all__ = [
     'BaseProvider', 'GeminiProvider', 'OpenAIProvider', 'ClaudeProvider',
-    'get_provider', 'PROVEEDOR_ID_TO_NAME', 'MODELOS_DISPONIBLES',
-    'listar_modelos_disponibles',
+    'OllamaProvider', 'OllamaLocalProvider', 'DeepSeekProvider', 'HuaweiProvider',
+    'get_provider', 'get_llm_cached', 'get_embeddings_cached',
+    'PROVEEDOR_ID_TO_NAME', 'MODELOS_DISPONIBLES', 'listar_modelos_disponibles',
 ]

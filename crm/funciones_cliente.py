@@ -81,7 +81,9 @@ def cliente_upsert(conversacion, variables, config, endpoint=None) -> dict:
 
     nombres = _str(variables.get('nombres'))
     apellidos = _str(variables.get('apellidos'))
-    email = _str(variables.get('email'))
+    # Aceptamos 'email' o 'correo' (distintos flujos usan distinto nombre).
+    email = _str(variables.get('email') or variables.get('correo'))
+    ciudad = _str(variables.get('ciudad'))
     telefono = _str(variables.get('telefono'))
     if not telefono and contacto is not None:
         telefono = (
@@ -111,6 +113,7 @@ def cliente_upsert(conversacion, variables, config, endpoint=None) -> dict:
             'apellidos': apellidos,
             'email': email,
             'telefono': telefono,
+            'ciudad': ciudad,
             'edad': edad,
             'fecha_nacimiento': fecha_nac,
             'sexo': sexo,
@@ -128,7 +131,7 @@ def cliente_upsert(conversacion, variables, config, endpoint=None) -> dict:
         cambios = []
         for campo, nuevo in (
             ('nombres', nombres), ('apellidos', apellidos),
-            ('email', email), ('telefono', telefono),
+            ('email', email), ('telefono', telefono), ('ciudad', ciudad),
             ('sexo', sexo), ('notas', notas),
         ):
             if nuevo and nuevo != getattr(cliente, campo, ''):
@@ -148,6 +151,34 @@ def cliente_upsert(conversacion, variables, config, endpoint=None) -> dict:
             logger.exception('Error actualizando Cliente %s: %s', cedula, ex)
             return {'etiqueta': 'error', 'body': {}, 'status': 500,
                     'error': f'no se pudo actualizar cliente: {ex}'}
+
+    # Registrar el origen POR CONVERSACIÓN: 1 fila por (cliente, conversación).
+    # Un mismo cliente puede venir de 4-5 conversaciones distintas — cada una
+    # queda como su propia fila con su número/sesión. Si la misma conversación
+    # vuelve a registrarlo, solo suma `veces`.
+    if conversacion is not None:
+        try:
+            from .models import ClienteOrigen
+            origen, ocre = ClienteOrigen.objects.get_or_create(
+                cliente=cliente, conversacion=conversacion,
+                defaults={
+                    'numero': telefono,
+                    'contacto': contacto,
+                    'sesion': sesion,
+                    'departamento': depto,
+                    'canal': canal,
+                    'veces': 1,
+                    'fecha_ultima': ahora,
+                },
+            )
+            if not ocre:
+                origen.veces = (origen.veces or 0) + 1
+                origen.fecha_ultima = ahora
+                if telefono and not origen.numero:
+                    origen.numero = telefono
+                origen.save(update_fields=['veces', 'fecha_ultima', 'numero'])
+        except Exception:
+            logger.exception('No se pudo registrar ClienteOrigen (cedula=%s)', cedula)
 
     nombre_full = f'{cliente.nombres} {cliente.apellidos}'.strip()
     return {

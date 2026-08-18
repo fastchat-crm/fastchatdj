@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from datetime import timedelta
 from decimal import Decimal
@@ -16,6 +17,8 @@ from whatsapp.models import ConversacionWhatsApp
 from fastchatdj import settings
 from agents_ai.vectorstore_manager import VectorStoreManager
 from agents_ai.providers import MODELOS_DISPONIBLES
+
+logger = logging.getLogger(__name__)
 
 # Representa las industrias generales a las que puede pertenecer un negocio
 class Industria(ModeloBase):
@@ -194,9 +197,9 @@ class AgentesIA(ModeloBase):
         help_text="Si se activa, el agente guardará las listas de productos/servicios en la memoria"
     )
     faqs_en_prompt = models.PositiveSmallIntegerField(
-        default=5, verbose_name='Cantidad de FAQs en prompt',
+        blank=True, null=True, default=None, verbose_name='Cantidad de FAQs en prompt',
         help_text='Top N FAQs aprobadas (por prioridad) inyectadas literal en el prompt. '
-                  'Las demás quedan disponibles vía RAG.'
+                  'Las demás quedan disponibles vía RAG. Vacío = hereda del Centro de IA.'
     )
     vectorstore_enlaces_path = models.CharField(
         max_length=1000, blank=True, null=True, verbose_name="Ruta del vector store de Apis y Enlaces"
@@ -210,50 +213,67 @@ class AgentesIA(ModeloBase):
     )
 
     # ── Configuración avanzada de comportamiento IA (override por agente) ────
+    # Todos NULL por default: el agente hereda el valor del Centro de IA
+    # (ConfiguracionIA del perfil, o la fila global de plataforma). Solo se
+    # guarda valor propio cuando el usuario lo sobreescribe a mano.
+    # Resolver siempre con crm.ia_config.parametros_efectivos(agente).
     cfg_faiss_k = models.PositiveSmallIntegerField(
-        default=5, verbose_name='Fragmentos relevantes por respuesta',
+        blank=True, null=True, default=None, verbose_name='Fragmentos relevantes por respuesta',
         help_text='Cuántos pedacitos del entrenamiento (PDF/CSV/etc.) le pasamos al bot por cada pregunta. '
-                  'Más = más contexto pero respuestas más lentas y caras. Rango: 3–10. Default: 5.'
+                  'Más = más contexto pero respuestas más lentas y caras. Rango: 3–10. '
+                  'Vacío = hereda del Centro de IA.'
     )
     cfg_faiss_fetch_k = models.PositiveSmallIntegerField(
-        default=20, verbose_name='Candidatos antes de elegir',
+        blank=True, null=True, default=None, verbose_name='Candidatos antes de elegir',
         help_text='Cuántos fragmentos consideramos antes de quedarnos con los mejores. '
-                  'Mayor = selección de mejor calidad pero un poco más lenta. Rango: 10–40. Default: 20.'
+                  'Mayor = selección de mejor calidad pero un poco más lenta. Rango: 10–40. '
+                  'Vacío = hereda del Centro de IA.'
     )
     cfg_max_context_chars = models.PositiveIntegerField(
-        default=4000, verbose_name='Máx caracteres de contexto del entrenamiento',
+        blank=True, null=True, default=None, verbose_name='Máx caracteres de contexto del entrenamiento',
         help_text='Tope total de información del entrenamiento que cabe en una respuesta. '
-                  'Si el bot da respuestas cortadas/incompletas, subilo. Rango: 2000–8000. Default: 4000.'
+                  'Si el bot da respuestas cortadas/incompletas, subilo. Rango: 2000–8000. '
+                  'Vacío = hereda del Centro de IA.'
     )
     cfg_max_static_chars = models.PositiveIntegerField(
-        default=1200, verbose_name='Máx caracteres del texto fijo (cuando complementa)',
+        blank=True, null=True, default=None, verbose_name='Máx caracteres del texto fijo (cuando complementa)',
         help_text='Cuando hay entrenamiento Y texto fijo (FAQ/menú), cuánto texto fijo se incluye. '
-                  'Rango: 800–5000. Default: 1200.'
+                  'Rango: 800–5000. Vacío = hereda del Centro de IA.'
     )
     cfg_history_turns = models.PositiveSmallIntegerField(
-        default=5, verbose_name='Mensajes previos que recuerda',
+        blank=True, null=True, default=None, verbose_name='Mensajes previos que recuerda',
         help_text='Cuántos turnos de conversación recuerda el bot (1 turno = 1 mensaje del cliente + 1 respuesta). '
-                  'Subilo si el bot olvida pedidos en conversaciones largas. Rango: 3–20. Default: 5.'
+                  'Subilo si el bot olvida pedidos en conversaciones largas. Rango: 3–20. '
+                  'Vacío = hereda del Centro de IA.'
     )
     cfg_user_snippet = models.PositiveSmallIntegerField(
-        default=150, verbose_name='Máx caracteres por mensaje del cliente recordado',
+        blank=True, null=True, default=None, verbose_name='Máx caracteres por mensaje del cliente recordado',
         help_text='Si el cliente escribe un mensaje muy largo, lo truncamos a esta cantidad para no gastar tokens. '
-                  'Rango: 100–600. Default: 150.'
+                  'Rango: 100–600. Vacío = hereda del Centro de IA.'
     )
     cfg_ai_snippet = models.PositiveSmallIntegerField(
-        default=400, verbose_name='Máx caracteres por respuesta del bot recordada',
+        blank=True, null=True, default=None, verbose_name='Máx caracteres por respuesta del bot recordada',
         help_text='Crítico cuando el bot envía menús/listas largas. Si está muy bajo, el bot olvida lo que ya mostró '
-                  'y se contradice. Rango: 300–2000. Default: 400.'
+                  'y se contradice. Rango: 300–2000. Vacío = hereda del Centro de IA.'
     )
     cfg_max_output_tokens = models.PositiveIntegerField(
-        default=3000, verbose_name='Máx longitud de la respuesta del bot',
+        blank=True, null=True, default=None, verbose_name='Máx longitud de la respuesta del bot',
         help_text='Límite de tokens (≈palabras) que el bot puede generar en una sola respuesta. '
-                  'Si las respuestas se cortan a la mitad, subilo. Rango: 500–4000. Default: 3000.'
+                  'Si las respuestas se cortan a la mitad, subilo. Rango: 500–4000. '
+                  'Vacío = hereda del Centro de IA.'
     )
     cfg_topic_anchor_chars = models.PositiveSmallIntegerField(
-        default=180, verbose_name='Chars del tema inicial conservado',
+        blank=True, null=True, default=None, verbose_name='Chars del tema inicial conservado',
         help_text='Cuando la conversación se hace larga, se conserva el primer mensaje sustantivo del cliente '
-                  'como "ancla" para mantener el bot enfocado en el tema original. Rango: 100–400. Default: 180.'
+                  'como "ancla" para mantener el bot enfocado en el tema original. Rango: 100–400. '
+                  'Vacío = hereda del Centro de IA.'
+    )
+    memoria_rag_activa = models.BooleanField(
+        blank=True, null=True, default=None, verbose_name='Memoria de conversaciones previas (RAG)',
+        help_text='El agente indexa cada pregunta→respuesta válida en un FAISS de memoria propio y '
+                  'reutiliza en consultas futuras lo ya respondido a otros clientes. Aprende y mejora '
+                  'entre conversaciones sin gastar tokens LLM (solo embeddings). '
+                  'Vacío = hereda del Centro de IA.'
     )
 
     # ── Persona del bot (humanización) ─────────────────────────────────────
@@ -440,8 +460,7 @@ class AgentesIA(ModeloBase):
         detalles = self.detalleagentesai_set.filter(status=True).order_by('id')
         detalles_json = []
 
-        # Debug: imprimir cuántos detalles se encontraron
-        print(f"DEBUG: Agente {self.id} tiene {detalles.count()} detalles activos")
+        logger.debug("Agente %s tiene %s detalles activos", self.id, detalles.count())
 
         for detalle in detalles:
             detalle_data = {
@@ -458,8 +477,23 @@ class AgentesIA(ModeloBase):
             }
             detalles_json.append(detalle_data)
 
-        print(f"DEBUG: JSON generado con {len(detalles_json)} detalles")
+        logger.debug("JSON generado con %s detalles", len(detalles_json))
         return json.dumps(detalles_json)
+
+    def apikey_activa(self):
+        """La API key con la que responde este agente. None si no tiene ninguna.
+
+        Existe porque `apikey.filter(estado=True, status=True).first()` sobre un
+        queryset **sin orden** devuelve lo que la base quiera: con dos keys
+        activas, qué modelo le contesta al cliente dependía del orden de filas.
+        No es teórico — EPUNEMI VENDEDOR y Vida Buena Asesor IA tienen consumo
+        registrado con dos modelos distintos cada uno.
+
+        El orden es: primero la marcada por defecto en el Centro de IA, después
+        la más vieja. Determinista y con una intención detrás, en vez de azar.
+        """
+        return (self.apikey.filter(estado=True, status=True)
+                .order_by('-es_default', 'id').first())
 
     def fetch_contexto_apis(self, forzar_refresco: bool = False) -> str:
         """
@@ -652,7 +686,8 @@ class AgentesIA(ModeloBase):
             vs_manager = VectorStoreManager(
                 storage_dir=base_dir,
                 provider=apikeyobj.proveedor,  # int — el provider registry lo resuelve
-                apikey=apikeyobj.descripcion
+                apikey=apikeyobj.descripcion,
+                base_url=(getattr(apikeyobj, 'base_url', '') or None)
             )
             documentos = []
             for detalle in detalles:
@@ -663,7 +698,7 @@ class AgentesIA(ModeloBase):
 
                     resp = requests.get(detalle.enlace, headers=headers, timeout=30)
                     if resp.status_code != 200:
-                        print(f"[build_enlaces] {detalle.enlace} → HTTP {resp.status_code}: {resp.text[:200]}")
+                        logger.warning("[build_enlaces] %s → HTTP %s: %s", detalle.enlace, resp.status_code, resp.text[:200])
                         continue
 
                     descripcion_detalle = (detalle.descripcion or '').strip()
@@ -749,8 +784,7 @@ class AgentesIA(ModeloBase):
                         documentos.extend(docs)
 
                 except Exception as e:
-                    import traceback
-                    print(f"[build_enlaces] Error procesando {detalle.enlace}: {e}\n{traceback.format_exc()}")
+                    logger.exception("[build_enlaces] Error procesando %s", detalle.enlace)
                     continue
 
             if documentos:
@@ -766,7 +800,7 @@ class AgentesIA(ModeloBase):
                             apikeyobj.estado = False
                             apikeyobj.msgerror = f'Inválida al generar embeddings: {err_msg[:400]}'
                             apikeyobj.save(update_fields=['estado', 'msgerror'])
-                            print(f"[build_enlaces] API Key #{apikeyobj.id} marcada inactiva por embedding inválido")
+                            logger.warning("[build_enlaces] API Key #%s marcada inactiva por embedding inválido", apikeyobj.id)
                         except Exception:
                             pass
                         continue  # intentar con la siguiente apikey
@@ -803,6 +837,24 @@ TIPO_DATO_ENLACE = (
     (5, 'CSV'),
 )
 
+def _registrar_error_entrenamiento(agente_id, mensaje):
+    """Guarda el error de entrenamiento donde la UI pueda mostrarlo (cache 1h).
+
+    Reemplaza a los viejos `print()` silenciosos — el inspector RAG y el
+    reproceso leen esta clave para avisarle al usuario qué fuente falló.
+    """
+    import logging
+    logging.getLogger(__name__).warning("Entrenamiento agente %s: %s", agente_id, mensaje)
+    try:
+        from django.core.cache import cache
+        clave = f'entrenamiento_errores_{agente_id}'
+        errores = cache.get(clave) or []
+        errores.append(str(mensaje)[:300])
+        cache.set(clave, errores[-10:], 3600)
+    except Exception:
+        pass
+
+
 class DetalleAgentesAI(ModeloBase):
     agente = models.ForeignKey(AgentesIA, on_delete=models.CASCADE, blank=True, null=True, verbose_name='Agente')
     tipo = models.PositiveSmallIntegerField(choices=TIPO_DETALLE_AGENTE_AI, default=1, verbose_name='Tipo de detalle')
@@ -810,7 +862,11 @@ class DetalleAgentesAI(ModeloBase):
     tipo_dato_enlace = models.PositiveSmallIntegerField(choices=TIPO_DATO_ENLACE, default=1, verbose_name='Tipo de dato retorna')
     archivo = models.FileField(
         upload_to='detalles_agentes/', blank=True, null=True, verbose_name='Archivo adjunto',
-        validators=[FileExtensionValidator(["pdf", 'csv', 'json', 'xlsx']), FileMaxSizeInMbValidator(10)]
+        validators=[FileExtensionValidator([
+            'pdf', 'csv', 'json', 'xlsx', 'txt', 'md',
+            'doc', 'docx', 'ppt', 'pptx', 'odt', 'odp', 'ods', 'rtf', 'epub', 'html', 'htm',
+            'png', 'jpg', 'jpeg', 'tif', 'tiff', 'bmp', 'webp',
+        ]), FileMaxSizeInMbValidator(10)]
     )
     descripcion = models.TextField(blank=True, null=True, verbose_name='Descripción del detalle')
 
@@ -852,8 +908,16 @@ class DetalleAgentesAI(ModeloBase):
                 raw_docs = _VM._extract_raw_text(detalle.archivo.path)
                 if raw_docs:
                     textos_raw.append(raw_docs)
+                else:
+                    _registrar_error_entrenamiento(
+                        agente.id,
+                        f"'{os.path.basename(detalle.archivo.name)}' sin texto legible — "
+                        f"¿PDF escaneado sin OCR o formato sin soporte (Tika apagado)?"
+                    )
             except Exception as e:
-                print(f"Error extrayendo texto de {detalle.archivo}: {e}")
+                _registrar_error_entrenamiento(
+                    agente.id, f"Error extrayendo texto de '{os.path.basename(detalle.archivo.name)}': {e}"
+                )
 
         for detalle in detalles_texto:
             if detalle.descripcion:
@@ -892,7 +956,8 @@ class DetalleAgentesAI(ModeloBase):
                 vs_manager = VectorStoreManager(
                     storage_dir=base_dir,
                     provider=apikeyobj.proveedor,  # int — el provider registry lo resuelve
-                    apikey=apikeyobj.descripcion
+                    apikey=apikeyobj.descripcion,
+                    base_url=(getattr(apikeyobj, 'base_url', '') or None)
                 )
                 documentos = []
                 for detalle in detalles_archivo:
@@ -913,17 +978,24 @@ class DetalleAgentesAI(ModeloBase):
                     vs_path = vs_manager.build_and_save(documentos, nombre_vs)
                     agente.vectorstore_path = os.path.relpath(vs_path, settings.MEDIA_ROOT)
             except Exception as e:
-                print(f"Error construyendo FAISS: {e}")
+                _registrar_error_entrenamiento(agente.id, f"Error construyendo el índice FAISS: {e}")
             break
 
         agente.save()
 
+
+# Proveedores que hoy exponen un modelo de embeddings utilizable para vectorizar.
+# Se usa para validar que la key marcada como `usar_para_embeddings` sirva.
+PROVEEDORES_CON_EMBEDDINGS = (2, 3)
 
 PROVEEDOR_CHOICES = (
     (2, 'GEMINI'),
     (3, 'OPEN IA'),
     (4, 'CLAUDE'),
     (5, 'OLLAMA'),
+    (6, 'DEEPSEEK'),
+    (7, 'HUAWEI MAAS'),
+    (8, 'OLLAMA LOCAL'),
 )
 
 class ApiKeyIA(ModeloBase):
@@ -936,6 +1008,12 @@ class ApiKeyIA(ModeloBase):
         help_text='Modelo concreto a usar con esta API Key. Debe ser compatible con el proveedor '
                   '(Gemini con keys Gemini, GPT con OpenAI, Claude con Anthropic). Vacío = usa el default del provider.'
     )
+    base_url = models.CharField(
+        max_length=300, blank=True, default='', verbose_name='Base URL',
+        help_text='Endpoint del proveedor para servicios auto-hospedados u OpenAI-compatibles '
+                  '(Ollama: http://host:11434, Huawei MaaS: URL del despliegue). '
+                  'Vacío = URL por defecto del proveedor.'
+    )
     usuario = models.CharField(max_length=100, blank=True, null=True, verbose_name='Usuario')
     contrasena = models.CharField(max_length=100, blank=True, null=True, verbose_name='Contraseña')
     msgerror = models.TextField(blank=True, null=True, verbose_name='Mensaje de error', editable=False)
@@ -946,6 +1024,22 @@ class ApiKeyIA(ModeloBase):
         verbose_name='Token WebService',
         help_text='Token para autenticar llamadas al endpoint /api/ia/consultar/. Se genera automaticamente.',
     )
+    es_default = models.BooleanField(
+        default=False, verbose_name='Key por defecto del proveedor',
+        help_text='Los agentes que no tengan una key propia asignada usarán esta. '
+                  'Solo puede haber una por proveedor dentro del mismo perfil.'
+    )
+    usar_para_embeddings = models.BooleanField(
+        default=False, verbose_name='Usar esta key para vectorizar',
+        help_text='Esta es la key con la que se generan los embeddings al indexar el conocimiento '
+                  'de los agentes. Solo puede haber una por perfil. Si no marcás ninguna, se usa la '
+                  'key por defecto de un proveedor con embeddings.'
+    )
+    es_global = models.BooleanField(
+        default=False, verbose_name='Key global de la plataforma',
+        help_text='Key de la plataforma, disponible para los perfiles que no tengan una key propia. '
+                  'Solo la configura un superusuario y no se asocia a ningún perfil.'
+    )
 
     class Meta:
         verbose_name = 'Api Keys IA'
@@ -955,16 +1049,158 @@ class ApiKeyIA(ModeloBase):
         prov = self.get_proveedor_display()
         return f"{prov} · {self.modelo}" if self.modelo else prov
 
+    def clean(self):
+        """Invariantes de la key.
+
+        Los errores van a `NON_FIELD_ERRORS`, no a la clave del campo: ninguno de
+        los tres (`perfil`, `es_global`, `usar_para_embeddings`) está en
+        `ApiKeyIAForm`, y Django revienta con
+        `ValueError: 'ApiKeyIAForm' has no field named 'perfil'` al intentar
+        adjuntar un error a un campo que el form no expone. Con `__all__` el
+        mensaje se muestra igual y cualquier formulario puede renderizarlo.
+        """
+        from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
+        errores = []
+
+        if self.usar_para_embeddings and self.proveedor not in PROVEEDORES_CON_EMBEDDINGS:
+            errores.append(
+                f'El proveedor {self.get_proveedor_display()} no ofrece un modelo de embeddings. '
+                f'Elegí una key de Gemini u OpenAI para vectorizar.'
+            )
+
+        if self.es_global and self.perfil_id:
+            errores.append('Una key global no puede estar asociada a un perfil de negocio.')
+
+        if errores:
+            raise ValidationError({NON_FIELD_ERRORS: errores})
+
     def save(self, *args, **kwargs):
         if not self.webservice_token:
             import secrets
             self.webservice_token = secrets.token_urlsafe(48)
         super().save(*args, **kwargs)
+        # Los flags son excluyentes dentro de su ámbito: al marcar esta key se
+        # desmarcan las demás en vez de rechazar el guardado. Va después del
+        # super().save() para que un alta nueva ya tenga pk y no se excluya mal.
+        self._desmarcar_otras()
+
+    def _desmarcar_otras(self):
+        hermanas = ApiKeyIA.objects.filter(perfil_id=self.perfil_id).exclude(pk=self.pk)
+        if self.es_default:
+            hermanas.filter(proveedor=self.proveedor, es_default=True).update(es_default=False)
+        if self.usar_para_embeddings:
+            hermanas.filter(usar_para_embeddings=True).update(usar_para_embeddings=False)
 
     def regenerar_webservice_token(self):
         import secrets
         self.webservice_token = secrets.token_urlsafe(48)
         self.save(update_fields=['webservice_token'])
+
+
+# Valores base de los parámetros de comportamiento IA. Son la última red de la
+# cascada agente → perfil → plataforma y coinciden con las constantes históricas
+# de agents_ai/agente_consultor.py.
+PARAMETROS_IA_DEFAULT = {
+    'faqs_en_prompt': 5,
+    'cfg_faiss_k': 5,
+    'cfg_faiss_fetch_k': 20,
+    'cfg_max_context_chars': 4000,
+    'cfg_max_static_chars': 1200,
+    'cfg_history_turns': 5,
+    'cfg_user_snippet': 150,
+    'cfg_ai_snippet': 400,
+    'cfg_max_output_tokens': 3000,
+    'cfg_topic_anchor_chars': 180,
+    'cfg_umbral_distancia': 1.4,
+    'cfg_max_static_amplia': 12000,
+    'cfg_max_api_chars': 12000,
+    'memoria_rag_activa': True,
+}
+
+
+class ConfiguracionIA(ModeloBase):
+    """Parámetros generales de IA — el "centro de IA".
+
+    Existe una fila por perfil de negocio y, opcionalmente, una fila con
+    `perfil=None` que actúa como default de toda la plataforma. Los agentes
+    dejan sus campos en NULL para heredar de aquí; solo guardan valor propio
+    cuando el usuario los sobreescribe a mano.
+
+    La resolución de la cascada vive en `crm/ia_config.py` — no leer estos
+    campos directamente desde las vistas.
+    """
+    perfil = models.OneToOneField(
+        PerfilNegocioIA, on_delete=models.CASCADE, blank=True, null=True, unique=True,
+        related_name='configuracion_ia', verbose_name='Perfil Negocio IA',
+        help_text='Vacío = configuración por defecto de toda la plataforma.'
+    )
+
+    faqs_en_prompt = models.PositiveSmallIntegerField(
+        blank=True, null=True, default=None, verbose_name='Cantidad de FAQs en prompt',
+        help_text='Top N FAQs aprobadas (por prioridad) inyectadas literal en el prompt. '
+                  'Las demás quedan disponibles vía RAG.'
+    )
+    cfg_faiss_k = models.PositiveSmallIntegerField(
+        blank=True, null=True, default=None, verbose_name='Fragmentos relevantes por respuesta',
+        help_text='Cuántos pedacitos del entrenamiento le pasamos al bot por cada pregunta. '
+                  'Más = más contexto pero respuestas más lentas y caras. Rango: 3–10.'
+    )
+    cfg_faiss_fetch_k = models.PositiveSmallIntegerField(
+        blank=True, null=True, default=None, verbose_name='Candidatos antes de elegir',
+        help_text='Cuántos fragmentos consideramos antes de quedarnos con los mejores. Rango: 10–40.'
+    )
+    cfg_max_context_chars = models.PositiveIntegerField(
+        blank=True, null=True, default=None, verbose_name='Máx caracteres de contexto del entrenamiento',
+        help_text='Tope total de información del entrenamiento que cabe en una respuesta. Rango: 2000–8000.'
+    )
+    cfg_max_static_chars = models.PositiveIntegerField(
+        blank=True, null=True, default=None, verbose_name='Máx caracteres del texto fijo (cuando complementa)',
+        help_text='Cuando hay entrenamiento Y texto fijo (FAQ/menú), cuánto texto fijo se incluye. Rango: 800–5000.'
+    )
+    cfg_history_turns = models.PositiveSmallIntegerField(
+        blank=True, null=True, default=None, verbose_name='Mensajes previos que recuerda',
+        help_text='Cuántos turnos de conversación recuerda el bot (1 turno = cliente + respuesta). Rango: 3–20.'
+    )
+    cfg_user_snippet = models.PositiveSmallIntegerField(
+        blank=True, null=True, default=None, verbose_name='Máx caracteres por mensaje del cliente recordado',
+        help_text='Trunca los mensajes largos del cliente para no gastar tokens. Rango: 100–600.'
+    )
+    cfg_ai_snippet = models.PositiveSmallIntegerField(
+        blank=True, null=True, default=None, verbose_name='Máx caracteres por respuesta del bot recordada',
+        help_text='Crítico cuando el bot envía menús largos: si está muy bajo, olvida lo que ya mostró. Rango: 300–2000.'
+    )
+    cfg_max_output_tokens = models.PositiveIntegerField(
+        blank=True, null=True, default=None, verbose_name='Máx longitud de la respuesta del bot',
+        help_text='Límite de tokens que el bot puede generar en una sola respuesta. Rango: 500–4000.'
+    )
+    cfg_topic_anchor_chars = models.PositiveSmallIntegerField(
+        blank=True, null=True, default=None, verbose_name='Chars del tema inicial conservado',
+        help_text='Ancla del primer mensaje sustantivo del cliente para mantener el foco. Rango: 100–400.'
+    )
+    cfg_umbral_distancia = models.FloatField(
+        blank=True, null=True, default=None, verbose_name='Umbral de distancia de relevancia',
+        help_text='Distancia máxima para considerar relevante un fragmento recuperado. '
+                  'Más bajo = más estricto (descarta más). Rango: 0.8–2.0.'
+    )
+    cfg_max_static_amplia = models.PositiveIntegerField(
+        blank=True, null=True, default=None, verbose_name='Máx caracteres del texto fijo en consultas amplias',
+        help_text='Techo del contexto estático completo cuando la pregunta es general ("¿qué venden?"). '
+                  'Rango: 4000–20000.'
+    )
+    memoria_rag_activa = models.BooleanField(
+        blank=True, null=True, default=None, verbose_name='Memoria de conversaciones previas (RAG)',
+        help_text='El agente indexa cada pregunta→respuesta válida y reutiliza lo ya respondido a '
+                  'otros clientes. Aprende entre conversaciones sin gastar tokens LLM.'
+    )
+
+    class Meta:
+        verbose_name = 'Configuración IA'
+        verbose_name_plural = 'Configuraciones IA'
+
+    def __str__(self):
+        if self.perfil_id:
+            return f'Configuración IA · {self.perfil}'
+        return 'Configuración IA · plataforma'
 
 
 class ConsumoTokenIA(models.Model):
@@ -1190,9 +1426,6 @@ class DepartamentoChatBot(ModeloBase):
             return resultado
 
         return construir(hijos_por_padre.get(None, []))
-
-    def obtener_perfiles(self):
-        return self.perfildepartamentochatbot_set.filter(status=True).order_by('usuario__first_name')
 
     def nodo_inicio(self):
         return self.opciondepartamentochatbot_set.filter(es_inicio=True, status=True).first() \
@@ -1520,18 +1753,6 @@ class EstadoFlujoChatbot(ModeloBase):
         self.en_handoff = False
 
 
-class PerfilDepartamentoChatBot(ModeloBase):
-    departamento = models.ForeignKey(DepartamentoChatBot, on_delete=models.SET_NULL, null=True, blank=True)
-    usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE)
-
-    class Meta:
-        verbose_name = 'Perfil Negocio ChatBot'
-        verbose_name_plural = 'Perfiles Negocios ChatBot'
-
-    def __str__(self):
-        return f"{self.usuario.get_full_name()} - {self.departamento.nombre if self.departamento else 'Sin departamento'}"
-
-
 # ---------------------------------------------------------------------------
 # Detección de fin de conversación + acciones automáticas
 # ---------------------------------------------------------------------------
@@ -1647,6 +1868,56 @@ class AccionFinConversacion(ModeloBase):
             return self.plantilla_mensaje.format(**contexto)
         except (KeyError, ValueError):
             return self.plantilla_mensaje
+
+
+class PreguntaEvaluacionAgente(ModeloBase):
+    """Pregunta de prueba guardada por agente — la suite de evaluación las
+    ejecuta en lote contra el agente real para medir qué responde bien."""
+    agente = models.ForeignKey(
+        AgentesIA, on_delete=models.CASCADE,
+        related_name='preguntas_evaluacion', verbose_name='Agente'
+    )
+    pregunta = models.TextField(verbose_name='Pregunta de prueba')
+    criterio = models.TextField(
+        blank=True, default='', verbose_name='Criterio de éxito',
+        help_text='Qué debería contener o cumplir la respuesta (opcional). '
+                  'Ej: "debe mencionar el precio de la pizza familiar".'
+    )
+
+    class Meta:
+        verbose_name = 'Pregunta de evaluación de agente'
+        verbose_name_plural = 'Preguntas de evaluación de agente'
+        ordering = ['id']
+
+    def __str__(self):
+        return f"[{self.agente_id}] {self.pregunta[:60]}"
+
+
+class EvaluacionAgente(ModeloBase):
+    """Corrida de la suite de evaluación: respuestas reales + veredicto del juez LLM."""
+    agente = models.ForeignKey(
+        AgentesIA, on_delete=models.CASCADE,
+        related_name='evaluaciones', verbose_name='Agente'
+    )
+    score = models.DecimalField(
+        max_digits=4, decimal_places=1, default=0,
+        verbose_name='Score global (0-10)'
+    )
+    total_preguntas = models.PositiveSmallIntegerField(default=0, verbose_name='Preguntas evaluadas')
+    aprobadas = models.PositiveSmallIntegerField(default=0, verbose_name='Preguntas aprobadas')
+    resultados = models.JSONField(
+        default=list, blank=True, verbose_name='Resultados por pregunta',
+        help_text='[{pregunta, respuesta, uso_datos, inventa, cumple_criterio, score, comentario}]'
+    )
+    tokens_total = models.IntegerField(default=0, verbose_name='Tokens consumidos')
+
+    class Meta:
+        verbose_name = 'Evaluación de agente'
+        verbose_name_plural = 'Evaluaciones de agente'
+        ordering = ['-fecha_registro']
+
+    def __str__(self):
+        return f"Evaluación #{self.pk} de {self.agente} — {self.score}/10"
 
 
 class AuditoriaAgenteIA(models.Model):
@@ -1932,6 +2203,7 @@ class Cliente(ModeloBase):
     apellidos = models.CharField('Apellidos', max_length=150, blank=True, default='')
     email = models.EmailField('Email', blank=True, default='')
     telefono = models.CharField('Teléfono', max_length=30, blank=True, default='')
+    ciudad = models.CharField('Ciudad', max_length=120, blank=True, default='')
     edad = models.PositiveSmallIntegerField('Edad', null=True, blank=True)
     fecha_nacimiento = models.DateField('Fecha de nacimiento', null=True, blank=True)
     sexo = models.CharField('Sexo', max_length=1, choices=CLIENTE_SEXO_CHOICES, blank=True, default='')
@@ -1979,3 +2251,236 @@ class Cliente(ModeloBase):
     def __str__(self):
         full = f'{self.nombres} {self.apellidos}'.strip()
         return f'{self.cedula} · {full}' if full else self.cedula
+
+    @property
+    def edad_actual(self):
+        """Edad calculada en vivo a partir de la fecha de nacimiento. Si no hay
+        fecha, cae al valor `edad` capturado. Es el valor que se muestra en
+        listados/fichas (no envejece estancado)."""
+        from datetime import date as _date
+        if self.fecha_nacimiento:
+            hoy = _date.today()
+            fn = self.fecha_nacimiento
+            return hoy.year - fn.year - ((hoy.month, hoy.day) < (fn.month, fn.day))
+        return self.edad
+
+    def save(self, *args, **kwargs):
+        """Deriva `fecha_nacimiento` desde `edad` cuando solo viaja la edad
+        (caso típico del chatbot/alta manual: pedimos edad, no fecha). Así la
+        edad mostrada queda siempre calculada desde una fecha real."""
+        from datetime import date as _date, timedelta as _timedelta
+        if not self.fecha_nacimiento and self.edad is not None and int(self.edad) >= 0:
+            hoy = _date.today()
+            try:
+                self.fecha_nacimiento = hoy.replace(year=hoy.year - int(self.edad))
+            except ValueError:
+                self.fecha_nacimiento = hoy - _timedelta(days=int(self.edad) * 365)
+            uf = kwargs.get('update_fields')
+            if uf is not None and 'fecha_nacimiento' not in uf:
+                kwargs['update_fields'] = list(uf) + ['fecha_nacimiento']
+        super().save(*args, **kwargs)
+
+
+class ClienteOrigen(ModeloBase):
+    """Cada CONVERSACIÓN distinta desde la que se registró/atendió a un Cliente.
+
+    Un mismo cliente (cédula) puede originarse de varias conversaciones (4-5),
+    posiblemente desde distintos números/sesiones. Guardamos 1 fila por
+    (cliente, conversación) — así se ven TODAS las conversaciones de origen, cada
+    una con su número/sesión. Si la misma conversación vuelve a registrarlo, se
+    incrementa `veces`.
+    """
+    cliente = models.ForeignKey(
+        Cliente, on_delete=models.CASCADE, related_name='origenes',
+        verbose_name='Cliente',
+    )
+    numero = models.CharField('Número de origen', max_length=50, blank=True, default='')
+    contacto = models.ForeignKey(
+        'whatsapp.Contacto', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+', verbose_name='Contacto',
+    )
+    conversacion = models.ForeignKey(
+        'whatsapp.ConversacionWhatsApp', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+', verbose_name='Conversación',
+    )
+    sesion = models.ForeignKey(
+        'whatsapp.SesionWhatsApp', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+', verbose_name='Sesión',
+    )
+    departamento = models.ForeignKey(
+        'crm.DepartamentoChatBot', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='+', verbose_name='Departamento',
+    )
+    canal = models.CharField('Canal', max_length=30, blank=True, default='chatbot')
+    veces = models.PositiveIntegerField('Veces que escribió', default=1)
+    fecha_ultima = models.DateTimeField('Última vez', null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Origen de cliente'
+        verbose_name_plural = 'Orígenes de cliente'
+        ordering = ['-fecha_ultima']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['cliente', 'conversacion'],
+                name='uniq_cliente_origen_conv',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.cliente_id} · {self.numero or "?"}'
+
+
+CANALES_NOTIF_ASIGNACION = (
+    ('interna', 'Notificación interna'),
+    ('correo', 'Correo'),
+    ('whatsapp', 'WhatsApp'),
+)
+
+
+class LogNotificacionAsignacion(ModeloBase):
+    """Trazabilidad de cada aviso enviado al asesor cuando se le asigna una
+    conversación (interna/correo/WhatsApp). Un registro por canal e intento,
+    con éxito o detalle del fallo — permite auditar si el asesor fue avisado."""
+    conversacion = models.ForeignKey(
+        'whatsapp.ConversacionWhatsApp', on_delete=models.CASCADE,
+        related_name='logs_notificacion_asignacion', verbose_name='Conversación',
+    )
+    agente = models.ForeignKey(
+        'autenticacion.Usuario', on_delete=models.CASCADE,
+        related_name='logs_notificacion_asignacion', verbose_name='Agente',
+    )
+    canal = models.CharField('Canal', max_length=12, choices=CANALES_NOTIF_ASIGNACION)
+    motivo = models.CharField('Motivo', max_length=30, blank=True, default='')
+    destino = models.CharField('Destino', max_length=200, blank=True, default='')
+    exito = models.BooleanField('Éxito', default=False)
+    detalle = models.TextField('Detalle', blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Log de notificación de asignación'
+        verbose_name_plural = 'Logs de notificación de asignación'
+        ordering = ['-fecha_registro']
+        indexes = [
+            models.Index(fields=['conversacion']),
+            models.Index(fields=['agente']),
+        ]
+
+    def __str__(self):
+        return f'Conv #{self.conversacion_id} → {self.agente_id} [{self.canal}] {"✓" if self.exito else "✗"}'
+
+
+RAG_FUENTE_TIPOS = (
+    (1, 'Enlace'),
+    (2, 'Archivo'),
+    (3, 'Texto'),
+)
+
+RAG_FUENTE_ESTADOS = (
+    ('pendiente', 'Pendiente'),
+    ('indexado', 'Indexado'),
+    ('error', 'Error'),
+)
+
+
+class RagColeccion(ModeloBase):
+    """Colección de conocimiento RAG independiente del agente.
+
+    Fase 1 (almacenamiento): el operador crea la colección, sube fuentes y las
+    indexa a un FAISS propio (`media/vectorstores/rag_col_<id>/`). Una colección
+    puede asociarse a una o varias sesiones WhatsApp
+    (`SesionWhatsApp.rag_coleccion`) — el consumo en el chat llega en fase 2.
+    """
+    perfil = models.ForeignKey(
+        PerfilNegocioIA, on_delete=models.CASCADE,
+        related_name='rag_colecciones', verbose_name='Perfil de negocio',
+    )
+    nombre = models.CharField('Nombre', max_length=150)
+    descripcion = models.TextField('Descripción', blank=True, default='')
+    apikey = models.ForeignKey(
+        'crm.ApiKeyIA', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='rag_colecciones', verbose_name='API Key para embeddings',
+        help_text='Si está vacía se usa la primera API Key activa del perfil.',
+    )
+    vectorstore_path = models.CharField('Ruta del índice FAISS', max_length=1000, blank=True, default='')
+    total_chunks = models.PositiveIntegerField('Chunks indexados', default=0)
+    ultima_indexacion = models.DateTimeField('Última indexación', null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Colección RAG'
+        verbose_name_plural = 'Colecciones RAG'
+        ordering = ['-fecha_registro']
+
+    def __str__(self):
+        return self.nombre
+
+    def ruta_indice(self):
+        import os
+        from django.conf import settings
+        return os.path.join(settings.MEDIA_ROOT, 'vectorstores', f'rag_col_{self.id}')
+
+    def fuentes_activas(self):
+        return self.fuentes.filter(status=True)
+
+    def fuentes_pendientes(self):
+        return self.fuentes.filter(status=True, estado='pendiente')
+
+    def apikey_efectiva(self):
+        if self.apikey and self.apikey.estado:
+            return self.apikey
+        return ApiKeyIA.objects.filter(
+            perfil=self.perfil, estado=True, status=True,
+        ).exclude(descripcion='').first()
+
+
+class RagFuente(ModeloBase):
+    """Una fuente de conocimiento dentro de una colección RAG:
+    enlace, archivo (Tika/OCR) o texto pegado."""
+    coleccion = models.ForeignKey(
+        RagColeccion, on_delete=models.CASCADE,
+        related_name='fuentes', verbose_name='Colección',
+    )
+    tipo = models.PositiveSmallIntegerField('Tipo', choices=RAG_FUENTE_TIPOS, default=2)
+    titulo = models.CharField('Título', max_length=200, blank=True, default='')
+    enlace = models.URLField('Enlace', max_length=600, blank=True, default='')
+    archivo = models.FileField(
+        upload_to='rag_colecciones/', blank=True, null=True, verbose_name='Archivo',
+        validators=[FileExtensionValidator([
+            'pdf', 'csv', 'json', 'xlsx', 'txt', 'md',
+            'doc', 'docx', 'ppt', 'pptx', 'odt', 'odp', 'ods', 'rtf', 'epub', 'html', 'htm',
+            'png', 'jpg', 'jpeg', 'tif', 'tiff', 'bmp', 'webp',
+        ]), FileMaxSizeInMbValidator(10)],
+    )
+    texto = models.TextField('Texto', blank=True, default='')
+    estado = models.CharField('Estado', max_length=12, choices=RAG_FUENTE_ESTADOS, default='pendiente')
+    error_detalle = models.TextField('Detalle del error', blank=True, default='')
+    chunks = models.PositiveIntegerField('Chunks generados', default=0)
+
+    class Meta:
+        verbose_name = 'Fuente RAG'
+        verbose_name_plural = 'Fuentes RAG'
+        ordering = ['-fecha_registro']
+
+    def __str__(self):
+        return self.titulo or f'Fuente #{self.id}'
+
+    def nombre_visible(self):
+        if self.titulo:
+            return self.titulo
+        if self.tipo == 2 and self.archivo:
+            import os
+            return os.path.basename(self.archivo.name)
+        if self.tipo == 1:
+            return self.enlace[:80]
+        return (self.texto or '')[:60] or f'Fuente #{self.id}'
+
+
+class PermisosCRM(models.Model):
+    """Modelo sin tabla (managed=False) que actúa como contenedor de permisos
+    especiales del CRM asignables por usuario desde el módulo administrativo
+    de Usuarios (modal "Permisos especiales")."""
+
+    class Meta:
+        managed = False
+        default_permissions = ()
+        permissions = [
+            ('puede_ver_citas_all', 'Puede ver todas las citas de la agenda'),
+        ]

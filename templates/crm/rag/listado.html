@@ -1,0 +1,409 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <link rel="stylesheet" href="/static/css/crm/rag_listado.css?v1.0">
+
+    <div class="row align-items-center mb-3">
+        <div class="col-md-8">
+            <button type="button" class="btn btn-success" onclick="abrirModalColeccion()">
+                <i class="fa fa-plus-circle me-1"></i> Nueva colección
+            </button>
+        </div>
+    </div>
+
+    <div class="rag-grid">
+        {% for c in colecciones %}
+            <div class="rag-card">
+                <h5><i class="fa fa-database text-primary me-1"></i>{{ c.nombre }}</h5>
+                <div class="rag-desc">{{ c.descripcion|default:'Sin descripción'|truncatechars:120 }}</div>
+                <div class="rag-metricas">
+                    <span><b>{{ c.n_fuentes }}</b> fuentes</span>
+                    <span><b>{{ c.total_chunks }}</b> chunks</span>
+                    <span><b>{{ c.n_sesiones }}</b> sesiones</span>
+                </div>
+                {% if c.n_pendientes %}
+                    <span class="badge bg-warning text-dark mb-2">{{ c.n_pendientes }} pendiente{{ c.n_pendientes|pluralize }} de indexar</span>
+                {% endif %}
+                {% if c.n_errores %}
+                    <span class="badge bg-danger mb-2">{{ c.n_errores }} con error</span>
+                {% endif %}
+                {% if c.ultima_indexacion %}
+                    <div class="text-muted small mb-2">Indexada: {{ c.ultima_indexacion|date:'d/m/Y H:i' }}</div>
+                {% endif %}
+                <div class="rag-acciones">
+                    <button class="btn btn-sm btn-primary" onclick="verFuentes({{ c.id }})">
+                        <i class="fa fa-list me-1"></i>Fuentes
+                    </button>
+                    <button class="btn btn-sm btn-success" onclick="abrirModalFuente({{ c.id }}, '{{ c.nombre }}')">
+                        <i class="fa fa-plus me-1"></i>Agregar
+                    </button>
+                    <button class="btn btn-sm btn-warning" onclick="indexarColeccion({{ c.id }}, this)">
+                        <i class="fa fa-bolt me-1"></i>Indexar
+                    </button>
+                    <button class="btn btn-sm btn-info text-white" onclick="abrirModalPrueba({{ c.id }}, '{{ c.nombre }}')">
+                        <i class="fa fa-vial me-1"></i>Probar
+                    </button>
+                    <button class="btn btn-sm btn-secondary" onclick="abrirModalColeccion({{ c.id }}, '{{ c.nombre|escapejs }}', '{{ c.descripcion|escapejs }}', '{{ c.apikey_id|default:'' }}')">
+                        <i class="fa fa-pen me-1"></i>Editar
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="eliminarColeccion({{ c.id }}, '{{ c.nombre|escapejs }}')">
+                        <i class="fa fa-trash me-1"></i>Eliminar
+                    </button>
+                </div>
+            </div>
+        {% empty %}
+            <div class="rag-vacio w-100">
+                <i class="fa fa-database"></i>
+                <h5>Todavía no tienes colecciones RAG</h5>
+                <p>Crea una colección, sube documentos y asígnala a una sesión de WhatsApp.</p>
+            </div>
+        {% endfor %}
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-body">
+            <h5 class="mb-3"><i class="fab fa-whatsapp text-success me-1"></i>Colección por sesión</h5>
+            <div class="table-responsive">
+                <table class="table table-sm table-striped align-middle">
+                    <thead>
+                    <tr>
+                        <th>Sesión</th>
+                        <th>Número</th>
+                        <th>Colección RAG</th>
+                        <th class="text-center">Acción</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for s in sesiones_usuario %}
+                        <tr>
+                            <td>{{ s.nombre|default:'—' }}</td>
+                            <td>{{ s.numero|default:'—' }}</td>
+                            <td>
+                                <select class="form-select form-select-sm rag-select-sesion" data-sesion="{{ s.id }}">
+                                    <option value="">Sin colección</option>
+                                    {% for c in colecciones %}
+                                        <option value="{{ c.id }}" {% if s.rag_coleccion_id == c.id %}selected{% endif %}>{{ c.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-primary" onclick="guardarSesion({{ s.id }}, this)">
+                                    <i class="fa fa-save"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="4" class="text-center text-muted">No tienes sesiones creadas.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalColeccion" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form id="frmColeccion" method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" id="col-action" value="add_coleccion">
+                    <input type="hidden" name="id" id="col-id" value="">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalColeccionLabel">Nueva colección</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-2">
+                            <div class="col-12">
+                                <label class="form-label">Nombre *</label>
+                                <input type="text" name="nombre" id="col-nombre" class="form-control" maxlength="150" required>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Descripción</label>
+                                <textarea name="descripcion" id="col-descripcion" rows="2" class="form-control"></textarea>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">API Key para embeddings</label>
+                                <select name="apikey_id" id="col-apikey" class="form-select">
+                                    <option value="">Automática (primera activa del perfil)</option>
+                                    {% for k in apikeys %}
+                                        <option value="{{ k.id }}">{{ k.alias|default:k.get_proveedor_display }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-success"><i class="fa fa-save me-1"></i>Guardar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalFuente" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <form id="frmFuente" method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="add_fuente">
+                    <input type="hidden" name="coleccion_id" id="fuente-coleccion-id" value="">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalFuenteLabel">Agregar fuente</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <label class="form-label">Tipo</label>
+                                <select name="tipo" id="fuente-tipo" class="form-select">
+                                    <option value="2">Archivo</option>
+                                    <option value="1">Enlace</option>
+                                    <option value="3">Texto</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Título</label>
+                                <input type="text" name="titulo" class="form-control" maxlength="200">
+                            </div>
+                            <div class="col-12" id="grupo-archivo">
+                                <label class="form-label">Archivo (pdf, docx, xlsx, imágenes con OCR…)</label>
+                                <input type="file" name="archivo" class="form-control">
+                            </div>
+                            <div class="col-12 d-none" id="grupo-enlace">
+                                <label class="form-label">URL</label>
+                                <input type="url" name="enlace" class="form-control" maxlength="600">
+                            </div>
+                            <div class="col-12 d-none" id="grupo-texto">
+                                <label class="form-label">Texto</label>
+                                <textarea name="texto" rows="5" class="form-control"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-danger" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-success"><i class="fa fa-save me-1"></i>Agregar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalFuentes" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalFuentesLabel">Fuentes</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                            <tr>
+                                <th>Fuente</th>
+                                <th>Tipo</th>
+                                <th class="text-center">Estado</th>
+                                <th class="text-center">Chunks</th>
+                                <th class="text-center">Acción</th>
+                            </tr>
+                            </thead>
+                            <tbody id="tbody-fuentes"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalPrueba" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalPruebaLabel">Probar consulta</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="input-group mb-3">
+                        <input type="text" id="rag-prueba-pregunta" class="form-control" placeholder="Escribe una pregunta como lo haría el cliente…">
+                        <button class="btn btn-primary" type="button" onclick="probarConsulta()">
+                            <i class="fa fa-search me-1"></i>Buscar
+                        </button>
+                    </div>
+                    <div id="rag-prueba-resultados"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+    <script>
+        let _pruebaColeccionId = null;
+
+        function _csrf() {
+            return $('input[name=csrfmiddlewaretoken]').first().val();
+        }
+
+        function abrirModalColeccion(id, nombre, descripcion, apikeyId) {
+            $('#col-action').val(id ? 'change_coleccion' : 'add_coleccion');
+            $('#col-id').val(id || '');
+            $('#col-nombre').val(nombre || '');
+            $('#col-descripcion').val(descripcion || '');
+            $('#col-apikey').val(apikeyId || '');
+            $('#modalColeccionLabel').text(id ? 'Editar colección' : 'Nueva colección');
+            new bootstrap.Modal(document.getElementById('modalColeccion')).show();
+        }
+
+        $('#frmColeccion').on('submit', function (e) {
+            e.preventDefault();
+            $.post('', $(this).serialize())
+                .done(function (r) {
+                    if (r.error) { mensajeWarning(r.message); return; }
+                    location.reload();
+                })
+                .fail(function () { mensajeWarning('Error de red.'); });
+        });
+
+        function eliminarColeccion(id, nombre) {
+            Swal.fire({
+                title: '¿Eliminar colección?',
+                text: `Se eliminará "${nombre}" y se desvinculará de sus sesiones.`,
+                type: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, eliminar',
+                cancelButtonText: 'Cancelar'
+            }).then(function (res) {
+                if (!res.value) return;
+                $.post('', { action: 'delete_coleccion', id: id, csrfmiddlewaretoken: _csrf() })
+                    .done(function (r) {
+                        if (r.error) { mensajeWarning(r.message); return; }
+                        location.reload();
+                    });
+            });
+        }
+
+        function abrirModalFuente(coleccionId, nombre) {
+            $('#fuente-coleccion-id').val(coleccionId);
+            $('#modalFuenteLabel').text(`Agregar fuente a "${nombre}"`);
+            $('#frmFuente')[0].reset();
+            $('#fuente-coleccion-id').val(coleccionId);
+            $('#fuente-tipo').trigger('change');
+            new bootstrap.Modal(document.getElementById('modalFuente')).show();
+        }
+
+        $('#fuente-tipo').on('change', function () {
+            const t = $(this).val();
+            $('#grupo-archivo').toggleClass('d-none', t !== '2');
+            $('#grupo-enlace').toggleClass('d-none', t !== '1');
+            $('#grupo-texto').toggleClass('d-none', t !== '3');
+        });
+
+        $('#frmFuente').on('submit', function (e) {
+            e.preventDefault();
+            const fd = new FormData(this);
+            $.ajax({ url: '', type: 'POST', data: fd, processData: false, contentType: false })
+                .done(function (r) {
+                    if (r.error) { mensajeWarning(r.message); return; }
+                    location.reload();
+                })
+                .fail(function () { mensajeWarning('Error de red.'); });
+        });
+
+        function verFuentes(id) {
+            $.get('', { action: 'fuentes', id: id })
+                .done(function (r) {
+                    if (r.error) { mensajeWarning(r.message || 'Error.'); return; }
+                    $('#modalFuentesLabel').text(`Fuentes de "${r.nombre}"`);
+                    const filas = r.fuentes.map(function (f) {
+                        const badge = f.estado === 'indexado'
+                            ? '<span class="badge bg-success">Indexado</span>'
+                            : (f.estado === 'error'
+                                ? `<span class="badge bg-danger" title="${f.error}">Error</span>`
+                                : '<span class="badge bg-warning text-dark">Pendiente</span>');
+                        const err = f.estado === 'error' ? `<div class="rag-fuente-error">${f.error}</div>` : '';
+                        return `<tr>
+                            <td>${f.titulo}${err}</td>
+                            <td>${f.tipo}</td>
+                            <td class="text-center">${badge}</td>
+                            <td class="text-center">${f.chunks}</td>
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-danger" onclick="eliminarFuente(${f.id})"><i class="fa fa-trash"></i></button>
+                            </td>
+                        </tr>`;
+                    }).join('');
+                    $('#tbody-fuentes').html(filas || '<tr><td colspan="5" class="text-center text-muted">Sin fuentes.</td></tr>');
+                    new bootstrap.Modal(document.getElementById('modalFuentes')).show();
+                });
+        }
+
+        function eliminarFuente(id) {
+            $.post('', { action: 'delete_fuente', id: id, csrfmiddlewaretoken: _csrf() })
+                .done(function (r) {
+                    if (r.error) { mensajeWarning(r.message); return; }
+                    location.reload();
+                });
+        }
+
+        function indexarColeccion(id, btn) {
+            const $btn = $(btn);
+            $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i>Indexando…');
+            $.post('', { action: 'indexar', id: id, csrfmiddlewaretoken: _csrf() })
+                .done(function (r) {
+                    if (r.error) {
+                        mensajeWarning(r.message);
+                        $btn.prop('disabled', false).html('<i class="fa fa-bolt me-1"></i>Indexar');
+                        return;
+                    }
+                    location.reload();
+                })
+                .fail(function () {
+                    mensajeWarning('Error de red.');
+                    $btn.prop('disabled', false).html('<i class="fa fa-bolt me-1"></i>Indexar');
+                });
+        }
+
+        function guardarSesion(sesionId, btn) {
+            const coleccionId = $(`select.rag-select-sesion[data-sesion=${sesionId}]`).val();
+            const $btn = $(btn);
+            $btn.prop('disabled', true);
+            $.post('', { action: 'asignar_sesion', sesion_id: sesionId, coleccion_id: coleccionId, csrfmiddlewaretoken: _csrf() })
+                .done(function (r) {
+                    $btn.prop('disabled', false);
+                    if (r.error) { mensajeWarning(r.message); return; }
+                    alertaSuccess ? alertaSuccess(r.message) : mensajeWarning(r.message);
+                })
+                .fail(function () {
+                    $btn.prop('disabled', false);
+                    mensajeWarning('Error de red.');
+                });
+        }
+
+        function abrirModalPrueba(id, nombre) {
+            _pruebaColeccionId = id;
+            $('#modalPruebaLabel').text(`Probar consulta — "${nombre}"`);
+            $('#rag-prueba-pregunta').val('');
+            $('#rag-prueba-resultados').html('');
+            new bootstrap.Modal(document.getElementById('modalPrueba')).show();
+        }
+
+        function probarConsulta() {
+            const pregunta = $('#rag-prueba-pregunta').val().trim();
+            if (!pregunta || !_pruebaColeccionId) return;
+            $('#rag-prueba-resultados').html('<i class="fa fa-spinner fa-spin"></i> Buscando…');
+            $.post('', { action: 'probar_consulta', id: _pruebaColeccionId, pregunta: pregunta, csrfmiddlewaretoken: _csrf() })
+                .done(function (r) {
+                    if (r.error) { $('#rag-prueba-resultados').html(''); mensajeWarning(r.message); return; }
+                    if (!r.resultados.length) {
+                        $('#rag-prueba-resultados').html('<p class="text-muted">Sin resultados relevantes. ¿Indexaste la colección?</p>');
+                        return;
+                    }
+                    const html = r.resultados.map(function (x) {
+                        return `<div class="rag-chunk"><b>${x.fuente}</b> <span class="text-muted">(score ${x.score.toFixed(3)})</span><br>${x.texto}</div>`;
+                    }).join('');
+                    $('#rag-prueba-resultados').html(html);
+                });
+        }
+    </script>
+{% endblock %}

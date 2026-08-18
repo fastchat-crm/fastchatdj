@@ -15,7 +15,10 @@ from autenticacion.urls import autenticacion_urls
 from autenticacion.view_perfil import perfilView
 from core.ajax import ConsultasAjax
 from crm.urls import crm_urls
+from objetos.urls import objetos_urls
+from automatizacion.urls import automatizacion_urls
 from fastchatdj.view_clearsitedata import clearSiteDataView
+from fastchatdj.view_health import health_view
 from fastchatdj import settings
 from fastchatdj.view_redirect import redirectView, redirectToUrlView
 from seguridad.api_mensajeria import enviar_mensaje_view
@@ -29,6 +32,9 @@ from django.conf.urls.static import static
 from core.consultas import consultas
 from seguridad.view_notificaciones import notificacionesView
 from whatsapp.urls import whatsapp_urls
+from instagram.urls import instagram_urls
+from facebook.urls import facebook_urls
+from tiktok.urls import tiktok_urls
 from agenda.urls import agenda_urls
 
 confi = Configuracion.get_instancia()
@@ -68,10 +74,50 @@ urls_sistema = (
         "vista": None
     },
     {
+        "nombre": "Instagram",
+        "url": 'instagram/',
+        "sub_urls": instagram_urls,
+        "include": include('instagram.urls'),
+        "name": None,
+        "vista": None
+    },
+    {
+        "nombre": "Facebook",
+        "url": 'facebook/',
+        "sub_urls": facebook_urls,
+        "include": include('facebook.urls'),
+        "name": None,
+        "vista": None
+    },
+    {
+        "nombre": "TikTok",
+        "url": 'tiktok/',
+        "sub_urls": tiktok_urls,
+        "include": include('tiktok.urls'),
+        "name": None,
+        "vista": None
+    },
+    {
         "nombre": "Crm",
         "url": 'crm/',
         "sub_urls": crm_urls,
         "include": include('crm.urls'),
+        "name": None,
+        "vista": None
+    },
+    {
+        "nombre": "Automatizaciones",
+        "url": 'automatizacion/',
+        "sub_urls": automatizacion_urls,
+        "include": include('automatizacion.urls'),
+        "name": None,
+        "vista": None
+    },
+    {
+        "nombre": "Objetos personalizados",
+        "url": 'objetos/',
+        "sub_urls": objetos_urls,
+        "include": include('objetos.urls'),
         "name": None,
         "vista": None
     },
@@ -87,6 +133,7 @@ urls_sistema = (
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('health/', health_view, name='health_check'),
     path('', home_view),
     path('panel/', index),
     path('notificaciones/', notificacionesView),

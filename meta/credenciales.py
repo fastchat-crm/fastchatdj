@@ -39,6 +39,42 @@ def get_meta_app_secret() -> str:
     return get_meta_app_credentials()[1]
 
 
+def get_meta_app_secrets() -> list:
+    """Todos los app_secrets aceptados para validar HMAC de webhooks.
+
+    Necesario cuando la instalación usa más de una Meta App (ej. una app para
+    WhatsApp Cloud y otra para Messenger/Instagram): cada app firma sus
+    webhooks con su propio secret y con uno solo el resto se rechazaba como
+    firma inválida. Fuentes, en orden:
+      1. `CredencialMetaApp.app_secret` (principal, UI /seguridad/credencial-meta/).
+      2. `CredencialMetaApp.app_secrets_extra` (uno por línea o coma, misma UI).
+      3. `META_APP_SECRETS_EXTRA` de credenciales.json (fallback/bootstrap).
+    """
+    from django.conf import settings
+    secretos = [get_meta_app_secret()]
+    try:
+        from seguridad.models import Configuracion, CredencialMetaApp
+        confi = Configuracion.get_instancia()
+        if confi and confi.pk:
+            cred = CredencialMetaApp.objects.filter(configuracion=confi).first()
+            crudo = (getattr(cred, 'app_secrets_extra', '') or '') if cred else ''
+            for linea in crudo.replace(',', '\n').splitlines():
+                secretos.append(linea)
+    except Exception as ex:
+        logger.debug("app_secrets_extra no disponible: %s", ex)
+    extra = getattr(settings, 'META_APP_SECRETS_EXTRA', []) or []
+    if isinstance(extra, str):
+        extra = [extra]
+    secretos.extend(extra)
+    vistos, unicos = set(), []
+    for s in secretos:
+        s = (s or '').strip()
+        if s and s not in vistos:
+            vistos.add(s)
+            unicos.append(s)
+    return unicos
+
+
 def get_meta_config_id() -> str:
     """Devuelve el `config_id` del Embedded Signup de WhatsApp Business.
 

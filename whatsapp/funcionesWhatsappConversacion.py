@@ -28,6 +28,152 @@ HORAS_VENTANA_REACTIVAR = 23
 
 HORAS_VENTANA_META_CUSTOMER_SERVICE = 24
 
+HORAS_AVISO_POR_CADUCAR = 6
+
+
+def horas_aviso_de_sesion(sesion):
+    """Horas de anticipación con las que se avisa que la ventana de 24h de Meta
+    está por cerrarse. Se configura por sesión (`horas_aviso_por_caducar`); si
+    el valor está vacío o fuera de rango se usa el default de 6 horas."""
+    horas = getattr(sesion, 'horas_aviso_por_caducar', None)
+    if not horas or not 1 <= horas < HORAS_VENTANA_META_CUSTOMER_SERVICE:
+        return HORAS_AVISO_POR_CADUCAR
+    return horas
+
+
+def conversaciones_por_caducar_por_sesion(usuario, sesiones, horas_aviso=None):
+    """Cuenta, sesión por sesión, las conversaciones a las que les queda poco
+    de la ventana de servicio de Meta (24h desde el último mensaje entrante).
+
+    Mismo criterio que el filtro `?por_caducar=1` del inbox: el último mensaje
+    del cliente tiene entre `24 - horas_aviso` y 24 horas de antigüedad. Solo
+    aplica a sesiones Meta — Baileys no tiene ventana.
+
+    `horas_aviso` sale de cada sesión (`horas_aviso_por_caducar`, 6h por
+    defecto); pasar el argumento fuerza el mismo umbral para todas.
+
+    El alcance respeta el rol del usuario en cada sesión: un asesor solo cuenta
+    las conversaciones que tiene asignadas; supervisor y dueño ven todas.
+
+    Devuelve una lista de dicts (solo sesiones con al menos una conversación),
+    ordenada por la que vence primero:
+        sesion, total, vence_en, conversacion_token
+    `conversacion_token` viene informado únicamente cuando hay una sola
+    conversación, para poder abrir su ventana directo desde el panel.
+    """
+    from core.funciones import encrypt_sesion_id
+    from django.db.models import OuterRef, Subquery
+
+    from .models import MensajeWhatsApp
+    from .permisos_sesion import filtro_conversaciones_por_rol
+
+    ahora = timezone.now()
+    limite_inferior = ahora - timedelta(hours=HORAS_VENTANA_META_CUSTOMER_SERVICE)
+    ultima_entrante = (
+        MensajeWhatsApp.objects
+        .filter(conversacion=OuterRef('pk'))
+        .exclude(remitente=OuterRef('contacto__sesion__numero'))
+        .order_by('-fecha')
+        .values('fecha')[:1]
+    )
+
+    listado = []
+    for sesion in sesiones:
+        if sesion.proveedor != 'meta':
+            continue
+        horas = horas_aviso or horas_aviso_de_sesion(sesion)
+        limite_superior = ahora - timedelta(
+            hours=HORAS_VENTANA_META_CUSTOMER_SERVICE - horas,
+        )
+        conversaciones = (
+            ConversacionWhatsApp.objects.sin_expirar
+            .filter(
+                filtro_conversaciones_por_rol(usuario, sesion),
+                status=True,
+                contacto__status=True,
+                estado_conversacion=0,
+                contacto__sesion=sesion,
+            )
+            .annotate(fecha_ultimo_entrante=Subquery(ultima_entrante))
+            .filter(
+                fecha_ultimo_entrante__gt=limite_inferior,
+                fecha_ultimo_entrante__lte=limite_superior,
+            )
+            .order_by('fecha_ultimo_entrante')
+            .distinct()
+        )
+        pendientes = list(conversaciones.values_list('id', 'fecha_ultimo_entrante')[:2])
+        if not pendientes:
+            continue
+        total = conversaciones.count()
+        primera_id, primera_fecha = pendientes[0]
+        listado.append({
+            'sesion': sesion,
+            'total': total,
+            'horas_aviso': horas,
+            'vence_en': primera_fecha + timedelta(hours=HORAS_VENTANA_META_CUSTOMER_SERVICE),
+            'sesion_token': encrypt_sesion_id(sesion.id),
+            'conversacion_token': encrypt_sesion_id(primera_id) if total == 1 else '',
+        })
+
+    listado.sort(key=lambda item: item['vence_en'])
+    return listado
+
+
+def persistir_y_difundir_automatico(conversacion, texto):
+    """Persiste un mensaje saliente automático (handoff, presentación del
+    asesor) y lo difunde por WebSocket. Los envíos hechos por fuera del action
+    `send` no vuelven por el webhook: sin esto el mensaje llega al cliente
+    pero no aparece en el historial ni en el sidebar del panel."""
+    import logging as _logging
+    from django.db import transaction as _tx
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+    from .models import MensajeWhatsApp
+
+    mensaje = MensajeWhatsApp.objects.create(
+        conversacion=conversacion,
+        remitente=conversacion.sesion.numero or '',
+        mensaje=texto,
+        tipo='texto',
+        fecha=timezone.now(),
+        leido=True,
+        fecha_leido=timezone.now(),
+        es_automatico=True,
+        ia_generado=False,
+        estado_envio='enviado',
+    )
+    conv_id = conversacion.id
+    sesion_id = conversacion.sesion.id
+    msg_id = mensaje.id
+    ts = mensaje.fecha.isoformat()
+
+    def _difundir():
+        try:
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(f"chat_{conv_id}", {
+                'type': 'whatsapp_message',
+                'event': 'new_message',
+                'conversation_id': conv_id,
+                'message_id': msg_id,
+                'message_type': 'texto',
+                'message_text': texto,
+                'timestamp': ts,
+            })
+            async_to_sync(channel_layer.group_send)(f"whatsapp_sessionroom_{sesion_id}", {
+                'type': 'whatsapp_event',
+                'event': 'new_message',
+                'conversation_id': conv_id,
+                'from_me': True,
+                'timestamp': ts,
+            })
+        except Exception:
+            _logging.getLogger(__name__).exception(
+                'No pude difundir mensaje automático conv#%s', conv_id)
+
+    _tx.on_commit(_difundir)
+    return mensaje
+
 
 def _bloqueo_ventana_meta(conversacion):
     """Regla de Meta: solo se pueden enviar mensajes de texto libre dentro de
@@ -60,26 +206,57 @@ def _bloqueo_ventana_meta(conversacion):
 
 def reactivar_conversacion(conversacion):
     """Pone la conversación de vuelta en estado activo. Espejo de lo que hace
-    `marcar-reactivar` pero invocable desde otras acciones (ej. `send`)."""
+    `marcar-reactivar` pero invocable desde otras acciones (ej. `send`).
+
+    Renueva `fecha_hora_expira` según `min_sesion` (0 = sin cierre automático):
+    sin esto, la conversación reactivada conservaba una `fecha_hora_expira`
+    pasada → quedaba `expirado=True` en el manager y no aparecía en el inbox
+    activo hasta que el cliente volviera a escribir."""
+    from dateutil.relativedelta import relativedelta
+    min_sesion = int(getattr(conversacion.sesion, 'min_sesion', None) or 0)
     conversacion.estado_conversacion = 0
     conversacion.fecha_fin_conversacion = None
     conversacion.despedida_enviado = False
     conversacion.conversacion_finalizada = False
+    conversacion.fecha_hora_expira = (
+        timezone.now() + relativedelta(minutes=min_sesion) if min_sesion > 0 else None
+    )
     conversacion.save(update_fields=[
         'estado_conversacion', 'fecha_fin_conversacion',
-        'despedida_enviado', 'conversacion_finalizada',
+        'despedida_enviado', 'conversacion_finalizada', 'fecha_hora_expira',
     ])
 
 
 def _bloqueo_reactivar(conversacion):
-    """Permite reactivar/enviar solo dentro de las primeras N horas desde fecha_registro.
+    """Permite reactivar/enviar solo dentro de las N horas desde el **último
+    mensaje entrante del cliente**.
 
-    Retorna (bloqueada, vence_en). `bloqueada=True` cuando la conversación tiene
-    más de N horas — fuera de la ventana de gracia ya no se puede revivir.
+    Retorna (bloqueada, vence_en). `bloqueada=True` cuando la ventana ya venció.
+
+    Antes se medía desde `fecha_registro` (creación de la conversación), lo que
+    era incorrecto en todos los canales: una conversación abierta hace 5 días
+    pero con el cliente escribiendo hace 10 minutos quedaba bloqueada para
+    siempre, aunque Meta sí permitiera responder. La ventana de reengagement de
+    Meta —WhatsApp, Messenger e Instagram— siempre corre desde el último mensaje
+    del usuario, igual que `_bloqueo_ventana_meta`. Sin mensaje entrante se cae a
+    `fecha_registro` como referencia.
     """
-    if not conversacion.fecha_registro:
+    from .models import MensajeWhatsApp
+    sesion = getattr(conversacion, 'sesion', None)
+    referencia = conversacion.fecha_registro
+    if sesion:
+        ultimo_entrante = (
+            MensajeWhatsApp.objects
+            .filter(conversacion=conversacion)
+            .exclude(remitente=sesion.numero)
+            .order_by('-fecha')
+            .first()
+        )
+        if ultimo_entrante:
+            referencia = ultimo_entrante.fecha
+    if not referencia:
         return False, None
-    vence_en = conversacion.fecha_registro + timedelta(hours=HORAS_VENTANA_REACTIVAR)
+    vence_en = referencia + timedelta(hours=HORAS_VENTANA_REACTIVAR)
     return timezone.now() > vence_en, vence_en
 
 
@@ -197,6 +374,9 @@ def _estadisticas_conversacion(conversacion):
 def cambiar_clasificacion_get(request):
     try:
         filtro = ConversacionWhatsApp.objects.get(pk=int(request.GET['id']))
+        from .permisos_sesion import puede_ver_conversacion
+        if not puede_ver_conversacion(request.user, filtro):
+            return JsonResponse({'result': False, 'message': 'No autorizado.'})
         form = CambiarClasificacionForm(instance=filtro)
         ctx = {
             'form': form,
@@ -218,10 +398,26 @@ def cambiar_clasificacion_post(request):
     except Exception as ex:
         return JsonResponse([{'error': True, 'message': f'No se encontró la conversación: {ex}'}], safe=False)
 
+    from .permisos_sesion import puede_ver_conversacion
+    if not puede_ver_conversacion(request.user, filtro):
+        return JsonResponse([{'error': True, 'message': 'No autorizado.'}], safe=False)
+
+    inline = request.POST.get('inline') == '1'
     form = CambiarClasificacionForm(request.POST, instance=filtro, request=request)
     if form.is_valid():
         form.save()
         log(f"Clasificación cambiada para la conversación {filtro.id}", request, 'edit', obj=filtro.id)
+        if inline:
+            filtro.refresh_from_db()
+            return JsonResponse([{
+                'error': False,
+                'reload': False,
+                'conversacion_id': filtro.id,
+                'clasificacion_id': filtro.clasificacion,
+                'clasificacion_label': filtro.get_clasificacion_display(),
+                'clasificacion_color': filtro.get_estado_color_clasificacion(),
+                'message': 'Classification updated.',
+            }], safe=False)
         messages.success(request, 'Clasificación cambiada correctamente.')
         return JsonResponse([{'error': False, 'reload': True}], safe=False)
     return JsonResponse(
@@ -230,9 +426,267 @@ def cambiar_clasificacion_post(request):
     )
 
 
+def _datos_red_de(conversacion):
+    """Consulta en vivo al proveedor de la sesión los datos del cliente.
+    Qué expone cada red:
+      - Messenger: nombre y foto (User Profile API; fallback Conversations) —
+        sin username/email/teléfono.
+      - Instagram: nombre, username, foto, follower_count y flags de follow.
+      - WhatsApp Cloud (meta): sin endpoint de perfil; solo push name guardado.
+      - Baileys: foto vía getUserImage del Node + nombre/alias de contacts_list.
+      - TikTok: nickname/avatar llegan solo en el webhook (API beta sin perfil).
+    Devuelve dict {red, nota, foto, nombre_red, datos} — `datos` son filas
+    {label, valor, origen}. Ante fallo del proveedor levanta NameError con
+    mensaje diagnóstico listo para el usuario."""
+    sesion = conversacion.sesion
+    contacto = conversacion.contacto
+    proveedor = getattr(sesion, 'proveedor', '') or 'baileys'
+    external_id = contacto.external_id or contacto.contacto_numero
+    datos, foto, nombre_red, nota = [], '', '', ''
+
+    if proveedor == 'messenger':
+        from meta.perfiles import obtener_perfil_usuario_messenger, diagnosticar_token
+        red = 'Facebook Messenger'
+        nota = 'Messenger solo expone nombre y foto del usuario — no hay username, email ni teléfono.'
+        cfg = getattr(sesion, 'config_messenger', None)
+        perfil = obtener_perfil_usuario_messenger(cfg, external_id)
+        if not (perfil and perfil.get('ok')):
+            detalle = (perfil or {}).get('error') or 'sin detalle'
+            diag = diagnosticar_token(getattr(cfg, 'access_token', ''))
+            page_id = getattr(cfg, 'page_id', '')
+            raise NameError(
+                f'Meta no devolvió el perfil. Detalle: {detalle} | '
+                f'Diagnóstico del token: {diag} | Page ID configurado: {page_id} | '
+                f'PSID consultado: {external_id}'
+            )
+        raw = perfil.get('raw') or {}
+        nombre_red = perfil.get('nombre') or ''
+        foto = perfil.get('foto') or ''
+        if raw.get('fuente') == 'conversations_fallback':
+            origen_msn = f'Graph API · GET /{{page_id}}/conversations?user_id={external_id} → participants.name'
+            nota += ' El perfil directo no está disponible (app sin Advanced Access); el nombre se obtuvo del endpoint de Conversations.'
+        else:
+            origen_msn = f'Graph API · GET /{external_id}?fields=first_name,last_name,profile_pic'
+        datos = [
+            {'label': 'Nombre', 'valor': nombre_red, 'origen': origen_msn},
+            {'label': 'Nombre (first_name)', 'valor': raw.get('first_name') or '', 'origen': 'campo first_name'},
+            {'label': 'Apellido (last_name)', 'valor': raw.get('last_name') or '', 'origen': 'campo last_name'},
+            {'label': 'PSID', 'valor': str(external_id), 'origen': 'id page-scoped del webhook (sender.id)'},
+        ]
+    elif proveedor == 'instagram':
+        from meta.perfiles import obtener_perfil_usuario_instagram, diagnosticar_token
+        red = 'Instagram'
+        nota = 'Instagram expone nombre, username y foto; seguidores y flags de follow dependen de los permisos de la app. No hay email ni teléfono.'
+        cfg = getattr(sesion, 'config_instagram', None)
+        perfil = obtener_perfil_usuario_instagram(cfg, external_id)
+        if not (perfil and perfil.get('ok')):
+            detalle = (perfil or {}).get('error') or 'sin detalle'
+            diag = diagnosticar_token(getattr(cfg, 'access_token', ''))
+            raise NameError(
+                f'Meta no devolvió el perfil. Detalle: {detalle} | '
+                f'Diagnóstico del token: {diag} | IGSID consultado: {external_id}'
+            )
+        raw = perfil.get('raw') or {}
+        nombre_red = perfil.get('nombre') or ''
+        foto = perfil.get('foto') or ''
+        origen_ig = f'Graph API · GET /{external_id}?fields=name,username,profile_pic,follower_count,...'
+        datos = [
+            {'label': 'Nombre', 'valor': raw.get('name') or '', 'origen': origen_ig},
+            {'label': 'Username', 'valor': ('@' + raw['username']) if raw.get('username') else '', 'origen': 'campo username'},
+            {'label': 'Seguidores', 'valor': raw.get('follower_count', ''), 'origen': 'campo follower_count (requiere permiso)'},
+            {'label': 'Sigue a la cuenta', 'valor': _si_no(raw.get('is_user_follow_business')), 'origen': 'campo is_user_follow_business'},
+            {'label': 'La cuenta lo sigue', 'valor': _si_no(raw.get('is_business_follow_user')), 'origen': 'campo is_business_follow_user'},
+            {'label': 'IGSID', 'valor': str(external_id), 'origen': 'id del webhook (sender.id)'},
+        ]
+    elif proveedor == 'meta':
+        red = 'WhatsApp Cloud API'
+        nota = 'La API oficial de WhatsApp no permite consultar el perfil del cliente; solo se dispone del nombre push que Meta envía con cada mensaje y de la identidad cross-app.'
+        datos = [
+            {'label': 'Número (wa_id)', 'valor': contacto.contacto_numero or '', 'origen': 'webhook Meta · contacts[].wa_id'},
+            {'label': 'Nombre (push)', 'valor': contacto.contacto_nombre or '', 'origen': 'webhook Meta · contacts[].profile.name'},
+            {'label': 'Meta User ID (cross-app)', 'valor': contacto.meta_user_id or '', 'origen': 'webhook Meta · contacts[].user_id (EC.xxx)'},
+        ]
+    elif proveedor == 'tiktok':
+        red = 'TikTok'
+        nota = 'TikTok Business Messaging (beta) solo entrega nickname y avatar dentro del propio webhook; no existe endpoint de perfil consultable.'
+        datos = [
+            {'label': 'Open ID', 'valor': str(external_id), 'origen': 'webhook TikTok · sender.open_id'},
+            {'label': 'Nickname (webhook)', 'valor': contacto.contacto_nombre or '', 'origen': 'webhook TikTok · sender.nickname'},
+            {'label': 'Avatar guardado', 'valor': 'Sí' if contacto.contacto_foto else 'No', 'origen': 'webhook TikTok · sender.avatar'},
+        ]
+    else:
+        import json as _json
+        from .services import get_whatsapp_service
+        red = 'WhatsApp (Baileys)'
+        nota = 'Baileys expone la foto de perfil pública y el nombre/alias sincronizado de la agenda del número conector.'
+        service = get_whatsapp_service(sesion)
+        foto = service.get_user_image(sesion.session_id, contacto.from_number) or ''
+        nombre_agenda, alias_push = '', ''
+        cfg_baileys = getattr(sesion, 'config_baileys', None)
+        if cfg_baileys and cfg_baileys.contacts_list:
+            try:
+                for c in _json.loads(cfg_baileys.contacts_list or '[]'):
+                    if c.get('id') == contacto.from_number:
+                        nombre_agenda = c.get('name') or ''
+                        alias_push = c.get('notify') or ''
+                        break
+            except (ValueError, TypeError):
+                pass
+        nombre_red = nombre_agenda or alias_push
+        datos = [
+            {'label': 'Número', 'valor': contacto.contacto_numero or '', 'origen': 'webhook Baileys · from (JID)'},
+            {'label': 'Nombre en agenda', 'valor': nombre_agenda, 'origen': 'Node Baileys · ConfigBaileys.contacts_list → name'},
+            {'label': 'Alias (push name)', 'valor': alias_push, 'origen': 'Node Baileys · ConfigBaileys.contacts_list → notify'},
+            {'label': 'Foto de perfil', 'valor': 'Disponible' if foto else 'No disponible', 'origen': 'Node Baileys · GET /getUserImage'},
+        ]
+    return {'red': red, 'nota': nota, 'foto': foto, 'nombre_red': nombre_red, 'datos': datos}
+
+
+def _conversacion_para_datos_red(request, canal_fijo, fuente):
+    """Resuelve y autoriza la conversación para las acciones de datos de red.
+    Devuelve `(conversacion, None)` o `(None, JsonResponse de error)`."""
+    from .permisos_sesion import puede_ver_conversacion
+    from .view_conversaciones import canal_conversacion_permitido
+    try:
+        conversacion = ConversacionWhatsApp.objects.select_related(
+            'contacto', 'contacto__sesion'
+        ).get(pk=int(fuente.get('pk') or fuente.get('id')))
+    except Exception as ex:
+        return None, JsonResponse({'result': False, 'message': f'No se encontró la conversación: {ex}'})
+    if not puede_ver_conversacion(request.user, conversacion):
+        return None, JsonResponse({'result': False, 'message': 'No autorizado.'})
+    if not canal_conversacion_permitido(conversacion.sesion, canal_fijo):
+        return None, JsonResponse({'result': False, 'message': 'La conversación no pertenece a este canal.'})
+    return conversacion, None
+
+
+def consultar_datos_red(request, canal_fijo=None):
+    """GET: modal `_modal_datos_red.html` con dos columnas — lo que respondió
+    la red (con endpoint/campo de origen) y lo guardado en BD (tabla.campo).
+    Si obtiene nombre/foto y el contacto no los tiene, los persiste."""
+    from core.funciones_adicionales import get_image_as_base64
+    conversacion, error = _conversacion_para_datos_red(request, canal_fijo, request.GET)
+    if error:
+        return error
+    try:
+        info = _datos_red_de(conversacion)
+    except NameError as ex:
+        return JsonResponse({'result': False, 'message': str(ex)})
+    except Exception as ex:
+        return JsonResponse({'result': False, 'message': f'Error consultando la red: {ex}'})
+
+    sesion = conversacion.sesion
+    contacto = conversacion.contacto
+    actualizado = []
+    if info['nombre_red'] and not contacto.contacto_nombre:
+        contacto.contacto_nombre = info['nombre_red']
+        actualizado.append('nombre')
+    if info['foto'] and not contacto.contacto_foto:
+        try:
+            contacto.contacto_foto = f'data:image/jpg;base64,{get_image_as_base64(info["foto"])}'
+            actualizado.append('foto')
+        except Exception:
+            pass
+    if actualizado:
+        contacto.save(request)
+
+    proveedor = getattr(sesion, 'proveedor', '') or 'baileys'
+    bd = [
+        {'campo': 'Nombre del contacto', 'valor': contacto.contacto_nombre or '',
+         'tabla': 'whatsapp_contacto', 'campo_db': 'contacto_nombre'},
+        {'campo': 'Número / ID', 'valor': contacto.contacto_numero or '',
+         'tabla': 'whatsapp_contacto', 'campo_db': 'contacto_numero'},
+        {'campo': 'JID interno', 'valor': contacto.from_number or '',
+         'tabla': 'whatsapp_contacto', 'campo_db': 'from_number'},
+        {'campo': 'ID externo (PSID/IGSID/wa_id)', 'valor': contacto.external_id or '',
+         'tabla': 'whatsapp_contacto', 'campo_db': 'external_id'},
+        {'campo': 'Canal', 'valor': contacto.canal or '',
+         'tabla': 'whatsapp_contacto', 'campo_db': 'canal'},
+        {'campo': 'Meta User ID', 'valor': contacto.meta_user_id or '',
+         'tabla': 'whatsapp_contacto', 'campo_db': 'meta_user_id'},
+        {'campo': 'Foto guardada', 'valor': 'Sí' if contacto.contacto_foto else 'No',
+         'tabla': 'whatsapp_contacto', 'campo_db': 'contacto_foto'},
+        {'campo': 'Proveedor de atención (snapshot)', 'valor': conversacion.proveedor_atencion or '',
+         'tabla': 'whatsapp_conversacionwhatsapp', 'campo_db': 'proveedor_atencion'},
+        {'campo': 'Sesión / proveedor actual', 'valor': f'{sesion.nombre or sesion.session_id} · {proveedor}',
+         'tabla': 'whatsapp_sesionwhatsapp', 'campo_db': 'nombre / proveedor'},
+    ]
+
+    log(f"Consultó datos de red ({info['red']}) del contacto {contacto.contacto_numero}",
+        request, "view", obj=conversacion.id)
+    ctx = {
+        'red': info['red'],
+        'nota': info['nota'],
+        'foto_red': info['foto'],
+        'datos_red': info['datos'],
+        'bd': bd,
+        'foto_bd': contacto.contacto_foto or '',
+        'actualizado': ', '.join(actualizado),
+        'conversacion': conversacion,
+        'puede_aplicar': bool(info['nombre_red'] or info['foto']),
+    }
+    return JsonResponse({
+        'result': True,
+        'data': render_to_string('whatsapp/conversaciones/_modal_datos_red.html', ctx, request=request),
+        'actualizado': ', '.join(actualizado),
+    })
+
+
+def aplicar_datos_red(request, canal_fijo=None):
+    """POST: sobreescribe nombre y foto del contacto con lo que devuelva la red
+    en este momento (a diferencia del GET, que solo completa lo que falta)."""
+    from core.funciones_adicionales import get_image_as_base64
+    conversacion, error = _conversacion_para_datos_red(request, canal_fijo, request.POST)
+    if error:
+        return error
+    try:
+        info = _datos_red_de(conversacion)
+    except NameError as ex:
+        return JsonResponse({'result': False, 'message': str(ex)})
+    except Exception as ex:
+        return JsonResponse({'result': False, 'message': f'Error consultando la red: {ex}'})
+
+    contacto = conversacion.contacto
+    cambios = []
+    if info['nombre_red'] and info['nombre_red'] != (contacto.contacto_nombre or ''):
+        contacto.contacto_nombre = info['nombre_red']
+        cambios.append('nombre')
+    if info['foto']:
+        try:
+            contacto.contacto_foto = f'data:image/jpg;base64,{get_image_as_base64(info["foto"])}'
+            cambios.append('foto')
+        except Exception:
+            pass
+    if not cambios:
+        return JsonResponse({
+            'result': True,
+            'cambios': '',
+            'message': 'La red no devolvió datos nuevos para actualizar (nombre igual y sin foto disponible).',
+        })
+    contacto.save(request)
+    log(f"Actualizó contacto desde la red ({info['red']}): {', '.join(cambios)} — {contacto.contacto_numero}",
+        request, "change", obj=conversacion.id)
+    return JsonResponse({
+        'result': True,
+        'cambios': ', '.join(cambios),
+        'message': f"Contacto actualizado desde {info['red']}: {', '.join(cambios)}.",
+        'nombre': contacto.contacto_nombre or '',
+        'foto': contacto.contacto_foto or '',
+    })
+
+
+def _si_no(valor):
+    if valor is None or valor == '':
+        return ''
+    return 'Sí' if valor else 'No'
+
+
 def cambiar_nombre_contacto_get(request):
     try:
         filtro = ConversacionWhatsApp.objects.get(pk=int(request.GET['id']))
+        from .permisos_sesion import puede_ver_conversacion
+        if not puede_ver_conversacion(request.user, filtro):
+            return JsonResponse({'result': False, 'message': 'No autorizado.'})
         form = CambiarNombreContactoForm(instance=filtro.contacto)
         ctx = {
             'form': form,
@@ -249,10 +703,15 @@ def cambiar_nombre_contacto_get(request):
 
 
 def historial_cliente_list(request, conversacion):
+    from django.db.models import Count, Q as _Q
+    from .permisos_sesion import puede_ver_conversacion
+    if not puede_ver_conversacion(request.user, conversacion):
+        return JsonResponse({'error': True, 'message': 'No autorizado.'})
     contacto = conversacion.contacto
     qs = (
         ConversacionWhatsApp.objects
         .filter(contacto=contacto, status=True)
+        .annotate(_total_msgs=Count('mensajes', filter=_Q(mensajes__status=True)))
         .order_by('-fecha_registro')
     )
     items = []
@@ -265,7 +724,7 @@ def historial_cliente_list(request, conversacion):
             'fecha_inicio': c.fecha_registro.strftime('%d/%m/%Y %H:%M') if c.fecha_registro else '',
             'fecha_inicio_corta': c.fecha_registro.strftime('%d/%m/%y') if c.fecha_registro else '',
             'fecha_fin': c.fecha_fin_conversacion.strftime('%d/%m/%Y %H:%M') if c.fecha_fin_conversacion else '',
-            'total_mensajes': c.mensajes.filter(status=True).count(),
+            'total_mensajes': c._total_msgs,
             'clasificacion': c.get_clasificacion_display() if c.clasificacion else '',
             'sentimiento': c.sentimiento or '',
             'resumen': (c.resumen_conversacion or '')[:240],
@@ -280,6 +739,9 @@ def historial_cliente_list(request, conversacion):
 
 def historial_cliente_mensajes(request, conversacion):
     from .models import MensajeWhatsApp
+    from .permisos_sesion import puede_ver_conversacion
+    if not puede_ver_conversacion(request.user, conversacion):
+        return JsonResponse({'error': True, 'message': 'No autorizado.'})
     mensajes = (
         MensajeWhatsApp.objects
         .filter(conversacion=conversacion, status=True)
@@ -310,6 +772,10 @@ def cambiar_nombre_contacto_post(request):
     except Exception as ex:
         return JsonResponse([{'error': True, 'message': f'No se encontró la conversación: {ex}'}], safe=False)
 
+    from .permisos_sesion import puede_ver_conversacion
+    if not puede_ver_conversacion(request.user, filtro):
+        return JsonResponse([{'error': True, 'message': 'No autorizado.'}], safe=False)
+
     contacto = filtro.contacto
     form = CambiarNombreContactoForm(request.POST, instance=contacto, request=request)
     if form.is_valid():
@@ -324,3 +790,462 @@ def cambiar_nombre_contacto_post(request):
         [{'error': True, 'message': f'Error al guardar el nombre: {form.errors}'}],
         safe=False,
     )
+
+
+def listar_plantillas_meta(request):
+    """GET: lista plantillas Meta APPROVED de la sesión de una conversación.
+
+    Compartido por las vistas de finalizadas y pendiente-reconexión para poblar
+    el panel de plantillas.
+    """
+    from django.shortcuts import get_object_or_404
+    try:
+        pk = int(request.GET['pk'])
+        conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
+        from .permisos_sesion import puede_ver_conversacion
+        if not puede_ver_conversacion(request.user, conversacion):
+            return JsonResponse({'error': True, 'message': 'No autorizado.'})
+        sesion = conversacion.sesion
+        if not getattr(sesion, 'es_meta', False):
+            return JsonResponse({'error': False, 'plantillas': [], 'motivo': 'sesion_no_meta'})
+        config = getattr(sesion, 'config_meta', None)
+        if not config:
+            return JsonResponse({'error': False, 'plantillas': [], 'motivo': 'sin_config_meta'})
+        plantillas = (
+            config.plantillas.filter(status=True, estado_meta='APPROVED')
+            .order_by('nombre', 'idioma')
+        )
+
+        def _preview(body, max_chars=140):
+            body = (body or '').strip()
+            return (body[:max_chars] + '…') if len(body) > max_chars else body
+
+        data_plantillas = [{
+            'id':        p.id,
+            'nombre':    p.nombre,
+            'idioma':    p.idioma,
+            'categoria': p.categoria,
+            'cuerpo':    p.cuerpo or '',
+            'preview':   _preview(p.cuerpo),
+            'footer':    p.footer or '',
+            'header_tipo':     p.header_tipo,
+            'header_contenido': p.header_contenido or '',
+            'variables': p.variables_json or [],
+            'botones':   p.botones_json or [],
+            'veces_enviada': p.veces_enviada,
+        } for p in plantillas]
+
+        # Contexto del contacto para precargar variables {{N}} en el form del
+        # panel: nombre del contacto + campos personalizados (por clave y por
+        # nombre, normalizados a minúsculas). El JS matchea contra el `nombre`
+        # de cada variable en variables_json.
+        contacto = conversacion.contacto
+        campos = {}
+        if contacto:
+            for v in contacto.valores_personalizados.filter(status=True).select_related('campo'):
+                if not v.campo or not (v.valor or '').strip():
+                    continue
+                valor = v.valor.strip()
+                for key in ((v.campo.clave or ''), (v.campo.nombre or '')):
+                    key = key.strip().lower()
+                    if key:
+                        campos[key] = valor
+        contexto = {
+            'nombre': (conversacion.contacto_nombre or '').strip(),
+            'numero': conversacion.contacto_numero or '',
+            'campos': campos,
+        }
+        return JsonResponse({'error': False, 'plantillas': data_plantillas, 'contexto': contexto})
+    except Exception as ex:
+        return JsonResponse({'error': True, 'message': str(ex)})
+
+
+_PREFIJOS_PAIS = (
+    ('593', 'EC'), ('521', 'MX'), ('52', 'MX'), ('57', 'CO'), ('51', 'PE'),
+    ('56', 'CL'), ('54', 'AR'), ('55', 'BR'), ('591', 'BO'), ('595', 'PY'),
+    ('598', 'UY'), ('58', 'VE'), ('507', 'PA'), ('506', 'CR'), ('502', 'GT'),
+    ('503', 'SV'), ('504', 'HN'), ('505', 'NI'), ('34', 'ES'), ('1', 'US'),
+)
+
+
+def _pais_por_numero(numero):
+    n = ''.join(ch for ch in str(numero or '') if ch.isdigit())
+    for prefijo, pais in _PREFIJOS_PAIS:
+        if n.startswith(prefijo):
+            return pais
+    return 'EC'
+
+
+def _registrar_envio_plantilla(request, sesion, conversacion, plantilla, mensaje, origen):
+    """Congela el costo del envío con la tarifa vigente y deja rastro:
+    fila en EnvioPlantillaMeta (consumo acumulable), contador de la plantilla
+    y traza en la trazabilidad de la conversación. Best-effort — nunca rompe
+    el envío."""
+    try:
+        from .models import EnvioPlantillaMeta, TarifaPlantillaMeta
+        pais = _pais_por_numero(conversacion.contacto_numero)
+        tarifa = TarifaPlantillaMeta.vigente(pais, plantilla.categoria)
+        EnvioPlantillaMeta.objects.create(
+            sesion=sesion,
+            conversacion=conversacion,
+            plantilla=plantilla,
+            mensaje=mensaje,
+            agente=request.user if request.user.is_authenticated else None,
+            plantilla_nombre=plantilla.nombre,
+            categoria=plantilla.categoria,
+            pais=pais,
+            costo_estimado=tarifa.precio if tarifa else None,
+            moneda=tarifa.moneda if tarifa else 'USD',
+            origen=origen,
+        )
+        from .trazas import registrar as _traza_registrar
+        _traza_registrar(
+            etapa='mensaje_enviado', sesion=sesion, conversacion=conversacion,
+            mensaje=mensaje, numero=conversacion.contacto_numero, nivel='info',
+            detalle={
+                'tipo': 'plantilla',
+                'origen': origen,
+                'plantilla': plantilla.nombre,
+                'categoria': plantilla.categoria,
+                'pais': pais,
+                'costo_estimado': str(tarifa.precio) if tarifa else None,
+                'moneda': tarifa.moneda if tarifa else 'USD',
+            },
+        )
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception('No se pudo registrar el envío de plantilla')
+
+
+def enviar_plantilla_reconexion(request):
+    """POST: envía una plantilla Meta a una conversación finalizada como sonda
+    de reconexión.
+
+    La conversación NO se reactiva de inmediato: queda finalizada (estado 1)
+    marcada con `pendiente_reconexion=True`. Cuando el cliente responde, el
+    webhook entrante REABRE esta misma conversación (ver
+    `ConversacionWhatsApp.obtener_o_crear_activa`), conservando historial,
+    plantillas enviadas y asesor asignado. Compartido por las vistas de
+    finalizadas y pendiente-reconexión.
+    """
+    import json as _json
+    from django.shortcuts import get_object_or_404
+    from .models import PlantillaWhatsApp, MensajeWhatsApp
+    from .services import get_whatsapp_service
+
+    pk = int(request.POST['pk'])
+    plantilla_id = int(request.POST['plantilla_id'])
+    params_cuerpo = _json.loads(request.POST.get('params_cuerpo_json') or '[]')
+    params_header = _json.loads(request.POST.get('params_header_json') or '[]')
+
+    conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
+
+    from .permisos_sesion import puede_ver_conversacion
+    if not puede_ver_conversacion(request.user, conversacion):
+        return JsonResponse({'error': True, 'message': 'No autorizado.'})
+
+    sesion = conversacion.sesion
+    if not getattr(sesion, 'es_meta', False):
+        return JsonResponse({'error': True, 'message': 'La sesión no es Meta.'})
+    config = getattr(sesion, 'config_meta', None)
+    if not config:
+        return JsonResponse({'error': True, 'message': 'No se encontró la configuración Meta de la sesión.'})
+    plantilla = PlantillaWhatsApp.objects.filter(
+        pk=plantilla_id, config_meta=config, status=True, estado_meta='APPROVED'
+    ).first()
+    if not plantilla:
+        return JsonResponse({'error': True, 'message': 'Plantilla no disponible o no aprobada.'})
+
+    service = get_whatsapp_service(sesion)
+    response = service.send_template(
+        sesion.session_id, conversacion.from_number,
+        plantilla_nombre=plantilla.nombre,
+        idioma=plantilla.idioma,
+        parametros_cuerpo=params_cuerpo if params_cuerpo else None,
+        parametros_header=params_header if params_header else None,
+        conversacion_id=conversacion.id,
+    )
+    if not response.get('success'):
+        return JsonResponse({
+            'error': True,
+            'message': f"Error al enviar la plantilla: {response.get('error', 'Error desconocido')}",
+        })
+
+    def _render_cuerpo(body, params):
+        if not body:
+            return ''
+        out = body
+        for idx, val in enumerate(params or [], start=1):
+            out = out.replace('{{' + str(idx) + '}}', str(val))
+        return out
+
+    texto_final = _render_cuerpo(plantilla.cuerpo, params_cuerpo)
+    if plantilla.footer:
+        texto_final = f"{texto_final}\n\n_{plantilla.footer}_"
+
+    conversacion.pendiente_reconexion = True
+    conversacion.reconectada = False
+    conversacion.save(update_fields=['pendiente_reconexion', 'reconectada'])
+
+    mensaje = MensajeWhatsApp(
+        mensaje_id_externo=response.get('message_id'),
+        conversacion=conversacion,
+        remitente=sesion.numero,
+        mensaje=texto_final,
+        tipo='texto',
+        fecha=timezone.now(),
+        leido=True,
+        fecha_leido=timezone.now(),
+        agente=request.user,
+        ia_generado=False,
+    )
+    mensaje.save()
+
+    if not conversacion.primer_agente:
+        conversacion.primer_agente = request.user
+        conversacion.save(update_fields=['primer_agente'])
+
+    _registrar_envio_plantilla(
+        request, sesion, conversacion, plantilla, mensaje, origen='reconexion',
+    )
+
+    log(
+        f"Plantilla de reconexión '{plantilla.nombre}' enviada en la conversación {conversacion.id}; marcada pendiente de reconexión",
+        request, "add", obj=conversacion.id,
+    )
+
+    return JsonResponse({
+        'error': False,
+        'pendiente': True,
+        'message': 'Plantilla enviada. Cuando el cliente responda, esta misma conversación se reanudará automáticamente.',
+        'mensaje_html': render_to_string(
+            'whatsapp/conversaciones/mensaje_enviado_partial.html',
+            {'mensaje': mensaje}, request=request,
+        ),
+    })
+
+
+LIMITE_ASIGNACION_MASIVA = 200
+
+# Conversaciones por POST. El reparto manda notificación, email y WhatsApp por
+# cada asesor, así que se procesa de a lotes chicos para responder rápido y que
+# el inbox pueda pintar la barra de progreso.
+LOTE_ASIGNACION_MASIVA = 10
+
+# La reasignación entre asesores no manda correo ni WhatsApp por conversación,
+# así que puede ir en lotes más grandes.
+LOTE_REASIGNACION_MASIVA = 50
+
+
+def filtro_conversaciones_sin_asesor(usuario, sesiones, sesion_seleccionada=None):
+    """Q() de las conversaciones abiertas y visibles que no tienen asesor.
+
+    Es el mismo alcance que usa el listado (sesiones visibles + rol dentro de
+    la sesión + estado abierto), para que la acción masiva afecte exactamente
+    lo que el operador está viendo con el chip "Sin asesor".
+    """
+    from django.db.models import Q
+    from .permisos_sesion import filtro_conversaciones_por_rol
+
+    filtros = Q(
+        contacto__status=True, status=True,
+        contacto__sesion__in=sesiones,
+        contacto__sesion__status=True,
+        estado_conversacion=0,
+        asignado_a__isnull=True,
+    )
+    if sesion_seleccionada:
+        filtros = filtros & Q(contacto__sesion=sesion_seleccionada)
+        filtros = filtros & filtro_conversaciones_por_rol(usuario, sesion_seleccionada)
+    return filtros
+
+
+def reasignacion_masiva_asesor_post(request, sesiones, sesion_seleccionada=None):
+    """POST: pasa todas las conversaciones abiertas de un asesor a otro.
+
+    Sirve para vacaciones, bajas o rebalanceo. Igual que el reparto automático
+    es administrativo: no cierra la conversación, no pausa el bot y no le avisa
+    al cliente. Al asesor destino se le manda **una** notificación por lote con
+    el total, no una por conversación.
+    """
+    from django.contrib.auth import get_user_model
+    from .permisos_sesion import puede_asignar_masivo
+    from .models import HistorialAsignacion
+
+    if not puede_asignar_masivo(request.user, sesion_seleccionada):
+        return JsonResponse({
+            'error': True,
+            'message': 'No tienes permiso para reasignar conversaciones en esta sesión.',
+        })
+
+    Usuario = get_user_model()
+    origen = Usuario.objects.filter(pk=request.POST.get('origen_id')).first()
+    destino = Usuario.objects.filter(pk=request.POST.get('destino_id'), is_active=True).first()
+    if not origen or not destino:
+        return JsonResponse({'error': True, 'message': 'Selecciona el asesor de origen y el de destino.'})
+    if origen.pk == destino.pk:
+        return JsonResponse({'error': True, 'message': 'El asesor de origen y el de destino son el mismo.'})
+
+    from django.db.models import Q
+    from .permisos_sesion import filtro_conversaciones_por_rol
+
+    filtros = Q(
+        contacto__status=True, status=True,
+        contacto__sesion__in=sesiones,
+        contacto__sesion__status=True,
+        estado_conversacion=0,
+        asignado_a=origen,
+    )
+    if sesion_seleccionada:
+        filtros = filtros & Q(contacto__sesion=sesion_seleccionada)
+        filtros = filtros & filtro_conversaciones_por_rol(request.user, sesion_seleccionada)
+
+    pendientes = ConversacionWhatsApp.objects.filter(filtros).distinct().order_by('id')
+    total_pendientes = pendientes.count()
+
+    try:
+        lote = int(request.POST.get('lote') or LOTE_REASIGNACION_MASIVA)
+    except (TypeError, ValueError):
+        lote = LOTE_REASIGNACION_MASIVA
+    lote = max(1, min(lote, LIMITE_ASIGNACION_MASIVA))
+
+    reasignadas = 0
+    for conversacion in list(pendientes[:lote]):
+        try:
+            conversacion.asignado_a = destino
+            conversacion.fecha_asignacion = timezone.now()
+            conversacion.save(update_fields=['asignado_a', 'fecha_asignacion'])
+            HistorialAsignacion.objects.create(
+                conversacion=conversacion,
+                asignado_a=destino,
+                asignado_por=request.user,
+                nota=f'Reasignación masiva desde {origen.get_full_name() or origen.username}.',
+            )
+            reasignadas += 1
+        except Exception:
+            import logging as _logging
+            _logging.getLogger(__name__).exception(
+                'Fallo la reasignación masiva conv#%s', conversacion.id)
+
+    if reasignadas:
+        try:
+            from seguridad.models import Notificacion
+            Notificacion.objects.create(
+                titulo=f'Se te reasignaron {reasignadas} conversaciones'[:300],
+                cuerpo=(
+                    f'{request.user.get_full_name() or request.user.username} te pasó '
+                    f'{reasignadas} conversaciones abiertas de '
+                    f'{origen.get_full_name() or origen.username}.'
+                ),
+                destinatario=destino,
+                url='/whatsapp/conversaciones/',
+                prioridad=2,
+                tipo=3,
+            )
+        except Exception:
+            import logging as _logging
+            _logging.getLogger(__name__).exception('No se pudo notificar la reasignación masiva')
+
+        log(f"Reasignación masiva: {reasignadas} conversaciones de {origen} a {destino}",
+            request, "change")
+
+    restantes = max(total_pendientes - reasignadas, 0)
+    return JsonResponse({
+        'error': False,
+        'message': f'Se reasignaron {reasignadas} conversaciones.',
+        'total_pendientes': total_pendientes,
+        'procesadas': reasignadas,
+        'reasignadas': reasignadas,
+        'restantes': restantes,
+        'continuar': bool(restantes and reasignadas),
+    })
+
+
+def asignacion_automatica_masiva_post(request, sesiones, sesion_seleccionada=None):
+    """POST: reparte asesor a todas las conversaciones abiertas sin asignar.
+
+    Recorre las conversaciones más antiguas primero y delega cada una en
+    `crm.helpers_asignacion.auto_asignar_agente`, que elige por carga y turno
+    (`candidatos_ordenados`), registra `HistorialAsignacion` y avisa al asesor
+    por notificación/webpush, email y WhatsApp. Al recalcular candidatos en cada
+    iteración el reparto queda equilibrado en orden de asignados.
+
+    Es un reparto administrativo: la conversación NO se termina, el bot NO se
+    pausa y el cliente NO recibe el mensaje de handoff. El bot solo se pausa
+    cuando el propio cliente elige "hablar con un asesor" en el flujo.
+    """
+    from crm.helpers_asignacion import auto_asignar_agente
+    from .permisos_sesion import puede_asignar_masivo
+
+    if not puede_asignar_masivo(request.user, sesion_seleccionada):
+        return JsonResponse({
+            'error': True,
+            'message': 'No tienes permiso para repartir conversaciones en esta sesión.',
+        })
+
+    pendientes = ConversacionWhatsApp.objects.sin_expirar.filter(
+        filtro_conversaciones_sin_asesor(request.user, sesiones, sesion_seleccionada)
+    ).distinct().order_by('id')
+
+    total_pendientes = pendientes.count()
+    asignadas = 0
+    sin_candidato = 0
+    fallidas = 0
+
+    # El cliente reparte de a lotes para poder pintar la barra de progreso: cada
+    # POST procesa `lote` conversaciones y devuelve cuántas quedan.
+    try:
+        lote = int(request.POST.get('lote') or LOTE_ASIGNACION_MASIVA)
+    except (TypeError, ValueError):
+        lote = LOTE_ASIGNACION_MASIVA
+    lote = max(1, min(lote, LIMITE_ASIGNACION_MASIVA))
+
+    for conversacion in pendientes[:lote]:
+        try:
+            candidato = auto_asignar_agente(
+                conversacion,
+                motivo='masivo',
+                asignador=request.user,
+                # Reparto administrativo: NO termina la conversación, NO pausa
+                # el bot y NO le avisa al cliente. El bot solo se pausa cuando
+                # el cliente pide un asesor en el flujo.
+                avisar_cliente=False,
+                pausar_ia=False,
+            )
+        except Exception:
+            import logging as _logging
+            _logging.getLogger(__name__).exception(
+                'Fallo la asignación masiva conv#%s', conversacion.id)
+            fallidas += 1
+            continue
+        if candidato:
+            asignadas += 1
+        else:
+            sin_candidato += 1
+
+    if asignadas:
+        log(f"Asignación automática masiva: {asignadas} conversaciones repartidas", request, "change")
+
+    procesadas = asignadas + sin_candidato + fallidas
+    restantes = max(total_pendientes - procesadas, 0)
+    if asignadas:
+        message = f'Se repartieron {asignadas} conversaciones entre los asesores disponibles.'
+    else:
+        message = 'No se repartió ninguna conversación.'
+    if sin_candidato:
+        message += f' {sin_candidato} quedaron sin asesor porque no había candidatos disponibles.'
+    if fallidas:
+        message += f' {fallidas} fallaron y quedan pendientes.'
+
+    return JsonResponse({
+        'error': False,
+        'message': message,
+        'total_pendientes': total_pendientes,
+        'procesadas': procesadas,
+        'asignadas': asignadas,
+        'sin_candidato': sin_candidato,
+        'fallidas': fallidas,
+        'restantes': restantes,
+        # Sin candidatos disponibles no tiene sentido seguir pidiendo lotes.
+        'continuar': bool(restantes and asignadas),
+    })

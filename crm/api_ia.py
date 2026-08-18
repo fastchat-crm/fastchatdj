@@ -124,9 +124,9 @@ def consultar_ia_view(request):
             tipo = 'documento'
 
     # ── Provider info ────────────────────────────────────────────────
-    provider_map = {2: 'gemini', 3: 'openai', 4: 'claude', 5: 'ollama'}
+    provider_map = {2: 'gemini', 3: 'openai', 4: 'claude', 5: 'ollama', 8: 'ollama_local'}
     provider = provider_map.get(apikey_obj.proveedor, 'gemini')
-    _default_model = {'gemini': 'gemini-2.5-flash', 'openai': 'gpt-4o-mini', 'claude': 'claude-haiku-4-5-20251001', 'ollama': 'gpt-oss:20b'}
+    _default_model = {'gemini': 'gemini-2.5-flash', 'openai': 'gpt-4o-mini', 'claude': 'claude-haiku-4-5-20251001', 'ollama': 'gpt-oss:20b', 'ollama_local': 'llama3.1'}
     model_name = apikey_obj.modelo or _default_model.get(provider, 'gemini-2.5-flash')
 
     registrar_traza(
@@ -254,6 +254,7 @@ def _procesar_texto(mensaje, agente, apikey_obj, provider, model_name, session_i
         contexto_estatico=agente.contexto_estatico or None,
         perfil=agente.perfil,
         agente=agente,
+        base_url=(getattr(apikey_obj, 'base_url', '') or None),
     )
 
     if agente.requiere_tools():
@@ -276,8 +277,8 @@ def _procesar_texto(mensaje, agente, apikey_obj, provider, model_name, session_i
 
 
 def _procesar_imagen(mensaje, archivo, agente, apikey_obj, provider, model_name):
-    if provider == 'ollama':
-        # Ollama Cloud no soporta multimodal; evitar misroutear la key a OpenAI.
+    if provider in ('ollama', 'ollama_local'):
+        # Ollama (Cloud/local) no soporta multimodal aquí; evitar misroutear la key a OpenAI.
         return 'Este agente (Ollama) no procesa imágenes por ahora.', {'entrada': 0, 'salida': 0, 'total': 0}
 
     b64 = base64.b64encode(archivo.read()).decode('utf-8')

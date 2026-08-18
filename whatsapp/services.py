@@ -13,14 +13,50 @@ from django.conf import settings
 from core.decoradores import sync_to_async_function
 from core.funciones_adicionales import get_image_as_base64
 from .models import SesionWhatsApp, WhatsAppWebhook, Contacto, MensajeWhatsApp
+from .servicio_canal_base import ServicioCanalBase
 
 
-class WhatsAppService:
+class WhatsAppService(ServicioCanalBase):
     def __init__(self):
         self.base_url = settings.WHATSAPP_API_URL
         self.headers = {
             'Content-Type': 'application/json',
             'X-API-Key': settings.NODE_SECRET_KEY
+        }
+
+    @staticmethod
+    def _error_del_gateway(response, prefijo):
+        """Convierte una respuesta de error del gateway Node en un dict legible.
+
+        El gateway responde `{"error": "...", "codigo": "...", "bloqueadoPorAntiban": bool}`
+        con mensajes ya redactados en español. Volcar `response.text` crudo dejaba
+        al usuario leyendo el JSON entero — incluido el caso más frecuente, que es
+        el anti-baneo rechazando un envío con una explicación perfectamente clara.
+
+        `codigo` distingue el motivo (número inexistente, cuota diaria, sesión
+        bloqueada…) para que la UI pueda reaccionar distinto según el caso.
+        """
+        detalle, codigo, antiban = '', None, False
+        try:
+            cuerpo = response.json()
+            if isinstance(cuerpo, dict):
+                detalle = (cuerpo.get('error') or cuerpo.get('message') or '').strip()
+                codigo = cuerpo.get('codigo')
+                antiban = bool(cuerpo.get('bloqueadoPorAntiban'))
+        except ValueError:
+            pass
+
+        if not detalle:
+            detalle = (response.text or '').strip()[:300] or f'HTTP {response.status_code}'
+            return {'success': False, 'error': f'{prefijo}: {detalle}'}
+
+        # Con un motivo concreto del gateway se muestra tal cual: agregarle
+        # "Error al enviar mensaje: 400 - " adelante solo agrega ruido.
+        return {
+            'success': False,
+            'error': detalle,
+            'codigo': codigo,
+            'bloqueado_por_antiban': antiban,
         }
 
     def create_session(self, session, webhook_url):
@@ -117,6 +153,52 @@ class WhatsAppService:
                 return ''
         except Exception as e:
             return ''
+
+    def get_antiban_estado(self, session_id):
+        """Cuota del día, calentamiento y consumo de una sesión Baileys.
+
+        Solo aplica al gateway no oficial: las sesiones Meta no pasan por el
+        anti-ban. Devuelve `{'success': True, 'antiban': {...}}` o
+        `{'success': False, 'error': ...}` — nunca lanza, porque se llama al
+        pintar el tablero y un gateway caído no puede tumbar la pantalla.
+        """
+        try:
+            response = requests.get(
+                f"{self.base_url}/antiban/{session_id}",
+                headers=self.headers,
+                timeout=8,
+            )
+            if response.status_code == 200:
+                return {'success': True, 'antiban': response.json().get('antiban') or {}}
+            return self._error_del_gateway(response, 'No se pudo leer el estado anti-baneo')
+        except Exception as e:
+            return {'success': False, 'error': f'No se pudo contactar al servicio: {e}'}
+
+    def verificar_numero(self, session_id, numero):
+        """¿El número tiene cuenta de WhatsApp?
+
+        Devuelve `existe`: True / False / None. **None significa indeterminado**
+        (WhatsApp no respondió la consulta), no "no existe" — tratarlo como
+        inexistente descartaría contactos buenos por un timeout.
+        """
+        try:
+            response = requests.get(
+                f"{self.base_url}/antiban/{session_id}/verificar",
+                headers=self.headers,
+                params={'numero': numero},
+                timeout=15,
+            )
+            if response.status_code == 200:
+                cuerpo = response.json()
+                return {
+                    'success': True,
+                    'numero': cuerpo.get('numero'),
+                    'existe': None if cuerpo.get('indeterminado') else cuerpo.get('existe'),
+                    'indeterminado': bool(cuerpo.get('indeterminado')),
+                }
+            return self._error_del_gateway(response, 'No se pudo verificar el número')
+        except Exception as e:
+            return {'success': False, 'error': f'No se pudo contactar al servicio: {e}'}
 
     @sync_to_async_function
     def sync_contacts(self, session):
@@ -238,16 +320,53 @@ class WhatsAppService:
                     'success': True,
                     'message_id': response.json().get('messageId')
                 }
-            else:
-                return {
-                    'success': False,
-                    'error': f"Error al enviar mensaje: {response.status_code} - {response.text}"
-                }
+            return self._error_del_gateway(response, 'Error al enviar mensaje')
         except Exception as e:
             return {
                 'success': False,
                 'error': f"Error de conexión: {str(e)}"
             }
+
+    def edit_message(self, session_id, to, message_id, new_text):
+        """Edita un mensaje ya enviado (solo Baileys). POST /message/edit.
+
+        Manda las claves en camelCase y snake_case para tolerar ambas
+        convenciones del microservicio Node.
+        """
+        data = {
+            'sessionId': session_id, 'session_id': session_id,
+            'to': to,
+            'messageId': message_id, 'message_id': message_id,
+            'newText': new_text, 'new_text': new_text, 'text': new_text,
+        }
+        try:
+            response = requests.post(
+                f"{self.base_url}/message/edit", headers=self.headers, json=data
+            )
+            if response.status_code == 200:
+                return {'success': True}
+            return {'success': False,
+                    'error': f"Error al editar: {response.status_code} - {response.text}"}
+        except Exception as e:
+            return {'success': False, 'error': f"Error de conexión: {str(e)}"}
+
+    def delete_message(self, session_id, to, message_id):
+        """Elimina (revoke) un mensaje ya enviado (solo Baileys). POST /message/delete."""
+        data = {
+            'sessionId': session_id, 'session_id': session_id,
+            'to': to,
+            'messageId': message_id, 'message_id': message_id,
+        }
+        try:
+            response = requests.post(
+                f"{self.base_url}/message/delete", headers=self.headers, json=data
+            )
+            if response.status_code == 200:
+                return {'success': True}
+            return {'success': False,
+                    'error': f"Error al eliminar: {response.status_code} - {response.text}"}
+        except Exception as e:
+            return {'success': False, 'error': f"Error de conexión: {str(e)}"}
 
     def send_presence_update(self, session_id, to):
         """
@@ -277,11 +396,7 @@ class WhatsAppService:
                 return {
                     'success': True
                 }
-            else:
-                return {
-                    'success': False,
-                    'error': f"Error al enviar mensaje: {response.status_code} - {response.text}"
-                }
+            return self._error_del_gateway(response, 'Error al actualizar el indicador de escritura')
         except Exception as e:
             return {
                 'success': False,
@@ -316,11 +431,7 @@ class WhatsAppService:
                 return {
                     'success': True
                 }
-            else:
-                return {
-                    'success': False,
-                    'error': f"Error al enviar mensaje: {response.status_code} - {response.text}"
-                }
+            return self._error_del_gateway(response, 'Error al actualizar el indicador de escritura')
         except Exception as e:
             return {
                 'success': False,
@@ -513,11 +624,7 @@ class WhatsAppService:
                     'success': True,
                     'message_id': response.json().get('messageId')
                 }
-            else:
-                return {
-                    'success': False,
-                    'error': f"Error al enviar archivo: {response.status_code} - {response.text}"
-                }
+            return self._error_del_gateway(response, 'Error al enviar archivo')
         except Exception as e:
             return {
                 'success': False,
@@ -626,4 +733,7 @@ def get_whatsapp_service(sesion=None, proveedor: str | None = None):
     if prov == 'messenger':
         from .services_instagram import MessengerService
         return MessengerService()
+    if prov == 'tiktok':
+        from tiktok.servicio import TikTokService
+        return TikTokService()
     return WhatsAppService()

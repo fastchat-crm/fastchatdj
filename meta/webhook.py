@@ -14,24 +14,57 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def validar_firma_hmac(raw_body: bytes, signature_header: str, app_secret: str | None) -> bool:
+def _fail_closed() -> bool:
+    """True si el modo estricto está activo (`META_WEBHOOK_FAIL_CLOSED=True`):
+    sin `app_secret` no se acepta ningún evento (mejor un outage visible que
+    procesar eventos spoofeados en silencio)."""
+    try:
+        from django.conf import settings
+        return bool(getattr(settings, 'META_WEBHOOK_FAIL_CLOSED', False))
+    except Exception:
+        return False
+
+
+def validar_firma_hmac(raw_body: bytes, signature_header: str, app_secret) -> bool:
     """Compara `X-Hub-Signature-256` contra HMAC(app_secret, body).
 
-    Si no hay `app_secret` configurado devolvemos True (modo permisivo para
-    setup inicial — el operador debe setearlo para endurecer). Si hay app_secret
-    pero no llegó header de firma, rechazamos.
+    `app_secret` acepta un str o una lista de secrets: instalaciones con más
+    de una Meta App (una para WhatsApp Cloud, otra para Messenger/IG) reciben
+    webhooks firmados con secrets distintos — la firma es válida si coincide
+    con CUALQUIERA de los configurados (`get_meta_app_secrets`).
+    Con secret(s) configurado(s): valida y rechaza firmas inválidas (fail-closed).
+    Sin secret: por defecto acepta (permisivo para setup inicial) emitiendo
+    warning; con `META_WEBHOOK_FAIL_CLOSED=True` rechaza (recomendado en prod).
+    Si hay secret pero no llegó header de firma, rechazamos.
     """
-    if not app_secret:
+    if isinstance(app_secret, (list, tuple, set)):
+        secretos = [s for s in app_secret if s]
+    else:
+        secretos = [app_secret] if app_secret else []
+    if not secretos:
+        if _fail_closed():
+            logger.error(
+                "Webhook Meta RECHAZADO: app_secret no configurado y modo estricto "
+                "activo (META_WEBHOOK_FAIL_CLOSED). Configura el App Secret."
+            )
+            return False
+        logger.warning(
+            "Webhook Meta aceptado SIN validar firma (app_secret no configurado) — "
+            "activa META_WEBHOOK_FAIL_CLOSED=True en producción para cerrar el fail-open."
+        )
         return True
     if not signature_header:
         return False
     try:
-        expected = 'sha256=' + hmac.new(
-            app_secret.encode('utf-8'),
-            raw_body,
-            hashlib.sha256,
-        ).hexdigest()
-        return hmac.compare_digest(expected, signature_header)
+        for secreto in secretos:
+            expected = 'sha256=' + hmac.new(
+                secreto.encode('utf-8'),
+                raw_body,
+                hashlib.sha256,
+            ).hexdigest()
+            if hmac.compare_digest(expected, signature_header):
+                return True
+        return False
     except Exception:
         logger.exception("Error computando HMAC")
         return False

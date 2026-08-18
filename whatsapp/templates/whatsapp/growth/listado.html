@@ -1,0 +1,257 @@
+{% extends 'base.html' %}
+
+{% block head %}
+    <link rel="stylesheet" href="/static/css/whatsapp/growth.css?v1.0">
+{% endblock %}
+
+{% block content %}
+    <div class="container-fluid p-0">
+
+        <div class="alert alert-info d-flex align-items-center gap-3 mb-3">
+            <i class="fa fa-link fa-2x"></i>
+            <div>
+                <strong>¿Qué es un enlace de captación?</strong><br>
+                <small>
+                    Un link <code>wa.me</code> con seguimiento: la persona lo abre (desde tu bio de Instagram,
+                    un QR en el local, un volante), le aparece WhatsApp con un mensaje ya escrito y al enviarlo
+                    el sistema sabe <strong>por qué canal llegó</strong>. Automáticamente puede
+                    etiquetarla, inscribirla en una <a href="/whatsapp/secuencias/">secuencia</a> y responder
+                    un mensaje fijo. Cada enlace cuenta sus leads — sabrás qué canal capta más.
+                </small>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="GET" class="mb-0">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-8">
+                            <label class="form-label">Búsqueda</label>
+                            <div class="input-group">
+                                <span class="input-group-text border-end-0">
+                                    <i class="fa fa-search text-muted"></i>
+                                </span>
+                                <input type="text" class="form-control border-start-0"
+                                       placeholder="Buscar por nombre o código" name="criterio"
+                                       value="{{ criterio|default:'' }}">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search me-1"></i> Filtrar
+                                </button>
+                                {% if url_vars %}
+                                    <a href="{{ request.path }}" class="btn btn-default">
+                                        <i class="fas fa-times"></i> Limpiar
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h4 class="mb-0">Enlaces de captación</h4>
+                <small class="text-muted">
+                    {{ list_count|default:0 }} enlace{{ list_count|default:0|pluralize }}
+                    · Cada canal de captación con su propio link medible
+                </small>
+            </div>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalEnlace">
+                <i class="fa fa-plus"></i> Nuevo enlace
+            </button>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <table class="table table-striped align-middle">
+                    <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Link</th>
+                        <th>Acciones al usarlo</th>
+                        <th>Leads</th>
+                        <th>Estado</th>
+                        <th style="width:200px">Acciones</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for e in listado %}
+                        <tr data-id="{{ e.id }}">
+                            <td>
+                                <strong>{{ e.nombre }}</strong><br>
+                                <small class="text-muted">{{ e.sesion.nombre|default:e.sesion.session_id }} · ref: {{ e.codigo }}</small>
+                            </td>
+                            <td>
+                                <div class="growth-link-box">
+                                    <input type="text" class="form-control form-control-sm" readonly
+                                           value="{{ e.url_whatsapp }}">
+                                    <button class="btn btn-sm btn-secondary btn-copiar" title="Copiar link"
+                                            data-url="{{ e.url_whatsapp }}">
+                                        <i class="fa fa-copy"></i>
+                                    </button>
+                                </div>
+                            </td>
+                            <td>
+                                {% if e.etiqueta %}
+                                    <span class="badge" style="background:{{ e.etiqueta.color }}">{{ e.etiqueta.nombre }}</span>
+                                {% endif %}
+                                {% if e.secuencia %}
+                                    <span class="badge bg-primary"><i class="fa fa-stream"></i> {{ e.secuencia.nombre }}</span>
+                                {% endif %}
+                                {% if e.mensaje_respuesta %}
+                                    <span class="badge bg-info"><i class="fa fa-reply"></i> Respuesta fija</span>
+                                {% endif %}
+                                {% if not e.etiqueta and not e.secuencia and not e.mensaje_respuesta %}
+                                    <small class="text-muted">Solo medición</small>
+                                {% endif %}
+                            </td>
+                            <td><span class="growth-usos">{{ e.usos }}</span></td>
+                            <td>
+                                {% if e.activo %}
+                                    <span class="badge bg-success">Activo</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Pausado</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-info btn-qr" title="Ver QR"
+                                        data-url="{{ e.url_whatsapp }}" data-nombre="{{ e.nombre }}">
+                                    <i class="fa fa-qrcode"></i>
+                                </button>
+                                <button class="btn btn-sm btn-secondary btn-edit" title="Editar"
+                                        data-id="{{ e.id }}" data-nombre="{{ e.nombre }}"
+                                        data-desc="{{ e.descripcion }}"
+                                        data-texto="{{ e.texto_prellenado }}"
+                                        data-respuesta="{{ e.mensaje_respuesta }}"
+                                        data-etiqueta="{{ e.etiqueta_id|default:'' }}"
+                                        data-secuencia="{{ e.secuencia_id|default:'' }}"
+                                        data-sesion="{{ e.sesion_id }}"
+                                        data-activo="{{ e.activo|yesno:'1,0' }}">
+                                    <i class="fa fa-pen"></i>
+                                </button>
+                                <button class="btn btn-sm btn-warning btn-toggle" title="Activar / pausar"
+                                        data-id="{{ e.id }}">
+                                    <i class="fa fa-power-off"></i>
+                                </button>
+                                <button class="btn btn-sm btn-danger btn-del" title="Eliminar"
+                                        data-id="{{ e.id }}" data-nombre="{{ e.nombre }}">
+                                    <i class="fa fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">
+                                Aún no has creado enlaces. Crea el primero y ponlo en tu bio de Instagram o en un QR.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% include 'paginacion.html' %}
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalEnlace" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <form class="modal-content" id="formEnlace">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Nuevo enlace</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="action" value="add">
+                    <input type="hidden" name="pk" value="">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Nombre *</label>
+                            <input type="text" name="nombre" class="form-control" required maxlength="120"
+                                   placeholder="Ej: Bio Instagram, QR local, Volante feria">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Sesión destino *</label>
+                            <select name="sesion_id" class="form-select" required>
+                                {% for s in sesiones %}
+                                    <option value="{{ s.id }}">{{ s.nombre|default:s.session_id }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Descripción</label>
+                        <input type="text" name="descripcion" class="form-control" maxlength="255" placeholder="Opcional">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Texto prellenado *</label>
+                        <textarea name="texto_prellenado" class="form-control" rows="2" required
+                                  placeholder="¡Hola! Quiero más información."></textarea>
+                        <small class="text-muted">El marcador (ref: código) se agrega solo al final — así el sistema reconoce el enlace.</small>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Etiqueta a aplicar</label>
+                            <select name="etiqueta_id" class="form-select">
+                                <option value="">— Ninguna —</option>
+                                {% for et in etiquetas_disponibles %}
+                                    <option value="{{ et.id }}">{{ et.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted">Si la etiqueta dispara una secuencia, también se activa.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Inscribir en secuencia</label>
+                            <select name="secuencia_id" class="form-select">
+                                <option value="">— Ninguna —</option>
+                                {% for sec in secuencias_disponibles %}
+                                    <option value="{{ sec.id }}">{{ sec.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Respuesta automática</label>
+                        <textarea name="mensaje_respuesta" class="form-control" rows="2"
+                                  placeholder="Opcional. Si la defines, se responde esto y el mensaje NO pasa al bot/IA."></textarea>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="activo" id="chkEnlaceActivo" checked>
+                        <label class="form-check-label" for="chkEnlaceActivo">Enlace activo</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalQr" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">QR del enlace</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img src="" alt="Código QR del enlace" class="growth-qr-img" id="imgQr">
+                    <small class="text-muted d-block mt-2">Imprímelo o compártelo: al escanearlo abre WhatsApp con el mensaje listo.</small>
+                    <a href="" id="linkDescargarQr" target="_blank" class="btn btn-primary btn-sm mt-2">
+                        <i class="fa fa-download"></i> Abrir en tamaño grande
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block jscript %}
+    <script src="/static/js/whatsapp/growth.js?v1.0"></script>
+{% endblock %}

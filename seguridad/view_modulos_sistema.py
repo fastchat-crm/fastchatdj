@@ -3,7 +3,7 @@ import sys
 from datetime import date
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render, redirect
 from django.template.loader import get_template
@@ -11,7 +11,7 @@ from django.template.loader import get_template
 from core.funciones import addData, mi_paginador, secure_module, log, paginador
 from core.funciones_adicionales import ordenar_modulos_url, salva_logs
 from seguridad.forms import ModuloForm
-from seguridad.models import Modulo, ModuloGrupo
+from seguridad.models import Modulo, ModuloGrupo, GroupModulo
 from django.contrib import messages
 
 
@@ -134,6 +134,115 @@ def modulossistemaView(request):
                         return HttpResponse(json.dumps({'result': False, 'mensaje': 'Orden inválido'}))
                     except Exception as ex:
                         return HttpResponse(json.dumps({'result': False, 'mensaje': str(ex)}))
+                elif action == 'guardar_grupos_modulo':
+                    pk_modulo = int(request.POST.get('pk_modulo') or 0)
+                    grupos_ids = [int(g) for g in request.POST.getlist('c_grupos', []) if g.isdigit()]
+                    modulo = model.objects.filter(pk=pk_modulo, status=True).first()
+                    if not modulo:
+                        res_json.append({'error': True, 'message': 'Module not found.'})
+                    else:
+                        grupos_actuales = set(ModuloGrupo.objects.filter(modulos=modulo, status=True).values_list('pk', flat=True))
+                        grupos_nuevos = set(grupos_ids)
+                        a_agregar = grupos_nuevos - grupos_actuales
+                        a_quitar = grupos_actuales - grupos_nuevos
+                        for gid in a_agregar:
+                            mg = ModuloGrupo.objects.filter(pk=gid, status=True).first()
+                            if mg:
+                                mg.modulos.add(modulo)
+                        for gid in a_quitar:
+                            mg = ModuloGrupo.objects.filter(pk=gid, status=True).first()
+                            if mg:
+                                mg.modulos.remove(modulo)
+                        log(f"Synced groups for module {modulo.__str__()}: +{len(a_agregar)} / -{len(a_quitar)}", request, "change")
+                        res_json.append({
+                            'error': False,
+                            'message': f"Groups updated (+{len(a_agregar)} / -{len(a_quitar)}).",
+                            'reload': True
+                        })
+                elif action == 'guardar_roles_modulo':
+                    from django.contrib.auth.models import Group
+                    pk_modulo = int(request.POST.get('pk_modulo') or 0)
+                    roles_ids = [int(g) for g in request.POST.getlist('c_roles', []) if g.isdigit()]
+                    modulo = model.objects.filter(pk=pk_modulo, status=True).first()
+                    if not modulo:
+                        res_json.append({'error': True, 'message': 'Módulo no encontrado.'})
+                    else:
+                        roles_actuales = set(
+                            GroupModulo.objects.filter(modulos=modulo, status=True).values_list('group_id', flat=True)
+                        )
+                        roles_nuevos = set(roles_ids)
+                        a_agregar = roles_nuevos - roles_actuales
+                        a_quitar = roles_actuales - roles_nuevos
+                        for gid in a_agregar:
+                            group = Group.objects.filter(pk=gid).first()
+                            if not group:
+                                continue
+                            gm = GroupModulo.objects.filter(group=group).first()
+                            if gm is None:
+                                gm = GroupModulo.objects.create(group=group)
+                            elif not gm.status:
+                                gm.status = True
+                                gm.save(request)
+                            gm.modulos.add(modulo)
+                        for gid in a_quitar:
+                            gm = GroupModulo.objects.filter(group_id=gid, status=True).first()
+                            if gm:
+                                gm.modulos.remove(modulo)
+                        log(f"Sincronizó roles del módulo {modulo.__str__()}: +{len(a_agregar)} / -{len(a_quitar)}", request, "change")
+                        res_json.append({
+                            'error': False,
+                            'message': f"Roles actualizados (+{len(a_agregar)} / -{len(a_quitar)}).",
+                            'reload': True
+                        })
+                elif action == 'extraer_urls':
+                    from fastchatdj.urls import urls_sistema
+                    seleccionadas = set(request.POST.getlist('c_urls'))
+                    if not seleccionadas:
+                        res_json.append({'error': True, 'message': 'Selecciona al menos una URL para importar.'})
+                    else:
+                        nuevas = []
+                        existentes_urls = set(model.objects.values_list('url', flat=True))
+                        for u in urls_sistema:
+                            if not u.get("sub_urls"):
+                                continue
+                            for idx, su in enumerate(u["sub_urls"]):
+                                mod_url = "/{}{}".format(u["url"], su["url"])
+                                if mod_url in existentes_urls or mod_url not in seleccionadas:
+                                    continue
+                                mod_obj = model.objects.create(
+                                    orden=idx,
+                                    nombre=su["nombre"],
+                                    url=mod_url,
+                                )
+                                existentes_urls.add(mod_url)
+                                nuevas.append(mod_obj.id)
+                        log(f"Importo {len(nuevas)} URLs nuevas del sistema", request, "add")
+                        res_json.append({
+                            'error': False,
+                            'reload': True,
+                            'message': f"{len(nuevas)} URL(s) importadas." if nuevas else "No había URLs nuevas para importar."
+                        })
+                elif action == 'depurar_urls':
+                    from fastchatdj.urls import urls_sistema
+                    ids = [int(x) for x in request.POST.getlist('c_modulos') if x.isdigit()]
+                    if not ids:
+                        res_json.append({'error': True, 'message': 'Selecciona al menos una URL para depurar.'})
+                    else:
+                        urls_diccionario = set()
+                        for u in urls_sistema:
+                            for su in (u.get("sub_urls") or []):
+                                urls_diccionario.add("/{}{}".format(u["url"], su["url"]))
+                        depuradas = 0
+                        for filtro in model.objects.filter(pk__in=ids, status=True).exclude(url__in=urls_diccionario):
+                            filtro.status = False
+                            filtro.save(request)
+                            log(f"Depuro URL huerfana {filtro.__str__()}", request, "delete")
+                            depuradas += 1
+                        res_json.append({
+                            'error': False,
+                            'reload': True,
+                            'message': f"{depuradas} URL(s) depuradas." if depuradas else "No se depuró ninguna URL."
+                        })
         except ValueError as ex:
             res_json.append({'error': True,
                              "message": str(ex)
@@ -170,10 +279,102 @@ def modulossistemaView(request):
                 data["pk"] = pk
                 data["form"] = Formulario(instance=modulo, ver=True)
                 return render(request, 'seguridad/modulossistema/form.html', data)
+            elif action == 'previa_extraer_urls':
+                from fastchatdj.urls import urls_sistema
+                existentes_urls = set(model.objects.values_list('url', flat=True))
+                grupos_urls = []
+                for u in urls_sistema:
+                    if not u.get("sub_urls"):
+                        continue
+                    pendientes = []
+                    for su in u["sub_urls"]:
+                        mod_url = "/{}{}".format(u["url"], su["url"])
+                        if mod_url in existentes_urls:
+                            continue
+                        pendientes.append({'nombre': su["nombre"], 'url': mod_url})
+                    if pendientes:
+                        grupos_urls.append({'app': u.get("nombre") or u["url"], 'urls': pendientes})
+                total_pendientes = sum(len(g['urls']) for g in grupos_urls)
+                if not total_pendientes:
+                    return JsonResponse({'result': False, 'message': 'No hay URLs nuevas para importar.'})
+                data['grupos_urls'] = grupos_urls
+                data['total_pendientes'] = total_pendientes
+                template = get_template('seguridad/modulossistema/form_extraer_urls.html')
+                return JsonResponse({'result': True, 'data': template.render(data)})
+            elif action == 'previa_depurar_urls':
+                from fastchatdj.urls import urls_sistema
+                urls_diccionario = set()
+                for u in urls_sistema:
+                    for su in (u.get("sub_urls") or []):
+                        urls_diccionario.add("/{}{}".format(u["url"], su["url"]))
+                huerfanos = list(
+                    model.objects.filter(status=True)
+                    .exclude(url__in=urls_diccionario)
+                    .order_by('url')
+                )
+                if not huerfanos:
+                    return JsonResponse({'result': False, 'message': 'No hay URLs huérfanas: todas existen en el diccionario.'})
+                grupos_huerfanos = {}
+                for m in huerfanos:
+                    seg = (m.url or '/').strip('/').split('/')[0] or '(raíz)'
+                    grupos_huerfanos.setdefault(seg, []).append(m)
+                data['grupos_huerfanos'] = [
+                    {'app': k, 'modulos': v} for k, v in sorted(grupos_huerfanos.items())
+                ]
+                data['total_huerfanos'] = len(huerfanos)
+                template = get_template('seguridad/modulossistema/form_depurar_urls.html')
+                return JsonResponse({'result': True, 'data': template.render(data)})
+            elif action == 'grupos_modulo':
+                pk_modulo = int(request.GET.get('id') or 0)
+                modulo = model.objects.filter(pk=pk_modulo, status=True).first()
+                if not modulo:
+                    return JsonResponse({'result': False, 'message': 'Module not found.'})
+                grupos_actuales_ids = set(ModuloGrupo.objects.filter(modulos=modulo, status=True).values_list('pk', flat=True))
+                data['modulo'] = modulo
+                data['grupos'] = ModuloGrupo.objects.filter(status=True).order_by('prioridad', 'nombre')
+                data['grupos_actuales_ids'] = grupos_actuales_ids
+                template = get_template('seguridad/modulossistema/form_grupos.html')
+                return JsonResponse({'result': True, 'data': template.render(data)})
+            elif action == 'roles_modulo':
+                from django.contrib.auth.models import Group
+                pk_modulo = int(request.GET.get('id') or 0)
+                modulo = model.objects.filter(pk=pk_modulo, status=True).first()
+                if not modulo:
+                    return JsonResponse({'result': False, 'message': 'Módulo no encontrado.'})
+                roles_actuales_ids = set(
+                    GroupModulo.objects.filter(modulos=modulo, status=True).values_list('group_id', flat=True)
+                )
+                data['modulo'] = modulo
+                data['roles'] = Group.objects.all().order_by('name')
+                data['roles_actuales_ids'] = roles_actuales_ids
+                template = get_template('seguridad/modulossistema/form_roles.html')
+                return JsonResponse({'result': True, 'data': template.render(data)})
 
         criterio, filtros, url_vars =  request.GET.get('criterio', ''), Q(status=True), ''
         ister, homologacion, postulate = request.GET.get('ister',''), request.GET.get('homologacion',''), request.GET.get('postulate','')
+        usadas = request.GET.get('usadas', '')
+        grupo_id = request.GET.get('grupo', '')
+        rol_id = request.GET.get('rol', '')
+        orden = request.GET.get('orden', 'id_desc')
 
+        if grupo_id.isdigit():
+            data['grupo_sel'] = int(grupo_id)
+            url_vars += f'&grupo={grupo_id}'
+            filtros = filtros & Q(modulogrupo__id=int(grupo_id), modulogrupo__status=True)
+        if rol_id.isdigit():
+            data['rol_sel'] = int(rol_id)
+            url_vars += f'&rol={rol_id}'
+            filtros = filtros & Q(groupmodulo__id=int(rol_id), groupmodulo__status=True)
+        if usadas in ('1', '0'):
+            data['usadas'] = usadas
+            url_vars += f'&usadas={usadas}'
+            ids_usadas = list(
+                x for x in ModuloGrupo.objects.filter(status=True).values_list('modulos__id', flat=True).distinct() if x
+            )
+            if usadas == '1':
+                filtros = filtros & Q(id__in=ids_usadas)
+            else:
+                filtros = filtros & ~Q(id__in=ids_usadas)
         if ister:
             data['ister'] = ister
             url_vars += f'&ister={ister}'
@@ -212,8 +413,34 @@ def modulossistemaView(request):
         #                 orden = u["sub_urls"].index(su)
         #                 mod_obj = Modulo.objects.create(orden=orden, nombre=su["nombre"], url=mod_url)
         #                 log(f"Sistema creo modulo {mod_obj.__str__()}", request, "add")
-        qs_modulos = model.objects.filter(filtros)
+        orden_map = {
+            'id_desc': '-id',
+            'id_asc': 'id',
+            'nombre_asc': 'nombre',
+            'nombre_desc': '-nombre',
+            'fecha_asc': 'fecha_registro',
+            'fecha_desc': '-fecha_registro',
+        }
+        order_field = orden_map.get(orden, '-id')
+        data['orden'] = orden
+        if orden != 'id_desc':
+            url_vars += f'&orden={orden}'
+
+        qs_modulos = (
+            model.objects.filter(filtros)
+            .prefetch_related('modulogrupo_set', 'groupmodulo_set__group')
+            .annotate(roles_count=Count('groupmodulo', filter=Q(groupmodulo__status=True), distinct=True))
+            .distinct()
+        )
         data["list_count"] = qs_modulos.count()
         data["url_vars"] = url_vars
-        paginador(request, qs_modulos.order_by('-id'), 20, data, url_vars)
+        from datetime import datetime, timedelta
+        data["umbral_reciente"] = datetime.now() - timedelta(days=7)
+        ids_usadas_set = set(
+            x for x in ModuloGrupo.objects.filter(status=True).values_list('modulos__id', flat=True).distinct() if x
+        )
+        data["ids_usadas"] = ids_usadas_set
+        data["grupos_filtro"] = ModuloGrupo.objects.filter(status=True).order_by('nombre')
+        data["roles_filtro"] = GroupModulo.objects.filter(status=True).select_related('group').order_by('group__name')
+        paginador(request, qs_modulos.order_by(order_field), 20, data, url_vars)
         return render(request, 'seguridad/modulossistema/listado.html', data)

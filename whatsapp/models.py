@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from email.policy import default
 from functools import cached_property
@@ -16,9 +17,11 @@ from core.crypto import EncryptedTextField
 from core.custom_models import ModeloBase
 from autenticacion.models import Usuario
 from core.funciones import default_expira_10_min, get_encrypt
-from core.funciones_adicionales import remover_espacios_de_mas
+from core.funciones_adicionales import remover_espacios_de_mas, foto_inicial_gris
 from fastchatdj.settings import MEDIA_ROOT
 from whatsapp.models_querysetmanagers import ContactoManager, ConversacionWhatsAppManager
+
+logger = logging.getLogger(__name__)
 
 ESTADOS_SESION = (
     ('pendiente', 'Pendiente'),
@@ -32,12 +35,14 @@ PROVEEDORES_SESION = (
     ('meta',      'Meta Cloud API'),
     ('instagram', 'Instagram DM'),
     ('messenger', 'Facebook Messenger'),
+    ('tiktok',    'TikTok Business'),
 )
 
 CANALES_ORIGEN = (
     ('whatsapp',  'WhatsApp'),
     ('instagram', 'Instagram'),
     ('messenger', 'Messenger'),
+    ('tiktok',    'TikTok'),
     ('otro',      'Otro'),
 )
 
@@ -54,6 +59,7 @@ MODOS_BOT = (
     ('ninguno',     'Sin bot (sólo humanos)'),
     ('tradicional', 'Chatbot tradicional (flujo/menús/APIs)'),
     ('ia',          'Agente IA'),
+    ('hibrido',     'Híbrido (flujo primero, IA si no hay match)'),
 )
 
 
@@ -71,7 +77,20 @@ class SesionWhatsApp(ModeloBase):
     mensaje_despedida = models.TextField(blank=True, null=True, verbose_name='Mensaje de despedida')
     mensaje_handoff = models.TextField(blank=True, null=True, verbose_name='Mensaje de transferencia a agente',
                                        help_text='Se envía al cliente cuando la IA transfiere a un agente humano')
-    min_sesion = models.IntegerField(default=0, verbose_name='Minutos de sesión')
+    reconexion_activa = models.BooleanField(
+        'Enviar mensajes de reconexión', default=False,
+        help_text='Si está activo, un cron horario envía el mensaje de reconexión a las '
+                  'conversaciones abiertas en silencio (dentro de la ventana de 24h).')
+    mensaje_reconexion = models.TextField(
+        blank=True, null=True, verbose_name='Mensaje de reconexión',
+        help_text='Se envía automáticamente (cron horario) a las conversaciones abiertas '
+                  'cuyo último mensaje es nuestro y llevan más de 1 hora sin respuesta del '
+                  'cliente, siempre dentro de la ventana de 24h. Requiere el check activo.')
+    min_sesion = models.IntegerField(
+        default=0, verbose_name='Minutos de sesión',
+        help_text='0 = la conversación NO se cierra sola (solo cierre manual del asesor). '
+                  'Mayor a 0 = minutos de inactividad antes del cierre automático con despedida.',
+    )
     departamentos = models.ManyToManyField('crm.DepartamentoChatBot', verbose_name='Departamentos', blank=True)
     modo_bot = models.CharField(
         max_length=15, choices=MODOS_BOT, default='ia',
@@ -87,6 +106,11 @@ class SesionWhatsApp(ModeloBase):
     #IDIOMA
     language = models.CharField('Idioma', max_length=50, choices=LANGUAGES, default='es')
     agente_ia = models.ForeignKey('crm.AgentesIA', on_delete=models.PROTECT, null=True, blank=True)
+    rag_coleccion = models.ForeignKey(
+        'crm.RagColeccion', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='sesiones', verbose_name='Colección RAG',
+        help_text='Conocimiento RAG propio de esta sesión/número (independiente del agente).',
+    )
     proveedor = models.CharField(
         max_length=20, choices=PROVEEDORES_SESION, default='baileys',
         verbose_name='Proveedor WhatsApp',
@@ -102,8 +126,22 @@ class SesionWhatsApp(ModeloBase):
         help_text='TZ database name, ej. America/Guayaquil, America/Bogota, UTC.'
     )
     auto_asignar_round_robin = models.BooleanField(
-        'Auto-asignar a agentes (round-robin)', default=False,
-        help_text='Al entrar una conversación sin agente, asignarla automáticamente al próximo agente disponible.'
+        'Asignar asesor apenas llega la conversación (round-robin)', default=False,
+        help_text='Al entrar una conversación nueva se asigna al próximo asesor disponible sin esperar al handoff. '
+                  'No pausa el bot ni avisa todavía al cliente: cuando el flujo llegue a "hablar con un asesor" no '
+                  'vuelve a repartirla, solo notifica al asesor que ya la tiene.'
+    )
+    horas_aviso_por_caducar = models.PositiveSmallIntegerField(
+        'Aviso de ventana por caducar (horas)', default=6,
+        help_text='Cuántas horas antes de que se cierre la ventana de 24h de Meta se avisa en el panel '
+                  'y se marca la conversación como "por caducar" en el inbox. Rango de 1 a 23.'
+    )
+    horas_reactivar_bot = models.PositiveSmallIntegerField(
+        'Reactivar el bot tras inactividad (horas)', default=12,
+        help_text='Si el cliente vuelve a escribir después de este tiempo de silencio y el bot estaba '
+                  'apagado (porque un asesor lo pausó al atenderlo), se vuelve a encender solo. '
+                  'Evita que un cliente que reaparece días después quede sin respuesta esperando a un '
+                  'asesor que ya cerró el caso. 0 = nunca reactivar automáticamente.'
     )
     pixel_meta = models.ForeignKey(
         'whatsapp.PixelMeta', on_delete=models.SET_NULL, null=True, blank=True,
@@ -137,6 +175,10 @@ class SesionWhatsApp(ModeloBase):
     def es_messenger(self):
         return self.proveedor == 'messenger'
 
+    @property
+    def es_tiktok(self):
+        return self.proveedor == 'tiktok'
+
     def is_connected(self):
         return self.estado == 'conectado'
 
@@ -158,6 +200,47 @@ class SesionWhatsApp(ModeloBase):
     def obtener_perfiles(self):
         return self.perfilsesionwhatsapp_set.filter(status=True).order_by('usuario__first_name')
 
+    def usuarios_asignados(self):
+        perfiles = [p for p in self.perfilsesionwhatsapp_set.all() if p.status]
+        supervisores = [p for p in perfiles if p.rol == 'supervisor']
+        agentes = [p for p in perfiles if p.rol == 'asesor']
+        ordenados = supervisores + agentes
+        limite = 4
+        visibles = ordenados[:limite]
+        restantes = ordenados[limite:]
+
+        def _nombre(perfil):
+            nombre = getattr(perfil.usuario, 'full_name', '') or ''
+            if callable(nombre):
+                nombre = nombre()
+            return (nombre or '').strip() or perfil.usuario.username
+
+        return {
+            'supervisores': supervisores,
+            'agentes': agentes,
+            'total': len(perfiles),
+            'visibles': visibles,
+            'extra': len(restantes),
+            'extra_titulo': ', '.join(_nombre(p) for p in restantes),
+        }
+
+    def rol_de_usuario(self, usuario):
+        if not usuario or not getattr(usuario, 'id', None):
+            return None
+        if self.usuario_id == usuario.id:
+            return 'supervisor'
+        perfil = self.perfilsesionwhatsapp_set.filter(usuario_id=usuario.id, status=True).first()
+        return perfil.rol if perfil else None
+
+    def es_supervisor(self, usuario):
+        return self.rol_de_usuario(usuario) == 'supervisor'
+
+    def es_asesor(self, usuario):
+        return self.rol_de_usuario(usuario) == 'asesor'
+
+    def es_participante(self, usuario):
+        return self.rol_de_usuario(usuario) is not None
+
     def is_empty_session(self):
         from django.utils import timezone
         cb = getattr(self, 'config_baileys', None)
@@ -172,14 +255,15 @@ class SesionWhatsApp(ModeloBase):
             self.ultima_conexion = timezone.now()
         else:
             self.ultima_conexion = None
-        if self.min_sesion and self.min_sesion > 720:
-            raise ValueError("El tiempo de sesión no puede superar las 12 horas (720 minutos).")
+        if self.min_sesion and self.min_sesion > 1440:
+            raise ValueError("El tiempo de sesión no puede superar las 24 horas (1440 minutos).")
         if not self.min_sesion:
             self.min_sesion = 60
         # Limpiar espacios en blanco de los mensajes
         self.mensaje_bienvenida = remover_espacios_de_mas(self.mensaje_bienvenida)
         self.mensaje_despedida = remover_espacios_de_mas(self.mensaje_despedida)
         self.mensaje_handoff = remover_espacios_de_mas(self.mensaje_handoff)
+        self.mensaje_reconexion = remover_espacios_de_mas(self.mensaje_reconexion)
         super().save(*args, **kwargs)
 
 
@@ -256,14 +340,30 @@ class Contacto(ModeloBase):
         verbose_name='Referral Meta (CTWA)',
         help_text='Datos del Click-to-WhatsApp ad por el que entró el contacto.'
     )
+    # Protección del número — opt-out y números inválidos quedan fuera de
+    # campañas/masivos automáticamente (calidad Meta).
+    opt_out = models.BooleanField(
+        default=False, db_index=True, verbose_name='Baja de mensajes masivos (opt-out)',
+        help_text='El contacto pidió no recibir más mensajes masivos (escribió BAJA/STOP '
+                  'o Meta reportó que bloqueó marketing). Se excluye de campañas.'
+    )
+    fecha_opt_out = models.DateTimeField(
+        blank=True, null=True, verbose_name='Fecha de baja'
+    )
+    motivo_opt_out = models.CharField(
+        max_length=30, blank=True, default='', verbose_name='Motivo de baja',
+        help_text='keyword (escribió baja/stop) o meta_131050 (Meta reportó bloqueo de marketing).'
+    )
+    whatsapp_invalido = models.BooleanField(
+        default=False, db_index=True, verbose_name='Número inválido en WhatsApp',
+        help_text='Marcado automáticamente cuando Meta responde que el número no existe '
+                  'en WhatsApp (error 131030). Se excluye de campañas.'
+    )
 
     def get_foto_gris(self):
         try:
             if not self.contacto_foto:
-                inicial = self.contacto_nombre[0].upper() if self.contacto_nombre else ''
-                if inicial and inicial.isalpha():
-                    return f"/static/images/initials/gris/{inicial}.png"
-                return "/static/foto_defaultd.png"
+                return foto_inicial_gris(self.contacto_nombre)
             return self.contacto_foto
         except Exception:
             return "/static/foto_defaultd.png"
@@ -294,7 +394,7 @@ class Contacto(ModeloBase):
     def save(self, *args, **kwargs):
         if not self.numero_telefono:
             self.numero_telefono = self.contacto_numero
-        else:
+        elif (self.canal or 'whatsapp') == 'whatsapp':
             self.contacto_numero = "".join([x for x in self.numero_telefono if x.isdigit()])
             self.from_number = f"{self.contacto_numero}@s.whatsapp.net"
         super().save(*args, **kwargs)
@@ -384,6 +484,12 @@ ESTADOS_CONVERSACION = (
     (1, 'Cerrado'),
 )
 
+ESTADOS_ATENCION = (
+    ('abierta', 'Abierta'),
+    ('pendiente', 'Pendiente'),
+    ('resuelta', 'Resuelta'),
+)
+
 ESTADO_MENSAJE_CHOICES = (
     ("MENU_DEPARTAMENTOS", "Menú Departamentos"),
     ("DEPARTAMENTO_ESCOGIDO", "Departamento Escogido"),
@@ -423,7 +529,10 @@ class ConversacionWhatsApp(ModeloBase):
     estado_conversacion = models.IntegerField(choices=ESTADOS_CONVERSACION, default=0, verbose_name='Estado de la conversación')
     # Campos para la gestión de mensajes
     conversacion_finalizada = models.BooleanField('Conversación finalizada', default=False)
-    fecha_hora_expira = models.DateTimeField('Fecha y Hora que expira la conversación')
+    fecha_hora_expira = models.DateTimeField(
+        'Fecha y Hora que expira la conversación', blank=True, null=True,
+        help_text='NULL = sin cierre automático (min_sesion=0 o canales Messenger/TikTok).'
+    )
     fecha_fin_conversacion = models.DateTimeField('Fecha y Hora de cierre de la conversación', blank=True, null=True)
     duracion_conversacion = models.DurationField('Duración de la conversación', blank=True, null=True)
     estado_mensaje = models.CharField(
@@ -444,6 +553,14 @@ class ConversacionWhatsApp(ModeloBase):
         related_name='conversaciones_asignadas', verbose_name='Asignado a'
     )
     fecha_asignacion = models.DateTimeField('Fecha de asignación', null=True, blank=True)
+    estado_atencion = models.CharField(
+        'Estado de atención', max_length=12, choices=ESTADOS_ATENCION, default='abierta',
+        help_text='Flujo de inbox: abierta → pendiente (esperando) → resuelta. Independiente del cierre técnico.'
+    )
+    snooze_hasta = models.DateTimeField(
+        'Pospuesta hasta', null=True, blank=True,
+        help_text='Si está en el futuro, la conversación se oculta del inbox hasta esa fecha (un cron la reabre).'
+    )
     nota_interna = models.TextField('Nota interna', blank=True, default='')
     primer_agente = models.ForeignKey(
         Usuario, on_delete=models.SET_NULL, null=True, blank=True,
@@ -503,6 +620,33 @@ class ConversacionWhatsApp(ModeloBase):
         help_text='Servicio con el que se atendio esta conversacion (baileys/meta/etc). Se congela al crearla.'
     )
 
+    # Reconexión por plantilla. Cuando un agente envía una plantilla Meta a una
+    # conversación finalizada, esta NO se reactiva de inmediato: queda en estado 1
+    # marcada como sonda (pendiente_reconexion=True) hasta que el cliente responda.
+    # Al responder, el webhook REABRE esta misma conversación (ver
+    # obtener_o_crear_activa) y la marca reconectada=True — así el historial
+    # conserva las plantillas enviadas y el asesor asignado. Los campos
+    # iniciada_por_plantilla/conv_origen quedan para datos históricos del flujo
+    # anterior (que creaba una conversación nueva enlazada).
+    pendiente_reconexion = models.BooleanField('Pendiente de reconexión', default=False, db_index=True)
+    reconectada = models.BooleanField('Reconectada', default=False)
+    iniciada_por_plantilla = models.BooleanField('Iniciada por plantilla', default=False)
+    # Nudge de reconexión en conversaciones ABIERTAS (texto libre, distinto de la
+    # sonda por plantilla de arriba). El cron horario lo pone en True al enviar el
+    # mensaje_reconexion de la sesión; se resetea a False cuando el cliente vuelve
+    # a escribir (procesar_mensaje), de modo que solo se envía un nudge por silencio.
+    reconexion_enviada = models.BooleanField('Reconexión enviada', default=False, db_index=True)
+    # Sesiones con bot tradicional/híbrido: el agente envió una plantilla Meta a
+    # una conversación CADUCADA (ventana 24h vencida) para reengancharla. Se marca
+    # True al enviar la plantilla; cuando el cliente responde, el webhook
+    # (procesar_mensaje) reinicia el flujo del bot desde nodo_inicio y limpia el
+    # flag. Distingue este caso del bot pausado a mano por un asesor humano.
+    reiniciar_flujo_al_responder = models.BooleanField('Reiniciar flujo al responder', default=False, db_index=True)
+    conv_origen = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='reconexiones', verbose_name='Conversación de origen',
+    )
+
     class Meta:
         verbose_name = 'Conversación WhatsApp'
         verbose_name_plural = 'Conversaciones WhatsApp'
@@ -550,11 +694,48 @@ class ConversacionWhatsApp(ModeloBase):
     def traer_ultimo_mensaje(self):
         return self.mensajes.last()
 
+    # Por debajo de esto no hay conversación que resumir: un "hola" suelto o un
+    # mensaje que nadie contestó. Resumirlos gastaba tokens para producir una
+    # línea sin valor, y esas líneas después ensucian el RAG del agente.
+    MIN_MENSAJES_PARA_RESUMIR = 3
+
+    # Marca de "no hay nada que resumir acá". A diferencia de un fallo, esto no
+    # se reintenta: la conversación no va a crecer.
+    SIN_CONTENIDO = 'CONVERSACION SIN CONTENIDO'
+
     def resumir_conversacion(self):
+        """Genera sentimiento + resumen de la conversación cerrada.
+
+        Idempotente: si ya hay resumen no hace nada.
+
+        **Un fallo NO deja marca.** Antes se escribía 'SIN RESUMEN' cuando algo
+        salía mal, y como el guard de entrada es `if not self.resumen_conversacion`,
+        esa marca volvía la conversación imposible de resumir para siempre. Un
+        error transitorio de la API la mataba definitivamente: 395 de 951
+        conversaciones cerradas quedaron así, y el cron que alimenta el RAG se
+        quedó sin material del que aprender. Ahora un fallo deja el campo vacío
+        y queda elegible para el próximo intento.
+        """
         session = self.contacto.sesion
-        if not self.resumen_conversacion and session.agente_ia and session.agente_ia.apikey.exists():
-            agente = session.agente_ia
-            for apikey in agente.apikey.all():
+        if self.resumen_conversacion or not session.agente_ia:
+            return
+
+        agente = session.agente_ia
+        # Solo keys activas. `apikey.all()` incluía las dadas de baja y las
+        # borradas, así que el primer intento se gastaba en una key muerta.
+        keys = list(agente.apikey.filter(estado=True, status=True).order_by('-es_default', 'id'))
+        if not keys:
+            logger.info('Conversación %s sin resumen: el agente "%s" no tiene key activa.',
+                        self.id, agente.nombre)
+            return
+
+        if self.mensajes.count() < self.MIN_MENSAJES_PARA_RESUMIR:
+            self.resumen_conversacion = self.SIN_CONTENIDO
+            super().save()
+            return
+
+        if True:
+            for apikey in keys:
                 try:
                     consultor = AgenteResumidor(
                         provider=apikey.proveedor, apikey=apikey.descripcion, conversacion=self,
@@ -571,20 +752,46 @@ class ConversacionWhatsApp(ModeloBase):
                         self.resumen_conversacion = resumen_analisis
                     else:
                         self.resumen_conversacion = consultor.resumir()
-                except Exception:
+                    # Consolidar aprendizaje: el resumen de la conversación cerrada
+                    # se indexa en la memoria RAG del agente — reutiliza el resumen
+                    # ya generado, solo cuesta 1 embedding (cero tokens LLM extra).
+                    try:
+                        # memoria_rag_activa puede venir en NULL = "heredar del
+                        # Centro de IA"; resolver la cascada en vez de leer el
+                        # campo, que en NULL sería falsy y apagaría la memoria.
+                        from crm.ia_config import parametro as _parametro_ia
+                        if self.resumen_conversacion and _parametro_ia('memoria_rag_activa', agente=agente):
+                            from agents_ai.providers import get_provider
+                            from agents_ai.memoria.rag_conversaciones import guardar_conocimiento
+                            _emb = get_provider(apikey.proveedor).get_embeddings(
+                                apikey.descripcion,
+                                base_url=(getattr(apikey, 'base_url', '') or None),
+                            )
+                            guardar_conocimiento(
+                                agente.id, _emb, self.resumen_conversacion,
+                                origen='resumen_conversacion', conversacion_id=str(self.id),
+                            )
+                    except Exception:
+                        pass
+                except Exception as ex:
+                    # Antes esto se tragaba en silencio y el motivo se perdía.
+                    logger.warning(
+                        'No se pudo resumir la conversación %s con la key %s (%s): %s',
+                        self.id, apikey.id, apikey.get_proveedor_display(), ex,
+                    )
                     continue
                 break
             if not self.resumen_conversacion:
-                self.resumen_conversacion = 'SIN RESUMEN'
+                # Se deja vacío a propósito para poder reintentar más adelante.
+                logger.warning('Conversación %s quedó sin resumen: fallaron las %d key(s) activas.',
+                               self.id, len(keys))
+                return
             super().save()
 
     def get_foto_gris(self):
         try:
             if not self.contacto.contacto_foto:
-                inicial = self.contacto.contacto_nombre[0].upper() if self.contacto.contacto_nombre else ''
-                if inicial and inicial.isalpha():
-                    return f"/static/images/initials/gris/{inicial}.png"
-                return "/static/foto_defaultd.png"
+                return foto_inicial_gris(self.contacto.contacto_nombre)
             return self.contacto.contacto_foto
         except Exception:
             return "/static/foto_defaultd.png"
@@ -614,6 +821,11 @@ class ConversacionWhatsApp(ModeloBase):
         # Mensajes entrantes del contacto aun sin marcar como leidos. Se usa
         # en el listado solo para conversaciones abiertas; las finalizadas
         # no muestran badge (no hay "pendiente" que atender).
+        # Si el queryset del listado ya anotó `_no_leidos_ann` (Count por SQL),
+        # lo usamos y evitamos una query COUNT por cada tarjeta (N+1 en el inbox).
+        ann = getattr(self, '_no_leidos_ann', None)
+        if ann is not None:
+            return ann
         return self.mensajes.filter(leido=False, remitente=self.contacto_numero).count()
 
     @cached_property
@@ -650,6 +862,32 @@ class ConversacionWhatsApp(ModeloBase):
     def atendida_por_messenger(self):
         return self.proveedor_efectivo == 'messenger'
 
+    @property
+    def atendida_por_tiktok(self):
+        return self.proveedor_efectivo == 'tiktok'
+
+    @cached_property
+    def vence_meta_en(self):
+        if not self.atendida_por_meta:
+            return None
+        sesion = getattr(self, 'sesion', None)
+        if not sesion:
+            return None
+        ultimo_entrante = (
+            self.mensajes
+            .exclude(remitente=sesion.numero)
+            .order_by('-fecha')
+            .first()
+        )
+        if not ultimo_entrante or not ultimo_entrante.fecha:
+            return None
+        return ultimo_entrante.fecha + relativedelta(hours=24)
+
+    @cached_property
+    def vence_meta_expirada(self):
+        vence = self.vence_meta_en
+        return bool(vence and timezone.now() > vence)
+
     @cached_property
     def from_number(self):
         return self.contacto.from_number
@@ -685,7 +923,14 @@ class ConversacionWhatsApp(ModeloBase):
         if self.contacto.fecha_ultimo_mensaje:
             self.order = int(round(self.contacto.fecha_ultimo_mensaje.timestamp(), 0))
         if not self.fecha_hora_expira:
-            self.fecha_hora_expira = timezone.now() + relativedelta(minutes=self.contacto.sesion.min_sesion)
+            # min_sesion=0 o canal social (Messenger/TikTok) → sin cierre
+            # automático: se respeta el NULL. El backfill incondicional anterior
+            # ponía now()+0min = ya expirada — la conversación nacía invisible
+            # para el inbox (sin_expirar) sin estar cerrada.
+            _min_sesion = int(getattr(self.contacto.sesion, 'min_sesion', None) or 0)
+            _proveedor = getattr(self.contacto.sesion, 'proveedor', '') or ''
+            if _min_sesion > 0 and _proveedor not in ('messenger', 'tiktok'):
+                self.fecha_hora_expira = timezone.now() + relativedelta(minutes=_min_sesion)
         if not self.hashed_id:
             self.hashed_id = get_encrypt(self.id)[1]
         super().save(*args, **kwargs)
@@ -865,6 +1110,24 @@ class ConversacionWhatsApp(ModeloBase):
         except Exception:
             _log.exception("No pude registrar traza fin_conversacion")
 
+        # Automatizaciones: cerrar una conversación es el gancho natural para
+        # encuestas de satisfacción o pedidos de reseña. `disparar` solo encola;
+        # el cron ejecuta, así que un fallo acá no puede impedir el cierre.
+        try:
+            from automatizacion.motor import disparar
+            from automatizacion.models import EVENTO_CONVERSACION_FINALIZADA
+            disparar(EVENTO_CONVERSACION_FINALIZADA, {
+                'conversacion_id': self.id,
+                'contacto_id': self.contacto_id,
+                'contacto_nombre': getattr(self.contacto, 'contacto_nombre', '') or '',
+                'numero': getattr(self.contacto, 'contacto_numero', '') or '',
+                'sesion_id': getattr(sesion, 'id', None),
+                'clasificacion': self.clasificacion,
+                'estado_atencion': self.estado_atencion,
+            })
+        except Exception:
+            _log.exception("No pude disparar las automatizaciones de fin_conversacion")
+
         return True
 
     @classmethod
@@ -873,18 +1136,109 @@ class ConversacionWhatsApp(ModeloBase):
         Devuelve (conversacion, created). Busca una conversación activa del
         contacto (no expirada, no finalizada, estado 0); si no existe, crea
         una nueva con fecha_hora_expira según session.min_sesion.
+
+        Concurrencia: dos mensajes del mismo contacto llegando en paralelo
+        (ráfaga del cliente, reintento del webhook) pasaban ambos el filter()
+        y creaban DOS conversaciones. Se serializa con select_for_update
+        sobre la fila del Contacto — el segundo request espera al primero y
+        ya encuentra la conversación creada.
         """
-        conv = cls.objects.sin_expirar.filter(contacto=contacto).first()
-        if conv:
-            return conv, False
-        min_sesion = int(getattr(contacto.sesion, 'min_sesion', None) or 10)
-        proveedor_snapshot = getattr(contacto.sesion, 'proveedor', '') or ''
-        conv = cls.objects.create(
-            contacto=contacto,
-            fecha_hora_expira=timezone.now() + relativedelta(minutes=min_sesion),
-            proveedor_atencion=proveedor_snapshot,
-        )
-        return conv, True
+        from django.db import transaction
+
+        with transaction.atomic():
+            contacto_bloqueado = (
+                type(contacto).objects.select_for_update().filter(pk=contacto.pk).first()
+            )
+            if contacto_bloqueado is None:
+                contacto_bloqueado = contacto
+            conv = cls.objects.sin_expirar.filter(contacto=contacto).first()
+            if conv:
+                return conv, False
+            # min_sesion == 0 → SIN cierre automático: la conversación solo la
+            # termina el usuario (fecha_hora_expira=None nunca matchea el cron
+            # de cierre ni la anotación `expirado`). min_sesion > 0 mantiene la
+            # ventana de inactividad clásica.
+            min_sesion = int(getattr(contacto.sesion, 'min_sesion', None) or 0)
+            # Messenger/TikTok: el asesor finaliza a mano (ver reopen abajo) —
+            # nunca expiran por inactividad aunque la sesión tenga min_sesion.
+            # Con expira seteada quedaban en limbo: `sin_expirar` las oculta
+            # del inbox pero siguen abiertas (badge N, lista vacía).
+            if (getattr(contacto.sesion, 'proveedor', '') or '') in ('messenger', 'tiktok'):
+                min_sesion = 0
+            expira = (timezone.now() + relativedelta(minutes=min_sesion)) if min_sesion > 0 else None
+            # Conversación abierta pero con la ventana vencida y que el cron
+            # AÚN no cerró: el cliente volvió a escribir antes de la despedida
+            # → es la misma conversación. Se reusa y se renueva la ventana en
+            # vez de abrir una duplicada (quedaban dos abiertas en el inbox).
+            conv = (
+                cls.objects
+                .filter(contacto=contacto, estado_conversacion=0,
+                        conversacion_finalizada=False, status=True)
+                .order_by('-id')
+                .first()
+            )
+            if conv:
+                conv.fecha_hora_expira = expira
+                conv.save(update_fields=['fecha_hora_expira'])
+                return conv, False
+            proveedor_snapshot = getattr(contacto.sesion, 'proveedor', '') or ''
+            # Si el contacto tiene una sonda de reconexión pendiente (plantilla
+            # enviada a una conversación finalizada), NO se crea una conversación
+            # nueva: se REABRE esa misma conversación para conservar el historial
+            # (incluida la plantilla enviada) y al asesor que la atendía.
+            pendiente = (
+                cls.objects
+                .filter(contacto=contacto, estado_conversacion=1,
+                        pendiente_reconexion=True, reconectada=False)
+                .order_by('-fecha_fin_conversacion', '-id')
+                .first()
+            )
+            if pendiente:
+                pendiente.estado_conversacion = 0
+                pendiente.conversacion_finalizada = False
+                pendiente.fecha_fin_conversacion = None
+                pendiente.despedida_enviado = False
+                pendiente.duracion_conversacion = None
+                pendiente.fecha_hora_expira = expira
+                pendiente.pendiente_reconexion = False
+                pendiente.reconectada = True
+                pendiente.save(update_fields=[
+                    'estado_conversacion', 'conversacion_finalizada',
+                    'fecha_fin_conversacion', 'despedida_enviado',
+                    'duracion_conversacion', 'fecha_hora_expira',
+                    'pendiente_reconexion', 'reconectada',
+                ])
+                return pendiente, False
+            # Messenger y TikTok no manejan "pendientes de reconexión": el
+            # asesor finaliza a mano y, si el cliente vuelve a escribir, se
+            # REABRE la última conversación finalizada (un solo hilo por
+            # contacto, como en la app nativa) en vez de crear una nueva.
+            if proveedor_snapshot in ('messenger', 'tiktok'):
+                finalizada = (
+                    cls.objects
+                    .filter(contacto=contacto, estado_conversacion=1, status=True)
+                    .order_by('-fecha_fin_conversacion', '-id')
+                    .first()
+                )
+                if finalizada:
+                    finalizada.estado_conversacion = 0
+                    finalizada.conversacion_finalizada = False
+                    finalizada.fecha_fin_conversacion = None
+                    finalizada.despedida_enviado = False
+                    finalizada.duracion_conversacion = None
+                    finalizada.fecha_hora_expira = expira
+                    finalizada.save(update_fields=[
+                        'estado_conversacion', 'conversacion_finalizada',
+                        'fecha_fin_conversacion', 'despedida_enviado',
+                        'duracion_conversacion', 'fecha_hora_expira',
+                    ])
+                    return finalizada, False
+            conv = cls.objects.create(
+                contacto=contacto,
+                fecha_hora_expira=expira,
+                proveedor_atencion=proveedor_snapshot,
+            )
+            return conv, True
 
 
 TIPO_MENSAJE_CHOICES = (
@@ -1047,6 +1401,109 @@ class MenuRapidoSesion(ModeloBase):
         return f'{self.sesion_id} · {self.nombre}'
 
 
+class RespuestaRapidaSesion(ModeloBase):
+    """Mensaje de texto guardado y reutilizable por sesión.
+
+    El operador registra respuestas frecuentes (ej. "Saludo inicial",
+    "Datos de pago", "Horario de atención"). Mientras atiende una
+    conversación, abre el panel de respuestas rápidas en el composer,
+    elige una y su texto se carga en la caja de mensaje para editarlo
+    antes de enviar. No se envía automáticamente.
+    """
+    sesion = models.ForeignKey(
+        SesionWhatsApp, on_delete=models.CASCADE,
+        related_name='respuestas_rapidas', verbose_name='Sesión',
+    )
+    titulo = models.CharField('Título', max_length=80,
+                              help_text='Nombre corto para identificar la respuesta (ej. Saludo inicial).')
+    cuerpo = models.TextField('Mensaje', default='',
+                              help_text='Texto que se cargará en la caja de mensaje para editar y enviar.')
+
+    class Meta:
+        verbose_name = 'Respuesta rápida de sesión'
+        verbose_name_plural = 'Respuestas rápidas de sesión'
+        ordering = ['titulo']
+
+    def __str__(self):
+        return f'{self.sesion_id} · {self.titulo}'
+
+
+class RespuestaRapidaGlobal(ModeloBase):
+    """Respuesta rápida reutilizable en TODAS las sesiones, invocable por /atajo.
+
+    A diferencia de `RespuestaRapidaSesion` (atada a una sesión), estas viven
+    a nivel plataforma. El operador escribe `/atajo ` en la caja de mensaje y
+    el texto se expande para editarlo antes de enviar. No se envía solo.
+    """
+    atajo = models.CharField(
+        'Atajo', max_length=40,
+        help_text="Se invoca escribiendo /atajo en el chat (sin la barra). Ej: saludo, pago, horario."
+    )
+    titulo = models.CharField('Título', max_length=80,
+                              help_text='Nombre corto para identificar la respuesta.')
+    cuerpo = models.TextField('Mensaje', default='',
+                              help_text='Texto que reemplaza al /atajo en la caja de mensaje.')
+
+    class Meta:
+        verbose_name = 'Respuesta rápida global'
+        verbose_name_plural = 'Respuestas rápidas globales'
+        ordering = ['atajo']
+
+    def __str__(self):
+        return f'/{self.atajo} — {self.titulo}'
+
+
+class CampoPersonalizadoContacto(ModeloBase):
+    """Definición de un campo personalizado para contactos (a nivel plataforma).
+
+    Permite extender la ficha del contacto sin tocar el modelo. Cada definición
+    genera un input en el formulario de contacto; el valor por contacto vive en
+    `ValorCampoContacto`.
+    """
+    TIPOS = (
+        ('texto', 'Texto'),
+        ('numero', 'Número'),
+        ('fecha', 'Fecha'),
+        ('booleano', 'Sí / No'),
+        ('opciones', 'Lista de opciones'),
+    )
+    nombre = models.CharField('Nombre / etiqueta', max_length=80)
+    clave = models.SlugField('Clave interna', max_length=60, unique=True,
+                             help_text='Identificador sin espacios (ej. cumpleanos, nivel_membresia).')
+    tipo = models.CharField('Tipo', max_length=12, choices=TIPOS, default='texto')
+    opciones = models.JSONField('Opciones', default=list, blank=True,
+                                help_text='Solo para tipo "Lista de opciones": ["A","B","C"].')
+    orden = models.PositiveSmallIntegerField('Orden', default=0)
+
+    class Meta:
+        verbose_name = 'Campo personalizado de contacto'
+        verbose_name_plural = 'Campos personalizados de contacto'
+        ordering = ['orden', 'nombre']
+
+    def __str__(self):
+        return f'{self.nombre} ({self.tipo})'
+
+
+class ValorCampoContacto(ModeloBase):
+    """Valor de un campo personalizado para un contacto concreto."""
+    campo = models.ForeignKey(
+        CampoPersonalizadoContacto, on_delete=models.CASCADE,
+        related_name='valores', verbose_name='Campo',
+    )
+    contacto = models.ForeignKey(
+        Contacto, on_delete=models.CASCADE,
+        related_name='valores_personalizados', verbose_name='Contacto',
+    )
+    valor = models.TextField('Valor', blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Valor de campo personalizado'
+        verbose_name_plural = 'Valores de campos personalizados'
+
+    def __str__(self):
+        return f'{self.contacto_id} · {self.campo_id} = {self.valor[:30]}'
+
+
 class MensajeWhatsAppProgramado(ModeloBase):
     contacto = models.ForeignKey(Contacto, on_delete=models.CASCADE, related_name='mensajes_programados')
     fecha = models.DateField(verbose_name='Fecha de envío programado', blank=True, null=True)
@@ -1055,6 +1512,10 @@ class MensajeWhatsAppProgramado(ModeloBase):
     archivo = models.FileField(upload_to='whatsapp_programados/', blank=True, null=True, verbose_name='Archivo adjunto')
     enviado = models.BooleanField(default=False, verbose_name='¿Enviado?')
     fecha_envio = models.DateTimeField(blank=True, null=True, verbose_name='Fecha y hora de envío')
+    intentos = models.PositiveSmallIntegerField(
+        default=0, verbose_name='Intentos de envío',
+        help_text='Cantidad de envíos fallidos; al llegar al tope el cron deja de reintentar.'
+    )
     enviado_por = models.ForeignKey(
         Usuario, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Enviado por'
     )
@@ -1110,6 +1571,7 @@ ETAPAS_TRAZA = (
     # Eventos del chatbot tradicional (motor de flujo)
     ('chatbot_ruteo',   '[Chatbot] Ruteo a departamento'),
     ('chatbot_http',    '[Chatbot] Llamada HTTP del flujo'),
+    ('chatbot_funcion', '[Chatbot] Función del flujo'),
     ('chatbot_nodo',    '[Chatbot] Transición de nodo'),
     ('chatbot_error',   '[Chatbot] Error en el flujo'),
 )
@@ -1352,12 +1814,49 @@ class ConfigMeta(ModeloBase):
                   '(modo previo a Tech Provider). False si pasó por el popup OAuth.'
     )
 
+    # Marketing API (anuncios Click-to-WhatsApp)
+    ad_account_id = models.CharField(
+        'Cuenta publicitaria (act_XXXX)', max_length=64, blank=True, default='',
+        help_text='ID de la cuenta de anuncios de Meta (formato act_XXXXXXXX). '
+                  'Necesario para traer nombres de campaña/anuncio y gasto vía Marketing API.'
+    )
+    ads_access_token = EncryptedTextField(
+        'Token de anuncios (opcional)', blank=True, default='',
+        help_text='Token con scope ads_read. Si se deja vacío se usa access_token '
+                  '(siempre que ese token tenga permiso de anuncios).'
+    )
+    ads_ultima_sincronizacion = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         verbose_name = 'Configuracion Meta'
         verbose_name_plural = 'Configuraciones Meta'
 
     def __str__(self):
         return f"Meta · WABA {self.waba_id} · {self.display_phone_number or self.phone_number_id}"
+
+
+class AnuncioMetaCache(ModeloBase):
+    """Caché de nombres de anuncio/campaña resueltos vía Marketing API.
+
+    Evita pegarle a la Graph API en cada apertura de conversación o cada carga
+    de Analytics: una vez resuelto un `ad_id`, guardamos sus nombres legibles y
+    los reusamos hasta que se vuelvan a refrescar.
+    """
+    ad_id = models.CharField('Ad ID', max_length=100, unique=True, db_index=True)
+    ad_name = models.CharField('Nombre del anuncio', max_length=300, blank=True, default='')
+    adset_id = models.CharField('Adset ID', max_length=100, blank=True, default='')
+    adset_name = models.CharField('Nombre del adset', max_length=300, blank=True, default='')
+    campaign_id = models.CharField('Campaign ID', max_length=100, blank=True, default='', db_index=True)
+    campaign_name = models.CharField('Nombre de la campaña', max_length=300, blank=True, default='')
+    effective_status = models.CharField('Estado del anuncio', max_length=40, blank=True, default='')
+    ultima_sync = models.DateTimeField('Última sincronización', null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Caché de anuncio Meta'
+        verbose_name_plural = 'Caché de anuncios Meta'
+
+    def __str__(self):
+        return f'{self.ad_id} · {self.campaign_name or self.ad_name or "—"}'
 
 
 CATEGORIAS_PLANTILLA = (
@@ -1467,6 +1966,18 @@ class PlantillaWhatsApp(ModeloBase):
     def __str__(self):
         return f"{self.nombre} ({self.idioma}) · {self.get_estado_meta_display()}"
 
+    def save(self, *args, **kwargs):
+        # Regla dura de Meta (error 2388299): el cuerpo no puede empezar ni
+        # terminar con una variable {{N}}. Se corrige acá para que TODOS los
+        # caminos (form manual, generador IA, editar con IA, confirmar lote)
+        # queden cubiertos sin repetir la lógica.
+        try:
+            from agents_ai.ai_actions.plantillas_wa import ajustar_variables_extremos
+            self.cuerpo = ajustar_variables_extremos(self.cuerpo or '')[:1024]
+        except Exception:
+            pass
+        super().save(*args, **kwargs)
+
     @property
     def aprobada(self):
         return self.estado_meta == 'APPROVED'
@@ -1540,6 +2051,61 @@ class TarifaPlantillaMeta(ModeloBase):
             Q(vigencia_hasta__isnull=True) | Q(vigencia_hasta__gte=f)
         ).order_by('-vigencia_desde')
         return qs.first()
+
+
+class EnvioPlantillaMeta(ModeloBase):
+    """Registro de cada envío individual de una plantilla Meta.
+
+    Permite trazabilidad (qué plantilla, a qué conversación, quién la envió)
+    y control de consumo: `costo_estimado` se congela al momento del envío con
+    la `TarifaPlantillaMeta` vigente para el país del destinatario, de modo que
+    el gasto acumulado (p. ej. en reconexiones) se pueda sumar aunque las
+    tarifas cambien después.
+    """
+    ORIGENES = (
+        ('reconexion', 'Reconexión de finalizada'),
+        ('chat', 'Chat abierto'),
+        ('campana', 'Campaña'),
+    )
+    sesion = models.ForeignKey(
+        SesionWhatsApp, on_delete=models.CASCADE,
+        related_name='envios_plantilla', verbose_name='Sesión',
+    )
+    conversacion = models.ForeignKey(
+        ConversacionWhatsApp, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='envios_plantilla', verbose_name='Conversación',
+    )
+    plantilla = models.ForeignKey(
+        PlantillaWhatsApp, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='envios', verbose_name='Plantilla',
+    )
+    mensaje = models.ForeignKey(
+        MensajeWhatsApp, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='envios_plantilla', verbose_name='Mensaje',
+    )
+    agente = models.ForeignKey(
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='envios_plantilla', verbose_name='Agente',
+    )
+    plantilla_nombre = models.CharField('Nombre de plantilla', max_length=512, default='')
+    categoria = models.CharField(
+        'Categoría', max_length=20, choices=CATEGORIAS_PLANTILLA, default='MARKETING',
+    )
+    pais = models.CharField('País destino (ISO-2)', max_length=2, default='EC')
+    costo_estimado = models.DecimalField(
+        'Costo estimado', max_digits=10, decimal_places=6, null=True, blank=True,
+        help_text='Tarifa vigente al momento del envío. Vacío si no había tarifa configurada.',
+    )
+    moneda = models.CharField('Moneda', max_length=3, default='USD')
+    origen = models.CharField('Origen', max_length=15, choices=ORIGENES, default='reconexion', db_index=True)
+
+    class Meta:
+        verbose_name = 'Envío de plantilla Meta'
+        verbose_name_plural = 'Envíos de plantillas Meta'
+        ordering = ['-fecha_registro']
+
+    def __str__(self):
+        return f'{self.plantilla_nombre} → conv {self.conversacion_id} ({self.origen})'
 
 
 class MetaWebhookHit(models.Model):
@@ -1901,6 +2467,11 @@ class Campana(ModeloBase):
     )
 
     # Audiencia: filtros declarativos sobre contactos
+    segmento = models.ForeignKey(
+        'whatsapp.SegmentoContacto', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='campanas', verbose_name='Segmento guardado',
+        help_text='Si se elige un segmento, la audiencia sale de sus condiciones y se ignoran las etiquetas de abajo.',
+    )
     etiquetas_incluir = models.ManyToManyField(
         EtiquetaContacto, blank=True, related_name='campanas_incluir',
         verbose_name='Etiquetas a incluir',
@@ -1930,6 +2501,12 @@ class Campana(ModeloBase):
     throttle_por_minuto = models.PositiveIntegerField(
         'Throttle (msg/min)', default=20,
         help_text='Tope de envíos por minuto para no gatillar rate limits.'
+    )
+    limite_diario = models.PositiveIntegerField(
+        'Límite diario de envíos', default=0,
+        help_text='Tope de mensajes por día para esta sesión (todas sus campañas). '
+                  '0 = automático: en Meta usa el tier del número (50/250/1K/…), '
+                  'en QR sin límite.'
     )
 
     # Ejecución
@@ -2116,6 +2693,38 @@ class ConfigInstagram(ModeloBase):
         return f"IG · {self.username or self.ig_user_id}"
 
 
+class ConfigTikTok(ModeloBase):
+    """Configuración TikTok Business Messaging por sesión. OneToOne con sesión
+    de proveedor='tiktok'. Los tokens llegan por OAuth de la cuenta Business."""
+    sesion = models.OneToOneField(
+        SesionWhatsApp, on_delete=models.CASCADE,
+        related_name='config_tiktok', verbose_name='Sesión'
+    )
+    business_id = models.CharField('Business Account ID', max_length=120, db_index=True,
+                                   blank=True, default='')
+    open_id = models.CharField('Open ID', max_length=120, blank=True, default='',
+                               help_text='Identificador de la cuenta autorizada vía OAuth.')
+    username = models.CharField('@username', max_length=150, blank=True, default='')
+    access_token = models.TextField('Access Token', blank=True, default='')
+    refresh_token = models.TextField('Refresh Token', blank=True, default='')
+    token_expira_en = models.DateTimeField('Token expira en', null=True, blank=True)
+    webhook_verify_token = models.CharField(max_length=60, blank=True, default='')
+    client_secret = models.CharField(
+        'Client Secret (firma webhook)', max_length=255, blank=True, default='',
+        help_text='Secreto de la app TikTok. Se usa para validar la firma HMAC de los webhooks entrantes.'
+    )
+    webhook_verificado_en = models.DateTimeField(null=True, blank=True)
+    ultima_sincronizacion = models.DateTimeField(null=True, blank=True)
+    error_mensaje = models.TextField('Último error', blank=True, default='')
+
+    class Meta:
+        verbose_name = 'Configuración TikTok'
+        verbose_name_plural = 'Configuraciones TikTok'
+
+    def __str__(self):
+        return f"TikTok · {self.username or self.business_id or self.sesion_id}"
+
+
 class ConfigMessenger(ModeloBase):
     """Configuración Messenger Platform (Facebook Page) por sesión."""
     sesion = models.OneToOneField(
@@ -2235,6 +2844,10 @@ class WebhookSaliente(ModeloBase):
     fallos_consecutivos = models.PositiveIntegerField('Fallos consecutivos', default=0)
     ultimo_error = models.TextField(blank=True, default='')
     ultima_entrega = models.DateTimeField(null=True, blank=True)
+    proximo_intento = models.DateTimeField(
+        'Próximo intento permitido', null=True, blank=True,
+        help_text='Backoff exponencial: hasta esta fecha no se reintenta tras fallos consecutivos.'
+    )
 
     class Meta:
         verbose_name = 'Webhook saliente'
@@ -2264,9 +2877,21 @@ class EntregaWebhookSaliente(models.Model):
         ordering = ['-fecha']
 
 
+ROLES_SESION = (
+    ('asesor', 'Agente'),
+    ('supervisor', 'Supervisor'),
+)
+
+
 class PerfilSesionWhatsApp(ModeloBase):
     sesion = models.ForeignKey(SesionWhatsApp, on_delete=models.CASCADE, null=True, blank=True, verbose_name='Sesión WhatsApp')
     usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE, verbose_name='Usuario')
+    rol = models.CharField(max_length=20, choices=ROLES_SESION, default='asesor', verbose_name='Role')
+    # Permiso por sesión: habilita el botón "Asignación automática" del inbox,
+    # que reparte de golpe todas las conversaciones abiertas sin asesor.
+    puede_asignar_masivo_asesores = models.BooleanField(
+        'Puede asignar asesores masivamente', default=False,
+    )
 
     class Meta:
         verbose_name = 'Perfil Sesión WhatsApp'
@@ -2274,3 +2899,340 @@ class PerfilSesionWhatsApp(ModeloBase):
 
     def __str__(self):
         return f"{self.usuario.get_full_name()} - {self.sesion.nombre if self.sesion else 'Sin sesión'}"
+
+
+# ----------------------------------------------------------------------------
+# Comentarios de redes sociales (Instagram y Facebook hoy; TikTok cuando se integre)
+# ----------------------------------------------------------------------------
+
+CANALES_COMENTARIO = (
+    ('instagram', 'Instagram'),
+    ('facebook', 'Facebook'),
+    ('tiktok', 'TikTok'),
+)
+
+PROVEEDOR_POR_CANAL = {
+    'instagram': 'instagram',
+    'facebook': 'messenger',
+    'tiktok': 'tiktok',
+}
+
+CANALES_CON_ACCIONES = ('instagram', 'facebook')
+
+ESTADOS_COMENTARIO = (
+    ('nuevo', 'Nuevo'),
+    ('respondido', 'Respondido'),
+    ('oculto', 'Oculto'),
+)
+
+
+class ComentarioSocial(ModeloBase):
+    """Comentario recibido en una publicación de un canal social. Inbox de
+    moderación: responder públicamente, ocultar, o pasar al autor a DM para
+    convertirlo en conversación (lead) del pipeline normal."""
+    sesion = models.ForeignKey(
+        SesionWhatsApp, on_delete=models.CASCADE,
+        related_name='comentarios_sociales', verbose_name='Sesión'
+    )
+    canal = models.CharField(
+        'Canal', max_length=20, choices=CANALES_COMENTARIO,
+        default='instagram', db_index=True
+    )
+    comment_id = models.CharField('ID externo del comentario', max_length=120, unique=True)
+    parent_id = models.CharField('ID comentario padre', max_length=120, blank=True, default='')
+    media_id = models.CharField('ID de la publicación', max_length=120, blank=True, default='', db_index=True)
+    autor_external_id = models.CharField('ID externo del autor', max_length=120, blank=True, default='')
+    autor_username = models.CharField('Usuario autor', max_length=150, blank=True, default='')
+    texto = models.TextField('Comentario', blank=True, default='')
+    fecha_comentario = models.DateTimeField('Fecha del comentario', null=True, blank=True, db_index=True)
+    estado = models.CharField(
+        'Estado', max_length=20, choices=ESTADOS_COMENTARIO,
+        default='nuevo', db_index=True
+    )
+    respuesta_texto = models.TextField('Respuesta pública', blank=True, default='')
+    respondido_por = models.ForeignKey(
+        Usuario, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='comentarios_respondidos', verbose_name='Respondido por'
+    )
+    respondido_en = models.DateTimeField('Respondido en', null=True, blank=True)
+    dm_enviado = models.BooleanField('DM enviado', default=False)
+    conversacion = models.ForeignKey(
+        ConversacionWhatsApp, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='comentarios_origen', verbose_name='Conversación generada'
+    )
+    payload_json = models.JSONField('Payload original', default=dict, blank=True)
+
+    class Meta:
+        verbose_name = 'Comentario social'
+        verbose_name_plural = 'Comentarios sociales'
+        ordering = ['-fecha_comentario', '-id']
+        indexes = [
+            models.Index(fields=['canal', 'estado', '-fecha_comentario']),
+        ]
+
+    def __str__(self):
+        autor = self.autor_username or self.autor_external_id
+        return f"{self.get_canal_display()} · @{autor}: {(self.texto or '')[:40]}"
+
+
+class ReglaComentario(ModeloBase):
+    """Regla comentario→DM (estilo ManyChat): cuando llega un comentario que
+    matchea las keywords, responde público y/o manda private reply (DM) al
+    autor, y si el autor ya es contacto le aplica una etiqueta.
+
+    Procesada en `funciones_comentarios.procesar_reglas_comentario` al ingresar
+    cada comentario por webhook. La primera regla que matchea gana.
+    """
+    sesion = models.ForeignKey(
+        SesionWhatsApp, on_delete=models.CASCADE,
+        related_name='reglas_comentario', verbose_name='Sesión',
+    )
+    canal = models.CharField(
+        'Canal', max_length=20, choices=CANALES_COMENTARIO,
+        default='instagram', db_index=True,
+    )
+    nombre = models.CharField('Nombre', max_length=120)
+    keywords = models.TextField(
+        'Palabras clave', blank=True, default='',
+        help_text='Separadas por coma (ej: precio, info, quiero). Vacío = todos los comentarios.',
+    )
+    media_id = models.CharField(
+        'ID de publicación', max_length=120, blank=True, default='',
+        help_text='Opcional: aplicar solo a los comentarios de esta publicación.',
+    )
+    respuesta_publica = models.TextField(
+        'Respuesta pública', blank=True, default='',
+        help_text='Se responde el comentario a la vista de todos. Vacío = no responder público.',
+    )
+    mensaje_dm = models.TextField(
+        'Mensaje DM (private reply)', blank=True, default='',
+        help_text='Se envía por DM al autor del comentario. Vacío = no enviar DM.',
+    )
+    etiqueta = models.ForeignKey(
+        EtiquetaContacto, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='reglas_comentario', verbose_name='Etiqueta a aplicar',
+        help_text='Solo se aplica si el autor ya existe como contacto (o cuando responda el DM).',
+    )
+    activa = models.BooleanField('Activa', default=True, db_index=True)
+    orden = models.PositiveSmallIntegerField('Orden', default=1)
+    usos = models.PositiveIntegerField('Usos totales', default=0)
+    ultimo_uso = models.DateTimeField('Último uso', null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Regla de comentarios'
+        verbose_name_plural = 'Reglas de comentarios'
+        ordering = ['sesion', 'orden', 'id']
+
+    def __str__(self):
+        return f'{self.nombre} ({self.get_canal_display()})'
+
+    def lista_keywords(self):
+        return [k.strip().lower() for k in (self.keywords or '').split(',') if k.strip()]
+
+
+class EnlaceCrecimiento(ModeloBase):
+    """Growth link (estilo ManyChat): link wa.me con texto prellenado que trae
+    un marcador `(ref: <codigo>)`. Cuando el contacto envía ese primer mensaje,
+    `funciones_growth.procesar_growth_link` lo detecta y ejecuta las acciones
+    configuradas: aplicar etiqueta (que a su vez puede disparar una secuencia),
+    inscribir en secuencia directa y/o responder un mensaje fijo.
+
+    Sirve para medir y automatizar cada canal de captación: bio de Instagram,
+    QR en el local, volante, firma de correo — cada uno con su propio enlace.
+    """
+    nombre = models.CharField('Nombre', max_length=120)
+    descripcion = models.TextField('Descripción', blank=True, default='')
+    sesion = models.ForeignKey(
+        SesionWhatsApp, on_delete=models.CASCADE,
+        related_name='enlaces_crecimiento', verbose_name='Sesión destino',
+    )
+    codigo = models.SlugField(
+        'Código', max_length=40, unique=True,
+        help_text='Identificador del enlace; viaja en el texto prellenado como (ref: codigo).',
+    )
+    texto_prellenado = models.TextField(
+        'Texto prellenado', default='¡Hola! Quiero más información.',
+        help_text='Mensaje que el cliente enviará al abrir el link. El marcador (ref: codigo) se agrega solo.',
+    )
+    activo = models.BooleanField('Activo', default=True, db_index=True)
+    etiqueta = models.ForeignKey(
+        EtiquetaContacto, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='enlaces_crecimiento', verbose_name='Etiqueta a aplicar',
+    )
+    secuencia = models.ForeignKey(
+        'whatsapp.SecuenciaWhatsApp', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='enlaces_crecimiento', verbose_name='Secuencia a inscribir',
+    )
+    mensaje_respuesta = models.TextField(
+        'Respuesta automática', blank=True, default='',
+        help_text='Si se define, se responde este texto y el mensaje no pasa al bot/IA.',
+    )
+    usos = models.PositiveIntegerField('Usos totales', default=0)
+    ultimo_uso = models.DateTimeField('Último uso', null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Enlace de captación'
+        verbose_name_plural = 'Enlaces de captación'
+        ordering = ['nombre']
+
+    def __str__(self):
+        return f'{self.nombre} ({self.codigo})'
+
+    def texto_completo(self):
+        return f'{(self.texto_prellenado or "").strip()} (ref: {self.codigo})'
+
+    def url_whatsapp(self):
+        numero = ''.join(ch for ch in (self.sesion.numero or '') if ch.isdigit())
+        from urllib.parse import quote
+        return f'https://wa.me/{numero}?text={quote(self.texto_completo())}'
+
+
+class UsoEnlaceCrecimiento(ModeloBase):
+    """Primer uso de un enlace por contacto — evita re-disparar acciones y da
+    la métrica de leads captados por enlace."""
+    enlace = models.ForeignKey(
+        EnlaceCrecimiento, on_delete=models.CASCADE,
+        related_name='usos_detalle', verbose_name='Enlace',
+    )
+    contacto = models.ForeignKey(
+        Contacto, on_delete=models.CASCADE,
+        related_name='usos_enlaces', verbose_name='Contacto',
+    )
+
+    class Meta:
+        verbose_name = 'Uso de enlace de captación'
+        verbose_name_plural = 'Usos de enlaces de captación'
+        constraints = [
+            models.UniqueConstraint(fields=['enlace', 'contacto'], name='uq_uso_enlace_contacto'),
+        ]
+
+    def __str__(self):
+        return f'{self.contacto} vía {self.enlace.codigo}'
+
+
+class SegmentoContacto(ModeloBase):
+    """Segmento guardado: filtro reutilizable de contactos (estilo ManyChat).
+
+    Las condiciones viven en JSON y se evalúan a queryset en
+    `funciones_segmentos.queryset_segmento`. Estructura de `condiciones`:
+      {
+        "etiquetas_incluir": [ids], "modo_etiquetas": "any"|"all",
+        "etiquetas_excluir": [ids],
+        "canales": ["whatsapp", "instagram", "messenger"],
+        "campos": [{"campo_id": int, "operador": "igual|contiene|vacio|no_vacio", "valor": "..."}],
+        "actividad": {"tipo": "con_actividad"|"sin_actividad", "dias": int}
+      }
+    Todas las claves son opcionales; siempre se excluyen opt-out y números inválidos.
+    """
+    nombre = models.CharField('Nombre', max_length=120)
+    descripcion = models.TextField('Descripción', blank=True, default='')
+    condiciones = models.JSONField('Condiciones', default=dict, blank=True)
+
+    class Meta:
+        verbose_name = 'Segmento de contactos'
+        verbose_name_plural = 'Segmentos de contactos'
+        ordering = ['nombre']
+
+    def __str__(self):
+        return self.nombre
+
+
+ESTADOS_INSCRIPCION_SECUENCIA = (
+    ('activa', 'Activa'),
+    ('completada', 'Completada'),
+    ('cancelada_respuesta', 'Cancelada por respuesta del contacto'),
+    ('cancelada_manual', 'Cancelada manualmente'),
+    ('error', 'Error'),
+)
+
+
+class SecuenciaWhatsApp(ModeloBase):
+    """Secuencia drip: serie de mensajes con esperas entre pasos (estilo ManyChat).
+
+    El contacto se inscribe manualmente, al asignársele la etiqueta disparadora,
+    o vía API. El cron `ejecutar_secuencias.py` despacha los pasos vencidos.
+    Con `salir_al_responder=True`, cualquier mensaje entrante del contacto
+    cancela sus inscripciones activas (el objetivo del drip ya se cumplió).
+    """
+    nombre = models.CharField('Nombre', max_length=120)
+    descripcion = models.TextField('Descripción', blank=True, default='')
+    activa = models.BooleanField('Activa', default=True, db_index=True)
+    etiqueta_disparadora = models.ForeignKey(
+        EtiquetaContacto, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='secuencias', verbose_name='Etiqueta disparadora',
+        help_text='Al asignar esta etiqueta a un contacto, se inscribe automáticamente.',
+    )
+    salir_al_responder = models.BooleanField(
+        'Salir al responder', default=True,
+        help_text='Si el contacto escribe, se cancela su inscripción y no recibe más pasos.',
+    )
+
+    class Meta:
+        verbose_name = 'Secuencia de mensajes'
+        verbose_name_plural = 'Secuencias de mensajes'
+        ordering = ['nombre']
+
+    def __str__(self):
+        return self.nombre
+
+    def pasos_activos(self):
+        return self.pasos.filter(status=True).order_by('orden')
+
+
+class PasoSecuencia(ModeloBase):
+    """Un mensaje de la secuencia, con la espera desde el paso anterior."""
+    secuencia = models.ForeignKey(
+        SecuenciaWhatsApp, on_delete=models.CASCADE,
+        related_name='pasos', verbose_name='Secuencia',
+    )
+    orden = models.PositiveSmallIntegerField('Orden', default=1)
+    espera_horas = models.PositiveIntegerField(
+        'Espera (horas)', default=24,
+        help_text='Horas desde la inscripción (paso 1) o desde el paso anterior.',
+    )
+    mensaje = models.TextField('Mensaje')
+
+    class Meta:
+        verbose_name = 'Paso de secuencia'
+        verbose_name_plural = 'Pasos de secuencia'
+        ordering = ['secuencia', 'orden']
+
+    def __str__(self):
+        return f'{self.secuencia.nombre} · paso {self.orden}'
+
+
+class InscripcionSecuencia(ModeloBase):
+    """Estado de un contacto dentro de una secuencia."""
+    secuencia = models.ForeignKey(
+        SecuenciaWhatsApp, on_delete=models.CASCADE,
+        related_name='inscripciones', verbose_name='Secuencia',
+    )
+    contacto = models.ForeignKey(
+        Contacto, on_delete=models.CASCADE,
+        related_name='inscripciones_secuencia', verbose_name='Contacto',
+    )
+    estado = models.CharField(
+        'Estado', max_length=25, choices=ESTADOS_INSCRIPCION_SECUENCIA,
+        default='activa', db_index=True,
+    )
+    paso_actual = models.PositiveSmallIntegerField(
+        'Pasos completados', default=0,
+        help_text='Cantidad de pasos ya enviados; el próximo envío corresponde al paso siguiente.',
+    )
+    proximo_envio = models.DateTimeField('Próximo envío', null=True, blank=True, db_index=True)
+    intentos = models.PositiveSmallIntegerField(
+        'Intentos de envío', default=0,
+        help_text='Fallos del paso pendiente; al llegar al tope el cron marca la inscripción en error.',
+    )
+    finalizada_en = models.DateTimeField('Finalizada en', null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Inscripción en secuencia'
+        verbose_name_plural = 'Inscripciones en secuencias'
+        ordering = ['-id']
+        indexes = [
+            models.Index(fields=['estado', 'proximo_envio']),
+        ]
+
+    def __str__(self):
+        return f'{self.contacto} en {self.secuencia.nombre} ({self.get_estado_display()})'

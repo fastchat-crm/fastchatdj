@@ -3,10 +3,10 @@
 Por ahora solo `notificar_asesores_depto` — se invoca desde el motor cuando
 un nodo HTTP tiene `config.envia_correo = true` y respondió 2xx.
 
-El flujo NO modifica destinatarios ni asunto; siempre va a TODOS los
-asesores activos del departamento (`PerfilDepartamentoChatBot.status=True`).
-Si en el futuro querés segmentar, agregás un `config.correo_destinatarios`
-que reciba una lista o filtro.
+Los destinatarios son los asesores DISPONIBLES de la sesión/número
+(`PerfilSesionWhatsApp` + `DisponibilidadAgente.disponible`), resueltos por
+`crm.helpers_asignacion.asesores_disponibles_sesion`. El departamento solo
+aporta una etiqueta informativa, no decide a quién se notifica.
 """
 from __future__ import annotations
 
@@ -19,7 +19,6 @@ from core.funciones import encrypt_sesion_id
 from crm.models import (
     DepartamentoChatBot,
     EstadoFlujoChatbot,
-    PerfilDepartamentoChatBot,
 )
 
 
@@ -41,17 +40,24 @@ def _resolver_departamento(conv):
     return DepartamentoChatBot.objects.filter(codigo='aria', status=True).first()
 
 
-def _emails_asesores(depto):
-    if not depto:
+def _usuarios_a_notificar(conv):
+    """Asesores DISPONIBLES de la sesión/número. Fuente única — nunca se
+    notifica a alguien fuera del equipo del número."""
+    try:
+        from crm.helpers_asignacion import asesores_disponibles_sesion
+        return asesores_disponibles_sesion(conv)
+    except Exception:
+        logger.exception('No se pudo resolver asesores de sesión conv#%s', conv.id)
         return []
-    return list(
-        PerfilDepartamentoChatBot.objects
-        .filter(departamento=depto, status=True)
-        .select_related('usuario')
-        .values_list('usuario__email', flat=True)
-        .exclude(usuario__email__isnull=True)
-        .exclude(usuario__email='')
-    )
+
+
+def _emails_de(usuarios):
+    out = []
+    for u in usuarios:
+        e = (getattr(u, 'email', '') or '').strip()
+        if e:
+            out.append(e)
+    return out
 
 
 def _link_conversacion(conv) -> str:
@@ -63,8 +69,8 @@ def _link_conversacion(conv) -> str:
     return f'{base}/whatsapp/conversaciones/?conv={token}'
 
 
-def _crear_notificaciones_internas(depto, conv, nodo_nombre, link_chat,
-                                   mensaje_custom=''):
+def _crear_notificaciones_internas(usuarios, conv, etiqueta, nodo_nombre,
+                                   link_chat, mensaje_custom=''):
     try:
         from seguridad.models import Notificacion
     except ImportError:
@@ -75,23 +81,17 @@ def _crear_notificaciones_internas(depto, conv, nodo_nombre, link_chat,
         titulo = f'🔔 {msg[:200]} — Conv #{conv.id}'
         cuerpo = (
             f'{msg} '
-            f'(Departamento "{depto.nombre}". Contacto: {contacto_nombre}.)'
+            f'({etiqueta}. Contacto: {contacto_nombre}.)'
         )
     else:
         titulo = f'🔔 {nodo_nombre} — Conv #{conv.id}'
         cuerpo = (
-            f'Nueva acción del flujo en el departamento "{depto.nombre}". '
+            f'Nueva acción del flujo ({etiqueta}). '
             f'Contacto: {contacto_nombre}. '
             f'Hacé click para abrir la conversación.'
         )
-    asesores = (
-        PerfilDepartamentoChatBot.objects
-        .filter(departamento=depto, status=True)
-        .select_related('usuario')
-    )
     creadas = 0
-    for rel in asesores:
-        usuario = rel.usuario
+    for usuario in usuarios:
         if not usuario:
             continue
         try:
@@ -105,26 +105,34 @@ def _crear_notificaciones_internas(depto, conv, nodo_nombre, link_chat,
             )
             creadas += 1
         except Exception:
-            logger.exception('No se pudo crear Notificacion para usuario %s', usuario.id)
+            logger.exception('No se pudo crear Notificacion para usuario %s',
+                             getattr(usuario, 'id', None))
     return creadas
 
 
 def notificar_asesores_depto(conv, nodo=None, request_body=None, response_body=None,
                              asunto=None, mensaje_custom=''):
     depto = _resolver_departamento(conv)
-    emails = _emails_asesores(depto)
+    sesion = getattr(conv.contacto, 'sesion', None)
+    etiqueta = (
+        f'Departamento "{depto.nombre}"' if depto
+        else (f'Sesión "{getattr(sesion, "nombre", "") or getattr(sesion, "numero", "")}"'
+              if sesion else 'Flujo')
+    )
+    usuarios = _usuarios_a_notificar(conv)
+    emails = _emails_de(usuarios)
     nodo_nombre = (nodo.nombre if nodo else '') or 'Nodo del flujo'
     link_chat = _link_conversacion(conv)
 
     n_internas = _crear_notificaciones_internas(
-        depto, conv, nodo_nombre, link_chat, mensaje_custom=mensaje_custom,
-    ) if depto else 0
+        usuarios, conv, etiqueta, nodo_nombre, link_chat, mensaje_custom=mensaje_custom,
+    )
 
     if not emails:
         logger.warning(
-            'Nodo flujo conv#%s: sin asesores con email en depto %s '
+            'Nodo flujo conv#%s: sin asesores disponibles con email '
             '(notificaciones internas creadas: %s)',
-            conv.id, depto.nombre if depto else '(none)', n_internas,
+            conv.id, n_internas,
         )
         return n_internas > 0  # devuelve True si al menos hubo notif interna
 

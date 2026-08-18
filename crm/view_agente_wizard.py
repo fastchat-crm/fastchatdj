@@ -17,7 +17,7 @@ from django.http import JsonResponse
 from django.shortcuts import redirect, render
 
 from core.constantes import PERSONALIDAD_PRESETS
-from core.funciones import addData, secure_module
+from core.funciones import addData, secure_module, get_encrypt
 from crm.models import AgentesIA, ApiKeyIA, PerfilNegocioIA
 
 logger = logging.getLogger(__name__)
@@ -73,6 +73,9 @@ def agente_wizard_view(request):
         agente.save()
         agente.apikey.add(apikey_obj)
 
+        ok_enc, enc = get_encrypt(agente.id)
+        chat_url = f'/crm/entrenamiento/chat/{enc}/' if ok_enc else ''
+
         # Provisiona el tenant RAG del agente e indexa el conocimiento inicial
         # (contexto_estatico). No fatal — el agente queda creado igual.
         try:
@@ -84,8 +87,10 @@ def agente_wizard_view(request):
         return JsonResponse({
             'result': True,
             'agente_id': agente.id,
-            'redirect': f'/crm/entrenamiento/?action=procedimiento&id={agente.id}',
-            'mensaje': f'Listo, {nombre} creado. Te llevamos al editor para que termines de afinarlo.',
+            'redirect': chat_url or f'/crm/entrenamiento/?action=procedimiento&id={agente.id}',
+            'redirect_editor': f'/crm/entrenamiento/?action=procedimiento&id={agente.id}',
+            'chat_url': chat_url,
+            'mensaje': f'Listo, {nombre} creado. Probalo ahora mismo en el chat — lo avanzado lo afinás después en el editor.',
         })
 
     # GET — render wizard

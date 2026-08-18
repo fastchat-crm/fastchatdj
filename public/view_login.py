@@ -37,7 +37,8 @@ def login_tienda(request):
                 if user is not None:
                     if user.is_active:
                         login(request, user)
-                        request.session['empresa_selected'] = Empresa.objects.filter(status=True).order_by('-id').first()
+                        empresa_selected = Empresa.objects.filter(status=True).order_by('-id').first()
+                        request.session['empresa_selected'] = empresa_selected.id if empresa_selected else None
                         datos['resp'] = True
                         ipreal = get_client_ip(request)
                         ip = ipreal if ipreal != '127.0.0.1' else '127.0.0.1'

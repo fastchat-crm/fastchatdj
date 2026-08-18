@@ -260,6 +260,29 @@ class Configuracion(ModeloBase):
                   'opciones "Crear con IA" no aparecen.'
     )
 
+    # ── Apache Tika (extracción de texto para el entrenamiento IA) ──
+    tika_activo = models.BooleanField(
+        default=True, verbose_name='Servicio Apache Tika activo',
+        help_text='Extrae texto de PDF/Word/PowerPoint/imágenes (OCR) para entrenar agentes IA '
+                  'sin gastar tokens LLM. Si está OFF se usan solo los extractores locales '
+                  '(pdf, csv, json, xlsx, txt).'
+    )
+    tika_url = models.CharField(
+        max_length=300, blank=True, default='https://tika.exducereonline.com',
+        verbose_name='URL servicio Apache Tika',
+        help_text='Endpoint HTTP del servidor Tika (ej: http://host:9998). Para OCR de PDFs '
+                  'escaneados el servidor debe tener Tesseract (imagen docker -full).'
+    )
+
+    # ── Cierre higiénico de conversaciones (min_sesion=0) ──
+    dias_cierre_higienico = models.PositiveSmallIntegerField(
+        default=3, verbose_name='Días de inactividad para cierre higiénico',
+        help_text='Conversaciones de sesiones SIN cierre automático (min_sesion=0) se cierran '
+                  'sin despedida tras estos días sin mensajes — así corren el resumen, el '
+                  'sentimiento y las reglas de fin, y el inbox no acumula zombies. '
+                  '0 = nunca cerrar automáticamente.',
+    )
+
     @staticmethod
     def get_instancia():
         from core.funciones import db_table_exists
@@ -297,6 +320,14 @@ class CredencialMetaApp(ModeloBase):
     app_secret = EncryptedTextField(
         verbose_name='Meta App Secret',
         help_text='Secret de la App. Se guarda cifrado.'
+    )
+    app_secrets_extra = EncryptedTextField(
+        blank=True, null=True,
+        verbose_name='App Secrets adicionales',
+        help_text='Un app_secret por línea. Solo si usás más de una Meta App '
+                  '(ej. una app para WhatsApp Cloud y otra para Messenger/Instagram): '
+                  'las firmas de los webhooks se validan contra el secret principal '
+                  'y contra estos. Se guarda cifrado.'
     )
     config_id = models.CharField(
         max_length=50, blank=True, default='',
@@ -570,3 +601,87 @@ class DetailTaskMarketingMail(ModeloBase):
     class Meta:
         verbose_name = u"Mail Send Task Detail"
         verbose_name_plural = u"Mail Send Task Details"
+
+
+class ParametroSistema(ModeloBase):
+    GRUPO_CHOICES = (
+        ('comportamiento_ia', 'Comportamiento IA'),
+        ('limites', 'Límites y gasto'),
+        ('general', 'General'),
+    )
+    TIPO_CHOICES = (
+        ('entero', 'Entero'),
+        ('decimal', 'Decimal'),
+        ('texto', 'Texto'),
+        ('booleano', 'Booleano'),
+    )
+
+    clave = models.CharField(max_length=100, unique=True, verbose_name='Clave')
+    etiqueta = models.CharField(max_length=150, verbose_name='Etiqueta')
+    descripcion = models.TextField(blank=True, null=True, verbose_name='Descripción')
+    grupo = models.CharField(max_length=30, choices=GRUPO_CHOICES, default='general', verbose_name='Grupo')
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default='texto', verbose_name='Tipo')
+    valor = models.TextField(blank=True, null=True, verbose_name='Valor')
+    valor_default = models.TextField(blank=True, null=True, verbose_name='Valor por defecto')
+    unidad = models.CharField(max_length=30, blank=True, null=True, verbose_name='Unidad')
+    orden = models.IntegerField(default=0, verbose_name='Orden')
+    editable = models.BooleanField(default=True, verbose_name='Editable')
+
+    _CACHE_PREFIX = 'parametro_ia__'
+    _CACHE_TTL = 60
+    _CACHE_NONE = '__none__'
+
+    def _castear(self, raw):
+        if raw is None or raw == '':
+            return None
+        if self.tipo == 'entero':
+            try:
+                return int(str(raw).strip())
+            except (TypeError, ValueError):
+                return None
+        if self.tipo == 'decimal':
+            try:
+                return float(str(raw).replace(',', '.').strip())
+            except (TypeError, ValueError):
+                return None
+        if self.tipo == 'booleano':
+            return str(raw).strip().lower() in ('1', 'true', 't', 'si', 'sí', 'yes', 'on')
+        return str(raw)
+
+    def valor_actual(self):
+        crudo = self.valor if self.valor not in (None, '') else self.valor_default
+        return self._castear(crudo)
+
+    @classmethod
+    def valor_de(cls, clave, default=None):
+        from django.core.cache import cache
+        ck = cls._CACHE_PREFIX + clave
+        cacheado = cache.get(ck)
+        if cacheado is not None:
+            return default if cacheado == cls._CACHE_NONE else cacheado
+        try:
+            fila = cls.objects.filter(clave=clave, status=True).first()
+        except Exception:
+            return default
+        if not fila:
+            cache.set(ck, cls._CACHE_NONE, cls._CACHE_TTL)
+            return default
+        valor = fila.valor_actual()
+        cache.set(ck, cls._CACHE_NONE if valor is None else valor, cls._CACHE_TTL)
+        return default if valor is None else valor
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        try:
+            from django.core.cache import cache
+            cache.delete(self._CACHE_PREFIX + self.clave)
+        except Exception:
+            pass
+
+    def __str__(self):
+        return '{} = {}'.format(self.clave, self.valor)
+
+    class Meta:
+        verbose_name = 'Parámetro IA'
+        verbose_name_plural = 'Parámetros IA'
+        ordering = ['grupo', 'orden', 'clave']

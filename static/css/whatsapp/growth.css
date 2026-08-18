@@ -1,0 +1,22 @@
+.growth-link-box {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 340px;
+}
+
+.growth-link-box input {
+    font-size: 0.8rem;
+}
+
+.growth-qr-img {
+    width: 220px;
+    height: 220px;
+    display: block;
+    margin: 0 auto;
+}
+
+.growth-usos {
+    font-size: 1.1rem;
+    font-weight: 700;
+}

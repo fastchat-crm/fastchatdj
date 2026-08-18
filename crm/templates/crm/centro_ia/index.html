@@ -1,0 +1,868 @@
+{% extends 'base.html' %}
+
+{% block head %}
+    <link rel="stylesheet" href="/static/css/crm/centro_ia.css?v2.2">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <div class="cia-hero">
+        <h4><i class="fa fa-brain me-2"></i>Centro de IA</h4>
+        <p>Todo lo que gobierna el motor: las credenciales, cómo responde, cuánto puede gastar
+           y con qué se vectoriza el conocimiento.</p>
+    </div>
+
+    <ul class="nav nav-tabs cia-tabs mb-3" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#ciaClaves" type="button">
+                <i class="fa fa-key me-1"></i>Claves y tokens
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#ciaParams" type="button">
+                <i class="fa fa-sliders me-1"></i>Parámetros
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#ciaLimites" type="button">
+                <i class="fa fa-gauge-high me-1"></i>Límites de gasto
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#ciaVector" type="button">
+                <i class="fa fa-cubes me-1"></i>Vectorización
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#ciaOptim" type="button">
+                <i class="fa fa-leaf me-1"></i>Optimización
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+
+        {# ── Claves y tokens ──────────────────────────────────────────── #}
+        <div class="tab-pane fade show active" id="ciaClaves" role="tabpanel">
+            <div class="cia-card">
+                <div class="cia-card-head">
+                    <div>
+                        <h6>API keys registradas</h6>
+                        <small>Credenciales de los proveedores. Marcá cuál vectoriza y cuál es la
+                               predeterminada de cada proveedor.</small>
+                    </div>
+                    <div class="d-flex gap-2">
+                        {% if keys %}
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="ciaProbarTodas">
+                                <i class="fa fa-satellite-dish me-1"></i>Probar todas
+                            </button>
+                        {% endif %}
+                        <button type="button" class="btn btn-sm btn-primary" id="ciaNuevaKey">
+                            <i class="fa fa-plus me-1"></i>Registrar key
+                        </button>
+                    </div>
+                </div>
+                <div class="cia-card-body">
+                    {% if keys %}
+                        <div class="table-responsive">
+                            <table class="cia-tabla">
+                                <thead>
+                                    <tr>
+                                        <th>Proveedor</th><th>Modelo</th><th>Marcas</th><th>Estado</th><th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for k in keys %}
+                                        <tr>
+                                            <td>
+                                                <strong>{{ k.get_proveedor_display }}</strong>
+                                                {% if k.alias %}<br><span class="text-muted small">{{ k.alias }}</span>{% endif %}
+                                            </td>
+                                            <td class="text-muted">{{ k.modelo|default:"(default del proveedor)" }}</td>
+                                            <td>
+                                                {% if k.es_la_de_embeddings %}<span class="cia-badge cia-badge-embed">Vectoriza</span>{% endif %}
+                                                {% if k.es_default %}<span class="cia-badge cia-badge-default">Por defecto</span>{% endif %}
+                                            </td>
+                                            <td>
+                                                {% if k.estado %}
+                                                    <span class="cia-badge cia-badge-embed">Activa</span>
+                                                {% else %}
+                                                    <span class="cia-badge cia-badge-propio" title="{{ k.msgerror }}">Con error</span>
+                                                {% endif %}
+                                            </td>
+                                            <td class="text-end cia-acciones">
+                                                <button type="button" class="cia-icon-btn cia-probar" data-pk="{{ k.id }}" title="Probar conexión">
+                                                    <i class="fa fa-satellite-dish"></i>
+                                                </button>
+                                                <button type="button" class="cia-icon-btn cia-editar-key" data-pk="{{ k.id }}" title="Editar">
+                                                    <i class="fa fa-pen"></i>
+                                                </button>
+                                                <button type="button" class="cia-icon-btn cia-borrar-key" data-pk="{{ k.id }}"
+                                                        data-nombre="{{ k.get_proveedor_display }}" title="Eliminar">
+                                                    <i class="fa fa-trash"></i>
+                                                </button>
+                                                {% if k.usable_para_vectorizar and not k.es_la_de_embeddings %}
+                                                    <button type="button" class="btn btn-sm btn-outline-success cia-marcar"
+                                                            data-accion="marcar_embeddings" data-pk="{{ k.id }}">Vectorizar con esta</button>
+                                                {% endif %}
+                                                {% if not k.es_default %}
+                                                    <button type="button" class="btn btn-sm btn-outline-primary cia-marcar"
+                                                            data-accion="marcar_default" data-pk="{{ k.id }}">Por defecto</button>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% if not key_embeddings %}
+                            <div class="alert alert-warning small mt-3 mb-0">
+                                Ninguna key puede vectorizar. Se necesita una de <strong>Gemini</strong> u
+                                <strong>OpenAI</strong>: los demás proveedores no ofrecen modelo de embeddings.
+                            </div>
+                        {% endif %}
+                        <div id="ciaResultadoKeys" class="mt-3"></div>
+                    {% else %}
+                        <p class="cia-vacio">
+                            Todavía no hay API keys. Registrá la primera para que los agentes puedan responder.
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {# ── Parámetros ───────────────────────────────────────────────── #}
+        <div class="tab-pane fade" id="ciaParams" role="tabpanel">
+            <div class="alert alert-info small">
+                Un agente toma su propio valor; si no lo define, el de este perfil; si tampoco,
+                el de la plataforma. Dejar un campo vacío significa <strong>heredar</strong>, no cero.
+            </div>
+
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="cia-card">
+                        <div class="cia-card-head">
+                            <div>
+                                <h6>Este perfil</h6>
+                                <small>Vacío = hereda de la plataforma.</small>
+                            </div>
+                            <button type="button" id="ciaGuardarParams" class="btn btn-sm btn-primary">Guardar</button>
+                        </div>
+                        <div class="cia-card-body">
+                            <form id="ciaFormParams">
+                                {% for p in parametros %}
+                                    <div class="cia-param">
+                                        {% if p.es_bool %}
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" role="switch"
+                                                       name="{{ p.campo }}" id="cia_{{ p.campo }}"
+                                                       {% if p.valor %}checked{% endif %}>
+                                                <label class="form-check-label small fw-semibold" for="cia_{{ p.campo }}">{{ p.label }}</label>
+                                            </div>
+                                        {% else %}
+                                            <label for="cia_{{ p.campo }}">
+                                                {{ p.label }}
+                                                {% if p.solo_centro %}<span class="cia-badge cia-badge-hereda">Solo aquí</span>{% endif %}
+                                            </label>
+                                            <input type="text" name="{{ p.campo }}" id="cia_{{ p.campo }}"
+                                                   value="{{ p.valor }}">
+                                        {% endif %}
+                                        <div class="invalid-feedback d-block small" id="ciaError_{{ p.campo }}"></div>
+                                    </div>
+                                {% endfor %}
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="cia-card">
+                        <div class="cia-card-head">
+                            <div>
+                                <h6>Plataforma</h6>
+                                <small>El piso para todos los perfiles que no definan lo suyo.</small>
+                            </div>
+                            <button type="button" id="ciaGuardarPlataforma" class="btn btn-sm btn-primary">Guardar</button>
+                        </div>
+                        <div class="cia-card-body">
+                            {% if plataforma_comportamiento %}
+                                <form id="ciaFormPlataforma">
+                                    {% for p in plataforma_comportamiento %}
+                                        <div class="cia-param">
+                                            <label for="ps_{{ p.pk }}">
+                                                {{ p.etiqueta }}
+                                                {% if p.unidad %}<span class="cia-unidad">{{ p.unidad }}</span>{% endif %}
+                                            </label>
+                                            <input type="text" name="param_{{ p.pk }}" id="ps_{{ p.pk }}"
+                                                   value="{{ p.valor|default:p.valor_default }}"
+                                                   {% if not p.editable %}readonly{% endif %}>
+                                            {% if p.descripcion %}<div class="form-text">{{ p.descripcion }}</div>{% endif %}
+                                        </div>
+                                    {% endfor %}
+                                </form>
+                            {% else %}
+                                <p class="cia-vacio">
+                                    No hay parámetros de plataforma cargados. Ejecutá
+                                    <code>manage.py seed_parametros_ia</code>.
+                                </p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="cia-card">
+                <div class="cia-card-head">
+                    <div><h6>Agentes</h6><small>Qué hereda cada uno y qué tiene sobreescrito.</small></div>
+                </div>
+                <div class="cia-card-body">
+                    {% if agentes %}
+                        <div class="table-responsive">
+                            <table class="cia-tabla">
+                                <thead><tr><th>Agente</th><th>Herencia</th><th>Parámetros propios</th></tr></thead>
+                                <tbody>
+                                    {% for a in agentes %}
+                                        <tr>
+                                            <td><a href="/crm/entrenamiento/">{{ a.nombre }}</a></td>
+                                            <td>
+                                                {% if a.hereda_todo %}
+                                                    <span class="cia-badge cia-badge-hereda">Hereda todo</span>
+                                                {% else %}
+                                                    <span class="cia-badge cia-badge-propio">{{ a.num_propios }} propio(s)</span>
+                                                {% endif %}
+                                            </td>
+                                            <td class="text-muted small">{{ a.params_propios|join:", "|default:"—" }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="cia-vacio">Este perfil todavía no tiene agentes.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {# ── Límites de gasto ─────────────────────────────────────────── #}
+        <div class="tab-pane fade" id="ciaLimites" role="tabpanel">
+            <div class="cia-card">
+                <div class="cia-card-head">
+                    <div>
+                        <h6>Topes de consumo</h6>
+                        <small>Un 0 significa sin tope. Aplican a toda la plataforma.</small>
+                    </div>
+                    <button type="button" id="ciaGuardarLimites" class="btn btn-sm btn-primary">Guardar</button>
+                </div>
+                <div class="cia-card-body">
+                    {% if plataforma_limites %}
+                        <div class="alert alert-warning small">
+                            Los topes se guardan, pero <strong>todavía no cortan el consumo</strong>:
+                            falta conectar el motor. Por ahora sirven como referencia.
+                        </div>
+                        <form id="ciaFormLimites">
+                            <div class="row">
+                                {% for p in plataforma_limites %}
+                                    <div class="col-md-6 cia-param">
+                                        <label for="pl_{{ p.pk }}">
+                                            {{ p.etiqueta }}
+                                            {% if p.unidad %}<span class="cia-unidad">{{ p.unidad }}</span>{% endif %}
+                                        </label>
+                                        <input type="text" name="param_{{ p.pk }}" id="pl_{{ p.pk }}"
+                                               value="{{ p.valor|default:p.valor_default }}"
+                                               {% if not p.editable %}readonly{% endif %}>
+                                        {% if p.descripcion %}<div class="form-text">{{ p.descripcion }}</div>{% endif %}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </form>
+                    {% else %}
+                        <p class="cia-vacio">
+                            No hay límites cargados. Ejecutá <code>manage.py seed_parametros_ia</code>.
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {# ── Vectorización ────────────────────────────────────────────── #}
+        <div class="tab-pane fade" id="ciaVector" role="tabpanel">
+            <div class="cia-card">
+                <div class="cia-card-head">
+                    <div>
+                        <h6>Vectorizar agentes</h6>
+                        <small>Reindexa el conocimiento con la key que elijas.</small>
+                    </div>
+                </div>
+                <div class="cia-card-body">
+                    {% if agentes_vectorizables %}
+                        {% if agentes_sin_key %}
+                            <div class="alert alert-warning small">
+                                {{ agentes_sin_key }} agente(s) quedan fuera de la lista porque no tienen
+                                ninguna API key activa: sin key no se puede generar el embedding.
+                            </div>
+                        {% endif %}
+                        <div class="row">
+                            <div class="col-md-5 mb-3">
+                                <label class="form-label small fw-semibold">Key para vectorizar</label>
+                                <select id="ciaKeyVector" class="form-select form-select-sm">
+                                    <option value="">
+                                        {% if key_embeddings %}
+                                            Usar la del Centro de IA ({{ key_embeddings.get_proveedor_display }})
+                                        {% else %}
+                                            Sin key de embeddings configurada
+                                        {% endif %}
+                                    </option>
+                                    {% for k in keys %}
+                                        {% if k.usable_para_vectorizar %}
+                                            <option value="{{ k.id }}">{{ k.get_proveedor_display }}{% if k.alias %} — {{ k.alias }}{% endif %}</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-7 mb-3">
+                                <label class="form-label small fw-semibold">Agentes</label>
+                                <div class="cia-agentes-lista">
+                                    {% for a in agentes_vectorizables %}
+                                        <div class="form-check">
+                                            <input class="form-check-input cia-agente" type="checkbox" value="{{ a.id }}" id="ciaAg{{ a.id }}">
+                                            <label class="form-check-label small" for="ciaAg{{ a.id }}">{{ a.nombre }}</label>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" id="ciaVectorizar" class="btn btn-sm btn-primary">
+                            <i class="fa fa-cubes me-1"></i>Vectorizar seleccionados
+                        </button>
+                        <button type="button" id="ciaEstadoConocimiento" class="btn btn-sm btn-outline-secondary">
+                            <i class="fa fa-magnifying-glass-chart me-1"></i>Revisar conocimiento
+                        </button>
+                        <div id="ciaEstadoLista" class="mt-3"></div>
+                        <div id="ciaResultados" class="mt-3"></div>
+                    {% else %}
+                        <p class="cia-vacio">
+                            No hay agentes con API key activa. Registrá o reactivá una key en la
+                            pestaña «Claves y tokens» y asignásela al agente.
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<div class="modal fade" id="ciaModalSaber" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">Conocimiento de <span id="ciaSaberAgente"></span></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="ciaSaberId">
+                <div id="ciaSaberFuentes"></div>
+                <hr>
+                <label class="form-label small fw-semibold">Probar qué recupera</label>
+                <p class="form-text mt-0">
+                    Lo que aparezca acá es lo que el agente va a tener en el prompt ante esa
+                    pregunta. Si no aparece, tampoco lo va a saber.
+                </p>
+                <div class="input-group input-group-sm mb-2">
+                    <input type="text" class="form-control" id="ciaSaberPregunta"
+                           placeholder="¿Cuánto cuesta el plan mensual?">
+                    <button type="button" class="btn btn-primary" id="ciaSaberConsultar">Consultar</button>
+                </div>
+                <div id="ciaSaberResultado"></div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="ciaOptim" role="tabpanel">
+            <div class="cia-card">
+                <div class="cia-card-head">
+                    <div>
+                        <h6>Dónde se va el gasto</h6>
+                        <small>
+                            Cruza la configuración de cada agente con lo que consumió de verdad.
+                            El análisis no llama al modelo: no gasta un solo token.
+                        </small>
+                    </div>
+                    <div class="d-flex gap-2 align-items-center">
+                        <select id="ciaOptimDias" class="form-select form-select-sm cia-optim-dias">
+                            <option value="7">Últimos 7 días</option>
+                            <option value="30" selected>Últimos 30 días</option>
+                            <option value="90">Últimos 90 días</option>
+                            <option value="365">Último año</option>
+                        </select>
+                        <button class="btn btn-sm btn-primary" id="ciaAnalizar">
+                            <i class="fa fa-magnifying-glass-chart me-1"></i>Analizar
+                        </button>
+                    </div>
+                </div>
+                <div class="cia-card-body">
+                    <p class="text-muted small mb-0">
+                        El gasto de un agente está en lo que se le manda, no en lo que responde:
+                        cada mensaje arrastra las instrucciones, el contexto estático, el
+                        conocimiento recuperado y el historial. Esta pestaña muestra cuánto pesa
+                        cada pieza y cuáles se pueden recortar sin degradar la respuesta.
+                    </p>
+                    <div id="ciaOptimResultado" class="mt-3"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="ciaModalKey" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title" id="ciaModalKeyTitulo">Registrar API key</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="ciaModalKeyCuerpo"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-sm btn-primary" id="ciaGuardarKey">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block jscript %}
+<script>
+function ciaEscHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+}
+
+function ciaPost(datos, alTerminar, alFallar) {
+    datos.csrfmiddlewaretoken = '{{ csrf_token }}';
+    $.post('{{ request.path }}', datos).done(function (r) {
+        if (r.error) {
+            if (alFallar) { alFallar(r); return; }
+            Swal.fire({ type: 'error', title: 'No se pudo completar', text: r.message });
+            return;
+        }
+        alTerminar(r);
+    }).fail(function () {
+        Swal.fire({ type: 'error', title: 'Error', text: 'No se pudo contactar al servidor.' });
+    });
+}
+
+function ciaRecargar(mensaje) {
+    Swal.fire({ type: 'success', title: 'Listo', text: mensaje, timer: 1600, showConfirmButton: false });
+    setTimeout(function () { location.reload(); }, 1200);
+}
+
+/* ── Claves ── */
+function ciaAbrirModalKey(pk) {
+    ciaPost({ action: 'form_key', pk: pk || '' }, function (r) {
+        $('#ciaModalKeyCuerpo').html(r.html);
+        $('#ciaModalKeyTitulo').text(pk ? 'Editar API key' : 'Registrar API key');
+        new bootstrap.Modal(document.getElementById('ciaModalKey')).show();
+    });
+}
+
+$('#ciaNuevaKey').on('click', function () { ciaAbrirModalKey(''); });
+$('.cia-editar-key').on('click', function () { ciaAbrirModalKey($(this).data('pk')); });
+
+$('#ciaGuardarKey').on('click', function () {
+    var datos = { action: 'guardar_key', pk: $('#ciaKeyPk').val() || '' };
+    $('#ciaFormKey').find('[name]').each(function () {
+        var $el = $(this);
+        datos[$el.attr('name')] = $el.attr('type') === 'checkbox'
+            ? ($el.is(':checked') ? 'on' : '') : $el.val();
+    });
+    $('[id^=ciaErrorKey_]').text('');
+    ciaPost(datos, function (r) { ciaRecargar(r.message); }, function (r) {
+        if (r.form && r.form.length) {
+            Object.keys(r.form[0]).forEach(function (campo) {
+                $('#ciaErrorKey_' + campo).text(r.form[0][campo]);
+            });
+        }
+        Swal.fire({ type: 'error', title: 'Revisá los campos', text: r.message });
+    });
+});
+
+$('.cia-borrar-key').on('click', function () {
+    var pk = $(this).data('pk');
+    Swal.fire({
+        title: '¿Eliminar la key de ' + $(this).data('nombre') + '?',
+        text: 'Los agentes que la usen dejarán de responder hasta que asignes otra.',
+        type: 'warning', showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar'
+    }).then(function (res) {
+        if (!res.value) { return; }
+        ciaPost({ action: 'eliminar_key', pk: pk }, function (r) { ciaRecargar(r.message); });
+    });
+});
+
+$('.cia-probar').on('click', function () {
+    var $btn = $(this);
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i>');
+    ciaPost({ action: 'probar_key', pk: $btn.data('pk') },
+        function (r) { ciaRecargar(r.message); },
+        function (r) {
+            $btn.prop('disabled', false).html('<i class="fa fa-satellite-dish"></i>');
+            Swal.fire({ type: 'error', title: 'La key no respondió', text: r.message });
+        });
+});
+
+$('.cia-marcar').on('click', function () {
+    var $btn = $(this);
+    $btn.prop('disabled', true);
+    ciaPost({ action: $btn.data('accion'), pk: $btn.data('pk') },
+        function (r) { ciaRecargar(r.message); },
+        function (r) {
+            $btn.prop('disabled', false);
+            Swal.fire({ type: 'error', title: 'No se pudo aplicar', text: r.message });
+        });
+});
+
+$('#ciaProbarTodas').on('click', function () {
+    var $btn = $(this), original = $btn.html();
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i>Probando…');
+    $('#ciaResultadoKeys').html('');
+    ciaPost({ action: 'probar_todas' }, function (r) {
+        $btn.prop('disabled', false).html(original);
+        var html = '<p class="cia-resumen">' + ciaEscHtml(r.message) + '</p>';
+        (r.resultados || []).forEach(function (res) {
+            var clase = res.ok ? 'cia-resultado-ok' : 'cia-resultado-error';
+            html += '<div class="cia-resultado ' + clase + '"><strong>'
+                 +  ciaEscHtml(res.proveedor) + (res.alias ? ' — ' + ciaEscHtml(res.alias) : '')
+                 +  '</strong> · ' + ciaEscHtml(res.modelo) + ' — ' + ciaEscHtml(res.message) + '</div>';
+        });
+        $('#ciaResultadoKeys').html(html);
+    }, function (r) {
+        $btn.prop('disabled', false).html(original);
+        Swal.fire({ type: 'error', title: 'No se pudo probar', text: r.message });
+    });
+});
+
+/* ── Parámetros del perfil ── */
+$('#ciaGuardarParams').on('click', function () {
+    var $btn = $(this), original = $btn.html();
+    $btn.prop('disabled', true).html('Guardando…');
+    $('[id^=ciaError_]').text('');
+    var payload = { action: 'guardar_parametros' };
+    $('#ciaFormParams').serializeArray().forEach(function (c) { payload[c.name] = c.value; });
+    ciaPost(payload, function (r) {
+        $btn.prop('disabled', false).html(original);
+        ciaRecargar(r.message);
+    }, function (r) {
+        $btn.prop('disabled', false).html(original);
+        if (r.form && r.form.length) {
+            Object.keys(r.form[0]).forEach(function (campo) {
+                $('#ciaError_' + campo).text(r.form[0][campo]);
+            });
+        }
+        Swal.fire({ type: 'error', title: 'Revisá los valores', text: r.message });
+    });
+});
+
+/* ── Parámetros de plataforma y límites ── */
+function ciaGuardarSistema(accion, selectorForm, $btn) {
+    var original = $btn.html();
+    $btn.prop('disabled', true).html('Guardando…');
+    var payload = { action: accion };
+    $(selectorForm).serializeArray().forEach(function (c) { payload[c.name] = c.value; });
+    ciaPost(payload, function (r) {
+        $btn.prop('disabled', false).html(original);
+        ciaRecargar(r.message);
+    }, function (r) {
+        $btn.prop('disabled', false).html(original);
+        Swal.fire({ type: 'error', title: 'Revisá los valores', text: r.message });
+    });
+}
+
+$('#ciaGuardarPlataforma').on('click', function () {
+    ciaGuardarSistema('guardar_plataforma', '#ciaFormPlataforma', $(this));
+});
+$('#ciaGuardarLimites').on('click', function () {
+    ciaGuardarSistema('guardar_limites', '#ciaFormLimites', $(this));
+});
+
+/* ── Vectorización ── */
+$('#ciaVectorizar').on('click', function () {
+    var seleccionados = $('.cia-agente:checked').map(function () { return this.value; }).get();
+    if (!seleccionados.length) {
+        Swal.fire({ type: 'warning', title: 'Sin agentes', text: 'Elegí al menos un agente para vectorizar.' });
+        return;
+    }
+    var $btn = $(this), original = $btn.html();
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i>Vectorizando…');
+    $('#ciaResultados').html('');
+
+    ciaPost({
+        action: 'revectorizar',
+        apikey_id: $('#ciaKeyVector').val(),
+        'agentes[]': seleccionados
+    }, function (r) {
+        $btn.prop('disabled', false).html(original);
+        var html = '';
+        (r.resultados || []).forEach(function (res) {
+            var clase = res.ok ? 'cia-resultado-ok' : 'cia-resultado-error';
+            var detalle = res.ok
+                ? (res.indexados + ' fragmento(s) indexado(s), ' + res.total + ' en total')
+                : res.mensaje;
+            if (res.ok && res.mensaje) { detalle += ' — ' + res.mensaje; }
+            html += '<div class="cia-resultado ' + clase + '"><strong>' + ciaEscHtml(res.agente)
+                 +  '</strong> — ' + ciaEscHtml(detalle) + '</div>';
+        });
+        $('#ciaResultados').html(html);
+        Swal.fire({ type: 'success', title: 'Vectorización terminada', text: r.message });
+    }, function (r) {
+        $btn.prop('disabled', false).html(original);
+        Swal.fire({ type: 'error', title: 'No se pudo vectorizar', text: r.message });
+    });
+});
+
+
+/* ── Conocimiento en Weaviate ── */
+$('#ciaEstadoConocimiento').on('click', function () {
+    var $btn = $(this), original = $btn.html();
+    $btn.prop('disabled', true).html('<i class="fa fa-spinner fa-spin me-1"></i>Revisando…');
+    ciaPost({ action: 'estado_conocimiento' }, function (r) {
+        $btn.prop('disabled', false).html(original);
+        var html = '<p class="cia-resumen">' + ciaEscHtml(r.message) + '</p>'
+                 + '<div class="table-responsive"><table class="cia-tabla"><thead><tr>'
+                 + '<th>Agente</th><th>Fragmentos</th><th>Estado</th><th></th></tr></thead><tbody>';
+        (r.filas || []).forEach(function (f) {
+            var estado, clase;
+            if (f.error)          { estado = 'No se pudo consultar'; clase = 'cia-badge-propio'; }
+            else if (f.sin_memoria) { estado = 'Sin conocimiento';    clase = 'cia-badge-propio'; }
+            else                  { estado = 'Vectorizado';         clase = 'cia-badge-embed'; }
+            html += '<tr><td>' + ciaEscHtml(f.nombre) + '</td>'
+                 +  '<td>' + (f.total === null ? '—' : f.total) + '</td>'
+                 +  '<td><span class="cia-badge ' + clase + '">' + estado + '</span>'
+                 +  (f.tiene_key ? '' : ' <span class="cia-badge cia-badge-propio">Sin key activa</span>') + '</td>'
+                 +  '<td class="text-end"><button type="button" class="btn btn-sm btn-outline-primary cia-ver-saber" '
+                 +  'data-id="' + f.id + '" data-nombre="' + ciaEscHtml(f.nombre) + '">Ver</button></td></tr>';
+        });
+        html += '</tbody></table></div>';
+        if ((r.sin_memoria_ids || []).length) {
+            html += '<button type="button" class="btn btn-sm btn-warning mt-2" id="ciaMarcarSinMemoria" '
+                 +  'data-ids="' + r.sin_memoria_ids.join(',') + '">'
+                 +  '<i class="fa fa-wand-magic-sparkles me-1"></i>Seleccionar los que no tienen conocimiento</button>';
+        }
+        $('#ciaEstadoLista').html(html);
+    }, function (r) {
+        $btn.prop('disabled', false).html(original);
+        Swal.fire({ type: 'error', title: 'No se pudo revisar', text: r.message });
+    });
+});
+
+// Marca en el selector solo los agentes sin conocimiento, para recompilarlos.
+$(document).on('click', '#ciaMarcarSinMemoria', function () {
+    var ids = String($(this).data('ids')).split(',');
+    $('.cia-agente').prop('checked', false);
+    var marcados = 0;
+    ids.forEach(function (id) {
+        var $chk = $('.cia-agente[value="' + id + '"]');
+        if ($chk.length) { $chk.prop('checked', true); marcados++; }
+    });
+    var fuera = ids.length - marcados;
+    Swal.fire({
+        type: fuera ? 'warning' : 'success',
+        title: marcados + ' agente(s) seleccionado(s)',
+        text: fuera
+            ? fuera + ' quedaron fuera porque no tienen API key activa y no se pueden vectorizar.'
+            : 'Pulsá «Vectorizar seleccionados» para recompilar su conocimiento.'
+    });
+});
+
+$(document).on('click', '.cia-ver-saber', function () {
+    var id = $(this).data('id'), nombre = $(this).data('nombre');
+    $('#ciaSaberId').val(id);
+    $('#ciaSaberAgente').text(nombre);
+    $('#ciaSaberFuentes').html('<p class="text-muted small">Cargando…</p>');
+    $('#ciaSaberResultado').html('');
+    $('#ciaSaberPregunta').val('');
+    new bootstrap.Modal(document.getElementById('ciaModalSaber')).show();
+
+    ciaPost({ action: 'explorar_agente', agente_id: id }, function (r) {
+        var html = '<p class="cia-resumen">' + ciaEscHtml(r.message) + '</p>';
+        if ((r.fuentes || []).length) {
+            html += '<div class="table-responsive"><table class="cia-tabla"><thead><tr>'
+                 +  '<th>Fuente</th><th>Tipo</th><th>Fragmentos</th></tr></thead><tbody>';
+            r.fuentes.forEach(function (f) {
+                html += '<tr><td>' + ciaEscHtml(f.source) + '</td>'
+                     +  '<td class="text-muted">' + ciaEscHtml(f.tipo || f.categoria || '—') + '</td>'
+                     +  '<td>' + f.count + '</td></tr>';
+            });
+            html += '</tbody></table></div>';
+        }
+        $('#ciaSaberFuentes').html(html);
+    }, function (r) {
+        $('#ciaSaberFuentes').html('<div class="cia-resultado cia-resultado-error">' + ciaEscHtml(r.message) + '</div>');
+    });
+});
+
+$('#ciaSaberConsultar').on('click', function () {
+    var pregunta = $('#ciaSaberPregunta').val();
+    if (!pregunta.trim()) { return; }
+    var $btn = $(this);
+    $btn.prop('disabled', true).text('Consultando…');
+    $('#ciaSaberResultado').html('');
+    ciaPost({ action: 'consultar_agente', agente_id: $('#ciaSaberId').val(), pregunta: pregunta },
+        function (r) {
+            $btn.prop('disabled', false).text('Consultar');
+            var html = '<p class="cia-resumen">' + ciaEscHtml(r.message) + '</p>';
+            (r.fragmentos || []).forEach(function (f) {
+                html += '<div class="cia-fragmento">'
+                     +  '<div class="cia-fragmento-meta">' + ciaEscHtml(f.source || 'sin fuente')
+                     +  (f.distancia != null ? ' · distancia ' + Number(f.distancia).toFixed(3) : '')
+                     +  '</div><div>' + ciaEscHtml(f.texto) + '</div></div>';
+            });
+            $('#ciaSaberResultado').html(html);
+        }, function (r) {
+            $btn.prop('disabled', false).text('Consultar');
+            $('#ciaSaberResultado').html('<div class="cia-resultado cia-resultado-error">' + ciaEscHtml(r.message) + '</div>');
+        });
+});
+
+function ciaBarraPiezas(piezas) {
+    var html = '<div class="cia-barra">';
+    (piezas || []).forEach(function (p, i) {
+        if (!p.porcentaje) { return; }
+        html += '<span class="cia-barra-tramo cia-tramo-' + (i % 4)
+             +  '" style="width:' + p.porcentaje + '%" title="'
+             +  ciaEscHtml(p.etiqueta) + ': ' + p.tokens + ' tokens ('
+             +  p.porcentaje + '%)"></span>';
+    });
+    html += '</div><div class="cia-barra-leyenda">';
+    (piezas || []).forEach(function (p, i) {
+        if (!p.porcentaje) { return; }
+        html += '<span><i class="cia-punto cia-tramo-' + (i % 4) + '"></i>'
+             +  ciaEscHtml(p.etiqueta) + ' <b>' + p.tokens + '</b> tok · '
+             +  p.porcentaje + '%</span>';
+    });
+    return html + '</div>';
+}
+
+function ciaHallazgo(a, h) {
+    var html = '<div class="cia-hallazgo cia-sev-' + ciaEscHtml(h.severidad) + '">'
+             + '<div class="cia-hallazgo-cab"><strong>' + ciaEscHtml(h.titulo) + '</strong>';
+    if (h.ahorro_mes_usd > 0) {
+        html += '<span class="cia-ahorro">hasta USD ' + h.ahorro_mes_usd.toFixed(4) + '/mes</span>';
+    }
+    html += '</div><p>' + ciaEscHtml(h.detalle) + '</p>';
+    if (h.aplicable) {
+        html += '<button class="btn btn-sm btn-outline-primary cia-aplicar"'
+             +  ' data-agente="' + a.id + '" data-campo="' + ciaEscHtml(h.campo) + '"'
+             +  ' data-valor="' + ciaEscHtml(h.propuesto) + '">'
+             +  'Aplicar: ' + ciaEscHtml(h.campo) + ' ' + ciaEscHtml(h.actual)
+             +  ' &rarr; ' + ciaEscHtml(h.propuesto) + '</button>';
+    }
+    return html + '</div>';
+}
+
+function ciaPintarAuditoria(r) {
+    if (!r.agentes.length) {
+        $('#ciaOptimResultado').html('<div class="cia-resultado">No hay agentes con consumo en la ventana elegida.</div>');
+        return;
+    }
+    var html = '<div class="cia-optim-resumen">'
+             + '<div><span>Gasto medido</span><b>USD ' + r.costo_usd.toFixed(4) + '</b>'
+             + '<small>en ' + r.dias + ' días</small></div>'
+             + '<div><span>Proyección mensual</span><b>USD ' + r.costo_mes_usd.toFixed(4) + '</b>'
+             + '<small>al ritmo actual</small></div>'
+             + '<div><span>Ahorro identificado</span><b>USD ' + r.ahorro_mes_usd.toFixed(4) + '</b>'
+             + '<small>' + r.total_hallazgos + ' hallazgo(s)</small></div>'
+             + '</div>';
+
+    r.agentes.forEach(function (a) {
+        html += '<div class="cia-optim-agente"><div class="cia-optim-agente-cab">'
+             +  '<div><h6>' + ciaEscHtml(a.nombre) + '</h6>'
+             +  '<small>' + a.llamadas + ' llamadas · ' + a.entrada_promedio
+             +  ' tokens de entrada por llamada · ' + ciaEscHtml(a.modelo || 'sin modelo')
+             +  ' · USD ' + a.costo_usd.toFixed(4) + '</small></div>';
+        if (a.saturacion != null) {
+            html += '<span class="cia-saturacion" title="Cuánto del presupuesto configurado usa el prompt real">'
+                 +  a.saturacion + '% del presupuesto</span>';
+        }
+        html += '</div>';
+        if (a.piezas && a.piezas.length) {
+            html += '<div class="cia-optim-presu"><small>Presupuesto de prompt: <b>'
+                 +  a.presupuesto_tokens + '</b> tokens</small>' + ciaBarraPiezas(a.piezas) + '</div>';
+        }
+        if (!a.hallazgos.length) {
+            html += '<div class="cia-resultado cia-resultado-ok">Sin hallazgos: la configuración acompaña al uso real.</div>';
+        }
+        a.hallazgos.forEach(function (h) { html += ciaHallazgo(a, h); });
+        html += '<button class="btn btn-sm btn-light cia-revisar-prompt" data-agente="' + a.id + '">'
+             +  '<i class="fa fa-wand-magic-sparkles me-1"></i>Revisar el texto de las instrucciones con IA</button>'
+             +  '<div class="cia-revision" id="ciaRevision' + a.id + '"></div>';
+        html += '</div>';
+    });
+    $('#ciaOptimResultado').html(html);
+}
+
+$('#ciaAnalizar').on('click', function () {
+    var $btn = $(this).prop('disabled', true);
+    $('#ciaOptimResultado').html('<div class="cia-resultado">Analizando el consumo de cada agente…</div>');
+    ciaPost({ action: 'auditar_consumo', dias: $('#ciaOptimDias').val() }, function (r) {
+        $btn.prop('disabled', false);
+        ciaPintarAuditoria(r);
+    }, function (r) {
+        $btn.prop('disabled', false);
+        $('#ciaOptimResultado').html('<div class="cia-resultado cia-resultado-error">' + ciaEscHtml(r.message) + '</div>');
+    });
+});
+
+$('#ciaOptimResultado').on('click', '.cia-aplicar', function () {
+    var $btn = $(this);
+    ciaPost({
+        action: 'aplicar_recomendacion',
+        agente_id: $btn.data('agente'),
+        campo: $btn.data('campo'),
+        valor: $btn.data('valor')
+    }, function (r) {
+        $btn.replaceWith('<span class="cia-aplicado"><i class="fa fa-check me-1"></i>' + ciaEscHtml(r.message) + '</span>');
+    }, function (r) {
+        Swal.fire('No se pudo aplicar', r.message, 'error');
+    });
+});
+
+$('#ciaOptimResultado').on('click', '.cia-revisar-prompt', function () {
+    var $btn = $(this).prop('disabled', true);
+    var id = $btn.data('agente');
+    $('#ciaRevision' + id).html('<div class="cia-resultado">Leyendo las instrucciones…</div>');
+    ciaPost({ action: 'revisar_prompt', agente_id: id }, function (r) {
+        $btn.prop('disabled', false);
+        var html = '';
+        if (r.sugerencias.length) {
+            html = '<ul class="cia-sugerencias">';
+            r.sugerencias.forEach(function (s) { html += '<li>' + ciaEscHtml(s) + '</li>'; });
+            html += '</ul><small class="text-muted">Revisión sobre ' + r.chars_prompt
+                 +  ' caracteres · costó ' + r.tokens_usados + ' tokens</small>';
+        } else {
+            html = '<div class="cia-resultado cia-resultado-ok">' + ciaEscHtml(r.mensaje) + '</div>';
+        }
+        $('#ciaRevision' + id).html(html);
+    }, function (r) {
+        $btn.prop('disabled', false);
+        $('#ciaRevision' + id).html('<div class="cia-resultado cia-resultado-error">' + ciaEscHtml(r.message) + '</div>');
+    });
+});
+
+/* Recordar la pestaña activa entre recargas: casi toda accion recarga la
+   pagina, y volver siempre a la primera obligaba a re-navegar cada vez. */
+document.querySelectorAll('#ciaTabsRoot, .cia-tabs .nav-link').forEach(function (b) {
+    b.addEventListener('shown.bs.tab', function (e) {
+        localStorage.setItem('ciaTab', e.target.getAttribute('data-bs-target'));
+    });
+});
+(function () {
+    var guardada = localStorage.getItem('ciaTab');
+    if (!guardada) { return; }
+    var btn = document.querySelector('.cia-tabs .nav-link[data-bs-target="' + guardada + '"]');
+    if (btn) { new bootstrap.Tab(btn).show(); }
+})();
+</script>
+{% endblock %}

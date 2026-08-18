@@ -102,19 +102,6 @@
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Sesion</label>
-                            <div class="input-group">
-                                <select class="form-control select2" name="sesion">
-                                    <option value="">Todas las sesiones</option>
-                                    {% for s in sesiones_meta %}
-                                    <option value="{{ s.id }}" {% if sesion_sel == s.id %}selected{% endif %}>
-                                        {{ s.nombre|default:s.numero }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
                             <label class="form-label">Estado</label>
                             <select class="form-select" name="estado">
                                 <option value="">Todos los estados</option>
@@ -177,6 +164,39 @@
                                 <i class="fa fa-satellite-dish me-1"></i> {{ s.nombre|default:s.numero }}
                             </a>
                         </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="dropdown">
+                    <button class="btn btn-info text-white dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="fab fa-facebook me-1"></i> Ver en Facebook/Meta
+                    </button>
+                    <ul class="dropdown-menu shadow-sm">
+                        {% for s in sesiones_meta %}
+                        {% if s.config_meta.waba_id %}
+                        <li><h6 class="dropdown-header">{{ s.nombre|default:s.numero }}</h6></li>
+                        <li>
+                            <a class="dropdown-item" target="_blank" rel="noopener"
+                               href="https://business.facebook.com/wa/manage/message-templates/?waba_id={{ s.config_meta.waba_id }}{% if s.config_meta.business_account_id %}&business_id={{ s.config_meta.business_account_id }}{% endif %}">
+                                <i class="fa fa-file-lines me-2 text-primary"></i> Ver plantillas en Meta
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" target="_blank" rel="noopener"
+                               href="https://business.facebook.com/wa/manage/insights/?waba_id={{ s.config_meta.waba_id }}{% if s.config_meta.business_account_id %}&business_id={{ s.config_meta.business_account_id }}{% endif %}">
+                                <i class="fa fa-chart-line me-2 text-success"></i> Ver costos y consumo
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" target="_blank" rel="noopener"
+                               href="https://business.facebook.com/billing_hub/accounts{% if s.config_meta.business_account_id %}?business_id={{ s.config_meta.business_account_id }}{% endif %}">
+                                <i class="fa fa-credit-card me-2 text-warning"></i> Facturación en Meta
+                            </a>
+                        </li>
+                        {% if not forloop.last %}<li><hr class="dropdown-divider"></li>{% endif %}
+                        {% else %}
+                        <li><span class="dropdown-item-text small text-muted">{{ s.nombre|default:s.numero }}: sin WABA ID configurado</span></li>
+                        {% endif %}
                         {% endfor %}
                     </ul>
                 </div>
@@ -253,10 +273,22 @@
                                             <i class="fa fa-ellipsis-v"></i>
                                         </button>
                                         <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                            <li>
+                                                <a class="dropdown-item" href="javascript:void(0);"
+                                                   onclick="verPlantilla({{ p.id }})">
+                                                    <i class="fa fa-eye me-2 text-info"></i>Ver plantilla
+                                                </a>
+                                            </li>
                                             {% if p.estado_meta == 'BORRADOR' or p.estado_meta == 'REJECTED' %}
                                             <li>
                                                 <a class="dropdown-item" href="?action=change&pk={{ p.id }}">
                                                     <i class="fa fa-pen-to-square me-2 text-success"></i>Editar
+                                                </a>
+                                            </li>
+                                            <li>
+                                                <a class="dropdown-item" href="javascript:void(0);"
+                                                   onclick="editarConIA({{ p.id }}, '{{ p.nombre|escapejs }}')">
+                                                    <i class="fa fa-wand-magic-sparkles me-2 text-warning"></i>Editar con IA
                                                 </a>
                                             </li>
                                             <li>
@@ -392,6 +424,67 @@ function sincronizarPlantillas(sesionId) {
         }
     ).fail(function() {
         _mostrarError('<i class="fa fa-times-circle me-1"></i> Error', '<p class="mb-0">No se pudo contactar al servidor.</p>');
+    });
+}
+
+function verPlantilla(id) {
+    $.get(window.location.pathname, { action: 'ver', pk: id }, function(r) {
+        if (r && r.error === false) {
+            _setModal('bg-primary text-white',
+                '<i class="fa fa-eye me-1"></i> ' + r.nombre,
+                r.html,
+                _btnCerrar);
+            _getModal().show();
+        } else {
+            _mostrarError('<i class="fa fa-times-circle me-1"></i> Error',
+                '<p class="mb-0">' + ((r && r.message) || 'Error desconocido') + '</p>');
+            _getModal().show();
+        }
+    }).fail(function() {
+        _mostrarError('<i class="fa fa-times-circle me-1"></i> Error', '<p class="mb-0">No se pudo contactar al servidor.</p>');
+        _getModal().show();
+    });
+}
+
+function editarConIA(id, nombre) {
+    _setModal('bg-warning text-dark',
+        '<i class="fa fa-wand-magic-sparkles me-1"></i> Editar con IA — ' + nombre,
+        '<label class="form-label small fw-bold">¿Qué quieres cambiar?</label>' +
+        '<textarea id="eia-instruccion" class="form-control" rows="3" ' +
+        'placeholder="Ej: hazla más corta y formal · agrega un cierre después de la última variable · cambia el llamado a la acción"></textarea>' +
+        '<p class="small text-muted mt-2 mb-0">La IA reescribe la plantilla respetando las reglas de Meta (variables numeradas, sin variables al inicio/fin). El consumo de tokens queda registrado.</p>',
+        '<button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>' +
+        '<button type="button" class="btn btn-warning btn-sm" id="eia-btn-ok"><i class="fa fa-wand-magic-sparkles me-1"></i>Aplicar cambios</button>'
+    );
+    _getModal().show();
+    $('#eia-btn-ok').off('click').on('click', function() {
+        var instruccion = $('#eia-instruccion').val().trim();
+        if (instruccion.length < 5) {
+            $('#eia-instruccion').addClass('is-invalid').focus();
+            return;
+        }
+        _mostrarLoading('<i class="fa fa-wand-magic-sparkles me-1"></i> Editando con IA', 'La IA está reescribiendo la plantilla...');
+        $.post(window.location.pathname,
+            { action: 'editar_con_ia', id: id, instruccion: instruccion },
+            function(r) {
+                if (r && r.error === false) {
+                    _mostrarExito(
+                        '<i class="fa fa-check-circle me-1"></i> Plantilla actualizada',
+                        '<p class="small fw-bold mb-1">Nuevo cuerpo:</p>' +
+                        '<pre class="small bg-light border rounded p-2" style="white-space:pre-wrap;">' +
+                        $('<div>').text(r.cuerpo || '').html() + '</pre>' +
+                        (r.footer ? '<p class="small text-muted mb-0">Footer: ' + $('<div>').text(r.footer).html() + '</p>' : '')
+                    );
+                } else {
+                    _mostrarError(
+                        '<i class="fa fa-times-circle me-1"></i> No se pudo editar',
+                        '<p class="mb-0">' + ((r && r.message) || 'Error desconocido') + '</p>'
+                    );
+                }
+            }
+        ).fail(function() {
+            _mostrarError('<i class="fa fa-times-circle me-1"></i> Error', '<p class="mb-0">No se pudo contactar al servidor.</p>');
+        });
     });
 }
 

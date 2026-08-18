@@ -30,3 +30,77 @@
 {{ form.media }}
 
 {% include 'base_formulario_modal.html' %}
+
+<script>
+(function() {
+    'use strict';
+    // Filtra el combo de modelos según el proveedor seleccionado.
+    const PREFIJOS = { '2': 'gemini-', '3': 'gpt-', '4': 'claude-' };
+    const LISTAS = {
+        '5': ['gpt-oss:20b', 'gpt-oss:120b', 'gemma3:12b', 'gemma3:27b', 'qwen3-next:80b', 'glm-4.7', 'deepseek-v3.2', 'ministral-3:8b'],
+        '6': ['deepseek-chat', 'deepseek-reasoner'],
+        '7': ['DeepSeek-V3', 'DeepSeek-R1', 'Qwen3-32B'],
+        '8': ['llama3.1', 'llama3.2', 'qwen2.5', 'mistral', 'deepseek-r1']
+    };
+    const USAN_BASE_URL = ['6', '7', '8'];
+
+    function filtrarModelos() {
+        const $prov = $('#id_proveedor');
+        const $modelo = $('#id_modelo');
+        if (!$prov.length || !$modelo.length) return;
+
+        const provVal = String($prov.val() || '');
+        const prefijo = PREFIJOS[provVal] || null;
+        const lista = LISTAS[provVal] || null;
+
+        // Guardar el valor actual antes de reconstruir
+        const valorActual = $modelo.val();
+        let primerValido = '';
+
+        $modelo.find('option').each(function() {
+            const $opt = $(this);
+            const v = $opt.attr('value') || '';
+            // Opción vacía (default) siempre visible
+            if (v === '') { $opt.prop('hidden', false).prop('disabled', false); return; }
+            let match;
+            if (lista) {
+                match = lista.indexOf(v) !== -1;
+            } else if (prefijo) {
+                match = v.startsWith(prefijo);
+            } else {
+                // Proveedor desconocido: mostrar todos (fallback defensivo)
+                $opt.prop('hidden', false).prop('disabled', false);
+                if (!primerValido) primerValido = v;
+                return;
+            }
+            $opt.prop('hidden', !match).prop('disabled', !match);
+            if (match && !primerValido) primerValido = v;
+        });
+
+        // Si el valor actual ya no es válido para este provider, cambiar al default ''
+        const currentOpt = $modelo.find('option[value="' + valorActual + '"]');
+        if (valorActual && currentOpt.length && currentOpt.prop('disabled')) {
+            $modelo.val('');
+        }
+
+        // Mostrar texto guía bajo el combo
+        const labels = { '2': 'Gemini', '3': 'OpenAI', '4': 'Claude', '5': 'Ollama', '6': 'DeepSeek', '7': 'Huawei MaaS', '8': 'Ollama Local' };
+        const prov_label = labels[provVal] || 'este proveedor';
+        let $hint = $modelo.siblings('.modelo-hint');
+        if (!$hint.length) {
+            $hint = $('<div class="form-text small modelo-hint"></div>').insertAfter($modelo);
+        }
+        $hint.html('<i class="fas fa-info-circle text-primary me-1"></i>Solo se muestran modelos compatibles con <strong>' + prov_label + '</strong>.');
+
+        const $baseUrl = $('#id_base_url');
+        if ($baseUrl.length) {
+            const visible = USAN_BASE_URL.indexOf(provVal) !== -1;
+            $baseUrl.closest('.col-lg-12, [class*="col-"]').toggle(visible);
+        }
+    }
+
+    $(document).on('change', '#id_proveedor', filtrarModelos);
+    // Ejecutar una vez al abrir el modal
+    setTimeout(filtrarModelos, 50);
+})();
+</script>

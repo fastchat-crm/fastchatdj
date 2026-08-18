@@ -1,0 +1,35 @@
+<div class="row g-2">
+    <input type="hidden" value="{{ id }}" name="pk">
+    <input type="hidden" name="action" value="permisos_especiales"/>
+    <div class="col-12">
+        <div class="alert alert-info py-2 small mb-2">
+            <i class="fa fa-circle-info me-1"></i>
+            Permisos puntuales de <strong>{{ filtro.nombre_corto }}</strong>, independientes de sus grupos.
+        </div>
+        {% for p in permisos_especiales %}
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" name="permisos" value="{{ p.clave }}"
+                       id="perm_{{ forloop.counter }}" {% if p.asignado %}checked{% endif %}>
+                <label class="form-check-label" for="perm_{{ forloop.counter }}">
+                    <strong>{{ p.nombre }}</strong>
+                    <div class="text-muted small">{{ p.descripcion }}</div>
+                </label>
+            </div>
+        {% empty %}
+            <div class="text-muted small">No hay permisos especiales definidos.</div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="border-top my-3"></div>
+
+<div class="d-flex justify-content-end">
+    <button type="button" class="btn btn-danger btn-sm me-1" data-bs-dismiss="modal">
+        <i class="fa fa-window-close me-1"></i>Cancelar
+    </button>
+    <button type="submit" class="btn btn-success btn-sm">
+        <i class="fa fa-save me-1"></i>Guardar
+    </button>
+</div>
+
+{% include 'base_formulario_modal.html' %}

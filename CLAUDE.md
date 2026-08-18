@@ -17,7 +17,9 @@
 - `autenticacion/` — `Usuario` (custom `AUTH_USER_MODEL`), login, profile, password recovery
 - `seguridad/` — modules, groups, permissions, configuration, database backups, notifications
 - `whatsapp/` — sessions, contacts, conversations, messages, campaigns, templates, tariffs, pipelines, analytics, traces; webhooks for Baileys + Meta; WebSocket consumers
-- `crm/` — chatbot flow engine, AI endpoints, agent wizard, departments, training
+- `crm/` — chatbot flow engine, AI endpoints, agent wizard, departments, training, Centro de IA (`/crm/centro-ia/`)
+- `objetos/` — objetos y campos personalizados definidos en runtime (metadata + JSONB). Una sola vista atiende todas las entidades; ver `objetos/README.md`
+- `automatizacion/` — motor de reglas transversal (evento → condiciones → acciones con espera persistida). Distinto del motor de flujos del chat; ver `automatizacion/README.md`
 - `agents_ai/` — AI agents (consultor/resumidor/auditor), tool builder, vector store, providers
 - `voz/` — voice AI (Piper TTS demo lives in `scripts/`)
 - `meta/` — Meta-specific integration helpers
@@ -28,7 +30,15 @@
 
 Deep-dive technical references for specific modules live under `.ai/docs/`. **Always read the relevant doc before touching the corresponding module** — they capture views, templates, JS, WebSocket flows, and business rules that aren't obvious from the code alone.
 
+- `.ai/docs/funcionalidades.md` — **mapa completo de funcionalidades del producto**: todas las features, casos de uso y puntos de entrada (URL/vista) de cada app. Leer primero cuando la tarea requiera entender qué hace el sistema, qué existe ya o dónde vive una funcionalidad.
+- `.ai/docs/estudio_gohighlevel.md` — **estudio competitivo y hoja de ruta de producto**: superficie completa de GoHighLevel (269 endpoints en 19 dominios + capa de producto), análisis de brechas contra fastchat, referencia de arquitectura de EspoCRM y Twenty para objetos custom, y plan por fases. Leer antes de proponer features nuevas o discutir prioridades de producto.
 - `.ai/docs/conversaciones.md` — `whatsapp/conversaciones/` and `whatsapp/conversaciones-finalizadas/`: views, helpers, GET/POST actions, listing filters, partials, JS patterns, WebSocket consumers (`ChatConsumer`, `SessionRoomConsumer`), webhook → broadcast flow, 6h reactivation window, Meta template flow, and rules for adding actions/filters/panels/message types.
+- `.ai/docs/asignacion_asesores.md` — single source of truth for **who attends** a conversation (the WhatsApp session via `PerfilSesionWhatsApp`, not departments), the assignment chain (`candidatos_ordenados`), workload + availability selection, flow notifications, and the traditional chatbot motor (`motor_flujo_chatbot.py`): accent-insensitive matching, re-show on invalid input, timeout→handoff, anti-rewind. Read before touching asesor assignment or the flow engine.
+- `.ai/docs/instagram_comentarios.md` — social comments inbox (`ComentarioSocial`), the `instagram/` and `tiktok/` control-layer apps, and the multichannel roadmap.
+- `.ai/docs/tiktok_integracion.md` — TikTok Business Messaging API plan (beta approval, OAuth, webhook).
+- `meta/README.md` — what each file in the `meta/` Graph API package is for.
+
+**Doc-sync rule:** whenever you create or modify a file inside `agents_ai/`, `whatsapp/`, `meta/`, `instagram/`, `tiktok/`, `cron_jobs/` or (future) `facebook/`, update the module's `.md` in the same change — the folder's `README.md` and/or the matching doc under `.ai/docs/`. If none exists yet, create it. A code change in those folders is not complete until its doc reflects it. **One `.md` per folder/module** — never one per `.py` file; document each script as a section inside the folder's single `README.md`.
 
 ## Server & Background Jobs
 
@@ -105,7 +115,9 @@ Always check the current version in the template before incrementing.
 
 ## Language & Copy
 
-All visible text in views and templates must be in **English**: `titulo`, alert messages, button labels, column headers, log messages, `messages.success/error`, and exception strings. Backend variable names may remain in Spanish (`criterio`, `filtro`, `listado`) for consistency with the existing codebase.
+Todo texto visible para el usuario en views y templates debe estar en **español**: `titulo`, mensajes de alertas y SweetAlert, labels de botones, encabezados de columnas, mensajes de log, `messages.success/error`, strings de excepciones, copys de ayuda, badges, tooltips y `JsonResponse({'message': ...})`. Los nombres de variables backend se mantienen en español (`criterio`, `filtro`, `listado`, `usuarios`) — siempre fue la convención. Términos técnicos universales (push, URL, endpoint, service worker, API, Meta, WhatsApp) no se traducen.
+
+Detalles y ejemplos en `.ai/docs/lenguaje.md`.
 
 ## Soft Delete
 

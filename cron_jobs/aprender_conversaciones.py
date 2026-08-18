@@ -94,7 +94,7 @@ def _actualizar_perfil_contacto(conv, ag, log_fn=None) -> bool:
     """
     if not conv.contacto_id or not ag:
         return False
-    apikey = ag.apikey.filter(estado=True).first()
+    apikey = ag.apikey_activa()
     if not apikey:
         return False
     # AgenteResumidor resuelve el LLM vía el registro de providers (2/3/4/5).

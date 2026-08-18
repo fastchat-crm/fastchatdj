@@ -21,15 +21,15 @@ import uuid
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
 from django.http import JsonResponse
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.template.loader import get_template
 from django.urls import reverse
 
-from core.funciones import addData, log, secure_module
+from core.funciones import addData, encrypt_sesion_id, log, secure_module
 
 from autenticacion.models import Usuario
 
-from .models import SesionWhatsApp, ConfigBaileys, PerfilSesionWhatsApp
+from .models import SesionWhatsApp, ConfigBaileys, ConfigMeta, PerfilSesionWhatsApp, ROLES_SESION
 from .services import WhatsAppService
 
 import json
@@ -148,9 +148,74 @@ def _accion_delete(request):
             pass
     sesion.status = False
     sesion.estado = 'desconectado'
-    sesion.save(update_fields=['status', 'estado'])
-    log(f"Sesion {sesion.id} eliminada", request, "del", obj=sesion.id)
+    sesion.save(
+        request=request,
+        update_fields=['status', 'estado', 'fecha_modificacion', 'usuario_modificacion'],
+    )
+    log(f"Sesion {sesion.id} eliminada (soft) status=False", request, "del", obj=sesion.id)
     return JsonResponse({'error': False, 'message': 'Sesión eliminada.'})
+
+
+def _accion_delete_pausadas_huerfanas(request):
+    qs = (
+        SesionWhatsApp.objects.filter(status=True, usuario=request.user, activo=False)
+        .annotate(_nc=Count('contacto'))
+        .filter(_nc=0)
+    )
+    ids = list(qs.values_list('id', flat=True))
+    if not ids:
+        return JsonResponse({'error': False, 'eliminadas': 0, 'message': 'No orphan paused sessions to delete.'})
+    eliminadas = 0
+    for sesion in qs:
+        if sesion.es_baileys:
+            try:
+                WhatsAppService().close_session(sesion.session_id)
+            except Exception:
+                pass
+        sesion.status = False
+        sesion.estado = 'desconectado'
+        sesion.save(
+            request=request,
+            update_fields=['status', 'estado', 'fecha_modificacion', 'usuario_modificacion'],
+        )
+        eliminadas += 1
+    log(f"Bulk delete pausadas huerfanas: {eliminadas} sesiones (ids={ids})", request, "del")
+    return JsonResponse({
+        'error': False,
+        'eliminadas': eliminadas,
+        'message': f'{eliminadas} paused orphan session(s) deleted.'
+    })
+
+
+def _accion_delete_bulk(request):
+    raw = request.POST.get('ids') or ''
+    try:
+        ids = [int(x) for x in raw.split(',') if x.strip().isdigit()]
+    except Exception:
+        ids = []
+    if not ids:
+        return JsonResponse({'error': True, 'message': 'No session ids provided.'})
+    qs = SesionWhatsApp.objects.filter(id__in=ids, status=True, usuario=request.user)
+    eliminadas = 0
+    for sesion in qs:
+        if sesion.es_baileys:
+            try:
+                WhatsAppService().close_session(sesion.session_id)
+            except Exception:
+                pass
+        sesion.status = False
+        sesion.estado = 'desconectado'
+        sesion.save(
+            request=request,
+            update_fields=['status', 'estado', 'fecha_modificacion', 'usuario_modificacion'],
+        )
+        eliminadas += 1
+    log(f"Bulk delete sesiones: {eliminadas} (ids={ids})", request, "del")
+    return JsonResponse({
+        'error': False,
+        'eliminadas': eliminadas,
+        'message': f'{eliminadas} session(s) deleted.'
+    })
 
 
 def _accion_baileys_verificar(request):
@@ -212,6 +277,106 @@ def _accion_meta_validar(request):
         'waba_id': cfg.waba_id,
         'phone_number_id': cfg.phone_number_id,
         'ultima_sincronizacion': cfg.ultima_sincronizacion.isoformat() if cfg.ultima_sincronizacion else None,
+    })
+
+
+def _accion_meta_test_credenciales(request):
+    """Dry-run against Graph with credentials provided in POST.
+
+    Used by the edit panel of the transport-data modal to verify new
+    credentials before persisting them. Does not touch the database.
+    """
+    from .meta_manual_view import _validar_con_graph
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('id'), usuario=request.user).first()
+    if not sesion or not sesion.es_meta:
+        return JsonResponse({'error': True, 'message': 'Only applies to Meta sessions.'})
+
+    waba_id = (request.POST.get('waba_id') or '').strip()
+    phone_number_id = (request.POST.get('phone_number_id') or '').strip()
+    access_token = (request.POST.get('access_token') or '').strip()
+    if not (waba_id and phone_number_id and access_token):
+        return JsonResponse({'error': True, 'message': 'WABA ID, Phone Number ID and Access Token are required.'})
+
+    res = _validar_con_graph(waba_id, phone_number_id, access_token)
+    if not res.get('ok'):
+        return JsonResponse({'error': True, 'message': res.get('error', 'Meta rejected the credentials.')})
+
+    return JsonResponse({
+        'error': False,
+        'message': 'Meta accepted the credentials.',
+        'waba_name': res.get('waba_name', ''),
+        'display_phone_number': res.get('display_phone_number', ''),
+        'verified_name': res.get('verified_name', ''),
+        'quality_rating': res.get('quality_rating', ''),
+    })
+
+
+def _accion_meta_actualizar_credenciales(request):
+    """Persist new credentials for an existing Meta session.
+
+    Re-validates against Graph, updates ConfigMeta, marks the session as
+    connected and re-subscribes the WABA to the Meta App.
+    """
+    from .meta_manual_view import _validar_con_graph, _suscribir_waba_a_app
+    from .sesiones_common import sincronizar_meta_desde_graph
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('id'), usuario=request.user).first()
+    if not sesion or not sesion.es_meta:
+        return JsonResponse({'error': True, 'message': 'Only applies to Meta sessions.'})
+    cfg = getattr(sesion, 'config_meta', None)
+    if not cfg:
+        return JsonResponse({'error': True, 'message': 'Session has no ConfigMeta loaded.'})
+
+    waba_id = (request.POST.get('waba_id') or '').strip()
+    phone_number_id = (request.POST.get('phone_number_id') or '').strip()
+    business_account_id = (request.POST.get('business_account_id') or '').strip()
+    display_phone_number = (request.POST.get('display_phone_number') or '').strip()
+    access_token = (request.POST.get('access_token') or '').strip()
+    if not (waba_id and phone_number_id and access_token):
+        return JsonResponse({'error': True, 'message': 'WABA ID, Phone Number ID and Access Token are required.'})
+
+    clash = ConfigMeta.objects.filter(phone_number_id=phone_number_id).exclude(sesion_id=sesion.id).first()
+    if clash:
+        return JsonResponse({
+            'error': True,
+            'message': f'Phone Number ID {phone_number_id} is already used by another session.',
+        })
+
+    chequeo = _validar_con_graph(waba_id, phone_number_id, access_token)
+    if not chequeo.get('ok'):
+        return JsonResponse({'error': True, 'message': chequeo.get('error', 'Meta rejected the credentials.')})
+
+    cfg.waba_id = waba_id
+    cfg.phone_number_id = phone_number_id
+    cfg.business_account_id = business_account_id or None
+    cfg.display_phone_number = display_phone_number or chequeo.get('display_phone_number') or cfg.display_phone_number
+    cfg.verified_name = chequeo.get('verified_name') or cfg.verified_name
+    cfg.quality_rating = chequeo.get('quality_rating') or cfg.quality_rating or 'UNKNOWN'
+    cfg.access_token = access_token
+    cfg.alta_manual = True
+    cfg.save(request)
+
+    sesion.numero = cfg.display_phone_number or sesion.numero
+    if sesion.estado != 'conectado':
+        sesion.estado = 'conectado'
+    sesion.save(request)
+
+    try:
+        sincronizar_meta_desde_graph(sesion, cfg)
+    except Exception as ex:
+        logger.warning("sincronizar_meta_desde_graph failed on credentials update: %s", ex)
+
+    sub_res = _suscribir_waba_a_app(waba_id, access_token)
+    log(f"Meta credentials updated for session {sesion.id}", request, "change", obj=sesion.id)
+
+    return JsonResponse({
+        'error': False,
+        'message': 'Credentials updated and connection re-tested successfully.',
+        'estado': sesion.estado,
+        'numero': sesion.numero,
+        'display_phone_number': cfg.display_phone_number or '',
+        'verified_name': cfg.verified_name or '',
+        'waba_suscrita': sub_res.get('ok'),
+        'waba_suscrita_error': sub_res.get('error') if not sub_res.get('ok') else None,
     })
 
 
@@ -292,6 +457,43 @@ def _accion_editar(request):
     sesion.mensaje_bienvenida = (request.POST.get('mensaje_bienvenida') or '').strip() or None
     sesion.mensaje_despedida   = (request.POST.get('mensaje_despedida')   or '').strip() or None
     sesion.mensaje_handoff     = (request.POST.get('mensaje_handoff')     or '').strip() or None
+    sesion.mensaje_reconexion  = (request.POST.get('mensaje_reconexion')  or '').strip() or None
+    sesion.reconexion_activa   = (request.POST.get('reconexion_activa') in ('on', 'true', '1', 'True'))
+    sesion.auto_asignar_round_robin = (
+        request.POST.get('auto_asignar_round_robin') in ('on', 'true', '1', 'True')
+    )
+    horas_aviso_raw = (request.POST.get('horas_aviso_por_caducar') or '').strip()
+    if horas_aviso_raw:
+        if not horas_aviso_raw.isdigit():
+            return JsonResponse([{
+                'error': True,
+                'message': 'El aviso de ventana por caducar debe ser un número entero de horas.',
+                'form': [{'horas_aviso_por_caducar': 'Valor inválido.'}],
+            }], safe=False)
+        horas_aviso_val = int(horas_aviso_raw)
+        if horas_aviso_val < 1 or horas_aviso_val > 23:
+            return JsonResponse([{
+                'error': True,
+                'message': 'El aviso de ventana por caducar debe estar entre 1 y 23 horas.',
+                'form': [{'horas_aviso_por_caducar': 'Rango permitido: 1 a 23.'}],
+            }], safe=False)
+        sesion.horas_aviso_por_caducar = horas_aviso_val
+    horas_reactivar_raw = (request.POST.get('horas_reactivar_bot') or '').strip()
+    if horas_reactivar_raw:
+        if not horas_reactivar_raw.isdigit():
+            return JsonResponse([{
+                'error': True,
+                'message': 'La reactivación del bot debe ser un número entero de horas.',
+                'form': [{'horas_reactivar_bot': 'Valor inválido.'}],
+            }], safe=False)
+        horas_reactivar_val = int(horas_reactivar_raw)
+        if horas_reactivar_val > 720:
+            return JsonResponse([{
+                'error': True,
+                'message': 'La reactivación del bot no puede superar las 720 horas (30 días).',
+                'form': [{'horas_reactivar_bot': 'Rango permitido: 0 a 720.'}],
+            }], safe=False)
+        sesion.horas_reactivar_bot = horas_reactivar_val
     min_sesion_raw = (request.POST.get('min_sesion') or '').strip()
     if min_sesion_raw:
         if not min_sesion_raw.isdigit():
@@ -301,11 +503,11 @@ def _accion_editar(request):
                 'form': [{'min_sesion': 'Valor inválido.'}],
             }], safe=False)
         min_sesion_val = int(min_sesion_raw)
-        if min_sesion_val < 1 or min_sesion_val > 720:
+        if min_sesion_val < 1 or min_sesion_val > 1440:
             return JsonResponse([{
                 'error': True,
-                'message': 'La duración de la sesión debe estar entre 1 y 720 minutos (12 horas).',
-                'form': [{'min_sesion': 'Rango permitido: 1 a 720.'}],
+                'message': 'La duración de la sesión debe estar entre 1 y 1440 minutos (24 horas).',
+                'form': [{'min_sesion': 'Rango permitido: 1 a 1440.'}],
             }], safe=False)
         sesion.min_sesion = min_sesion_val
     # Agente IA (opcional — llega como id o vacio)
@@ -438,6 +640,96 @@ def _accion_menu_rapido_eliminar(request):
     return JsonResponse({'error': False, 'message': 'Menú eliminado.'})
 
 
+@login_required
+def mensajes_rapidos_view(request, sesion_id):
+    """Página de configuración de mensajes rápidos de una sesión: respuestas
+    rápidas + menús rápidos, cada uno con su listado y CRUD (no modal).
+    Estilo /agenda/configuracion/. El CRUD usa las acciones AJAX existentes.
+    """
+    from .models import RespuestaRapidaSesion, MenuRapidoSesion
+    sesion = SesionWhatsApp.objects.filter(id=sesion_id, usuario=request.user).first()
+    if not sesion:
+        return redirect('/whatsapp/sesiones/')
+    data = {
+        'titulo': f'Mensajes rápidos · {sesion.nombre or sesion.numero}',
+        'ruta': request.path,
+        'sesion': sesion,
+        'respuestas': RespuestaRapidaSesion.objects.filter(
+            sesion=sesion, status=True).order_by('titulo'),
+        'menus': MenuRapidoSesion.objects.filter(
+            sesion=sesion, status=True).order_by('nombre'),
+        'tab': (request.GET.get('tab') or 'respuestas'),
+    }
+    addData(request, data)
+    return render(request, 'whatsapp/sesiones/mensajes_rapidos.html', data)
+
+
+def _accion_respuesta_rapida_listar(request):
+    """Lista las respuestas rápidas (texto guardado) de una sesión para el
+    panel del composer en /whatsapp/conversaciones/."""
+    from .models import RespuestaRapidaSesion
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('sesion_id'), usuario=request.user).first()
+    if not sesion:
+        return JsonResponse({'error': True, 'message': 'Sesión no encontrada.'})
+    items = list(
+        RespuestaRapidaSesion.objects.filter(sesion=sesion, status=True).order_by('titulo')
+        .values('id', 'titulo', 'cuerpo')
+    )
+    return JsonResponse({'error': False, 'sesion_id': sesion.id, 'items': items})
+
+
+def _accion_respuesta_rapida_guardar(request):
+    """Crea o actualiza una respuesta rápida. Si vino `id`, edita; si no, crea."""
+    from .models import RespuestaRapidaSesion
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('sesion_id'), usuario=request.user).first()
+    if not sesion:
+        return JsonResponse({'error': True, 'message': 'Sesión no encontrada.'})
+    titulo = (request.POST.get('titulo') or '').strip()
+    if not titulo:
+        return JsonResponse({'error': True, 'message': 'El título es obligatorio.'})
+    cuerpo = (request.POST.get('cuerpo') or '').strip()
+    if not cuerpo:
+        return JsonResponse({'error': True, 'message': 'El mensaje es obligatorio.'})
+
+    defaults = {
+        'sesion': sesion,
+        'titulo': titulo[:80],
+        'cuerpo': cuerpo[:4096],
+    }
+    resp_id = request.POST.get('id') or ''
+    if resp_id.isdigit():
+        resp = RespuestaRapidaSesion.objects.filter(id=int(resp_id), sesion=sesion).first()
+        if not resp:
+            return JsonResponse({'error': True, 'message': 'Respuesta no encontrada.'})
+        for k, v in defaults.items():
+            setattr(resp, k, v)
+        resp.save()
+        creado = False
+    else:
+        resp = RespuestaRapidaSesion.objects.create(**defaults)
+        creado = True
+    log(f"Respuesta rápida {'creada' if creado else 'actualizada'}: sesion={sesion.id} resp={resp.id}",
+        request, "add" if creado else "change", obj=resp.id)
+    return JsonResponse({
+        'error': False, 'creado': creado, 'respuesta_id': resp.id,
+        'message': 'Respuesta guardada.',
+    })
+
+
+def _accion_respuesta_rapida_eliminar(request):
+    from .models import RespuestaRapidaSesion
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('sesion_id'), usuario=request.user).first()
+    if not sesion:
+        return JsonResponse({'error': True, 'message': 'Sesión no encontrada.'})
+    resp = RespuestaRapidaSesion.objects.filter(id=request.POST.get('id'), sesion=sesion).first()
+    if not resp:
+        return JsonResponse({'error': True, 'message': 'Respuesta no encontrada.'})
+    resp.status = False
+    resp.save()
+    log(f"Respuesta rápida eliminada: {resp.id}", request, "del", obj=resp.id)
+    return JsonResponse({'error': False, 'message': 'Respuesta eliminada.'})
+
+
 def _accion_menu_rapido_enviar(request):
     """Envía un menú rápido a una conversación activa. Auto-detecta canal:
     Meta → interactive buttons (≤3) o list (>3). Baileys → texto numerado."""
@@ -558,15 +850,20 @@ def _accion_guardar_usuarios(request):
         pk = int(request.POST['pk'])
         sesion = SesionWhatsApp.objects.get(pk=pk, usuario=request.user)
         ids_usuarios = json.loads(request.POST.get('usuarios', '[]'))
+        rol = request.POST.get('rol', 'asesor')
+        if rol not in dict(ROLES_SESION):
+            rol = 'asesor'
         usuarios_creados = []
         for uid in ids_usuarios:
             usuario = Usuario.objects.get(pk=uid)
             ya_existe = PerfilSesionWhatsApp.objects.filter(sesion=sesion, usuario=usuario, status=True).exists()
             if not ya_existe:
-                relacion = PerfilSesionWhatsApp.objects.create(sesion=sesion, usuario=usuario)
+                relacion = PerfilSesionWhatsApp.objects.create(sesion=sesion, usuario=usuario, rol=rol)
                 usuarios_creados.append({
                     'id': usuario.id,
                     'id_relacion': relacion.id,
+                    'rol': relacion.rol,
+                    'rol_label': relacion.get_rol_display(),
                     'nombre': usuario.full_name(),
                     'documento': usuario.documento,
                     'email': usuario.email,
@@ -577,6 +874,42 @@ def _accion_guardar_usuarios(request):
         return JsonResponse({'result': True, 'usuarios': usuarios_creados})
     except Exception as ex:
         return JsonResponse({'result': False, 'message': str(ex)})
+
+
+def _accion_cambiar_rol_usuario(request):
+    try:
+        rol = request.POST.get('rol', '')
+        if rol not in dict(ROLES_SESION):
+            return JsonResponse({'error': True, 'message': 'Invalid role.'})
+        filtro = PerfilSesionWhatsApp.objects.get(
+            pk=int(request.POST['id']), status=True, sesion__usuario=request.user,
+        )
+        filtro.rol = rol
+        filtro.save(request)
+        log(f"Rol cambiado en sesión {filtro.sesion_id}", request, "change", obj=filtro.id)
+        return JsonResponse({'error': False, 'rol': filtro.rol, 'rol_label': filtro.get_rol_display()})
+    except PerfilSesionWhatsApp.DoesNotExist:
+        return JsonResponse({'error': True, 'message': 'Relation not found.'})
+    except Exception as ex:
+        return JsonResponse({'error': True, 'message': str(ex)})
+
+
+def _accion_toggle_asignacion_masiva(request):
+    """Marca/desmarca el permiso por sesión para repartir de golpe las
+    conversaciones sin asesor (botón "Asignación automática" del inbox)."""
+    try:
+        filtro = PerfilSesionWhatsApp.objects.get(
+            pk=int(request.POST['id']), status=True, sesion__usuario=request.user,
+        )
+        filtro.puede_asignar_masivo_asesores = request.POST.get('valor') == '1'
+        filtro.save(request)
+        estado = 'habilitado' if filtro.puede_asignar_masivo_asesores else 'deshabilitado'
+        log(f"Permiso de asignación masiva {estado} en sesión {filtro.sesion_id}", request, "change", obj=filtro.id)
+        return JsonResponse({'error': False, 'valor': filtro.puede_asignar_masivo_asesores})
+    except PerfilSesionWhatsApp.DoesNotExist:
+        return JsonResponse({'error': True, 'message': 'Relación no encontrada.'})
+    except Exception as ex:
+        return JsonResponse({'error': True, 'message': str(ex)})
 
 
 def _accion_eliminar_usuario(request):
@@ -590,21 +923,244 @@ def _accion_eliminar_usuario(request):
         return JsonResponse({'error': True, 'message': str(ex)})
 
 
+def _accion_ads_guardar_config(request):
+    """Guarda la cuenta publicitaria y el token de anuncios en ConfigMeta."""
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('sesion_id') or request.POST.get('id'),
+                                           usuario=request.user).first()
+    if not sesion or not sesion.es_meta:
+        return JsonResponse({'error': True, 'message': 'Sesión Meta no encontrada.'})
+    cfg = getattr(sesion, 'config_meta', None)
+    if not cfg:
+        return JsonResponse({'error': True, 'message': 'La sesión no tiene configuración Meta.'})
+    cfg.ad_account_id = (request.POST.get('ad_account_id') or '').strip()[:64]
+    nuevo_token = (request.POST.get('ads_access_token') or '').strip()
+    if nuevo_token:
+        cfg.ads_access_token = nuevo_token
+    cfg.save()
+    log(f"Config de anuncios actualizada: sesion={sesion.id}", request, "change", obj=sesion.id)
+    return JsonResponse({'error': False, 'message': 'Configuración de anuncios guardada.'})
+
+
+def _accion_ads_probar(request):
+    """Verifica la conexión a la Marketing API con la cuenta publicitaria."""
+    from .services_ads import MetaAdsService
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('sesion_id') or request.POST.get('id'),
+                                           usuario=request.user).first()
+    if not sesion or not sesion.es_meta:
+        return JsonResponse({'error': True, 'message': 'Sesión Meta no encontrada.'})
+    cfg = getattr(sesion, 'config_meta', None)
+    if not cfg:
+        return JsonResponse({'error': True, 'message': 'La sesión no tiene configuración Meta.'})
+    res = MetaAdsService(cfg).probar_conexion()
+    if res.get('error'):
+        return JsonResponse({'error': True, 'message': res.get('message') or 'No se pudo conectar.'})
+    return JsonResponse({
+        'error': False,
+        'message': 'Conexión OK.',
+        'name': res.get('name'),
+        'currency': res.get('currency'),
+        'amount_spent': res.get('amount_spent'),
+        'business_name': res.get('business_name'),
+    })
+
+
+def _accion_ads_campanas(request):
+    """Extrae las campañas de la cuenta publicitaria de Meta para conocerlas.
+
+    Solo lectura sobre la Marketing API; además cachea los nombres en
+    `AnuncioMetaCache` para que el reporte de leads por campaña
+    (`/whatsapp/campanas/?action=reporte`) deje de mostrar IDs crudos.
+    """
+    from .services_ads import MetaAdsService
+    from .models import AnuncioMetaCache
+
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('sesion_id') or request.POST.get('id'),
+                                           usuario=request.user).first()
+    if not sesion or not sesion.es_meta:
+        return JsonResponse({'error': True, 'message': 'Sesión Meta no encontrada.'})
+    cfg = getattr(sesion, 'config_meta', None)
+    if not cfg:
+        return JsonResponse({'error': True, 'message': 'La sesión no tiene configuración Meta.'})
+
+    servicio = MetaAdsService(cfg)
+    if not servicio.configurado:
+        return JsonResponse({
+            'error': True,
+            'message': 'Falta la cuenta publicitaria (act_XXXX) o el token de anuncios en esta sesión.',
+        })
+
+    solo_activas = request.POST.get('solo_activas') in ('on', 'true', '1', 'True')
+    res = servicio.listar_campanas()
+    if res.get('error'):
+        return JsonResponse({'error': True, 'message': res.get('message') or 'Meta rechazó la consulta.'})
+
+    filas = res.get('rows') or []
+    if solo_activas:
+        filas = [f for f in filas if (f.get('effective_status') or f.get('status')) == 'ACTIVE']
+
+    for f in filas:
+        campaign_id = (f.get('id') or '').strip()
+        nombre = (f.get('name') or '').strip()
+        if not campaign_id or not nombre:
+            continue
+        cacheadas = AnuncioMetaCache.objects.filter(campaign_id=campaign_id)
+        datos = {
+            'campaign_name': nombre[:300],
+            'effective_status': (f.get('effective_status') or f.get('status') or '')[:40],
+            'ultima_sync': timezone.now(),
+        }
+        if cacheadas.exists():
+            cacheadas.update(**datos)
+        else:
+            AnuncioMetaCache.objects.update_or_create(
+                ad_id=f'campaign:{campaign_id}',
+                defaults=dict(datos, campaign_id=campaign_id),
+            )
+
+    log(f"Campañas de Meta extraídas: sesion={sesion.id} ({len(filas)})", request, "change", obj=sesion.id)
+    return JsonResponse({
+        'error': False,
+        'message': f'{len(filas)} campañas encontradas.',
+        'campanas': [
+            {
+                'id': f.get('id'),
+                'nombre': f.get('name'),
+                'objetivo': f.get('objective'),
+                'estado': f.get('effective_status') or f.get('status'),
+                'inicio': f.get('start_time'),
+                'fin': f.get('stop_time'),
+            }
+            for f in filas
+        ],
+    })
+
+
+def _accion_antiban_estado(request):
+    """Cuota del día y calentamiento de una sesión Baileys.
+
+    Solo aplica al gateway no oficial: las sesiones Meta no pasan por el
+    anti-ban y devuelven `aplica: False` para que la UI no muestre el panel.
+    """
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('id'), usuario=request.user).first()
+    if not sesion:
+        return JsonResponse({'error': True, 'message': 'Sesión no encontrada.'})
+    if not sesion.es_baileys:
+        return JsonResponse({'error': False, 'aplica': False,
+                             'message': 'Esta sesión usa la API oficial de Meta: no pasa por el anti-baneo.'})
+
+    res = WhatsAppService().get_antiban_estado(sesion.session_id)
+    if not res.get('success'):
+        return JsonResponse({'error': True, 'message': res.get('error') or 'No se pudo leer el estado.'})
+
+    datos = res.get('antiban') or {}
+    cuota = int(datos.get('cuotaDiaria') or 0)
+    usados = int(datos.get('enviadosHoy') or 0)
+    # El anti-ban recién registra la sesión cuando el socket abre por primera
+    # vez: hasta entonces devuelve los valores de una sesión nueva (día 0, cuota
+    # mínima) aunque el número lleve meses dado de alta. Sin avisarlo, el panel
+    # diría "en calentamiento" de un número que en realidad ya está establecido.
+    return JsonResponse({
+        'error': False,
+        'aplica': True,
+        'antiban': datos,
+        'conectada': sesion.estado == 'conectado',
+        'porcentaje': round((usados / cuota) * 100) if cuota else 0,
+    })
+
+
+def _accion_antiban_verificar_lote(request):
+    """Verifica una lista de números contra WhatsApp antes de una campaña.
+
+    Devuelve tres grupos: los que existen, los que no y los indeterminados.
+    **Un indeterminado no es un número malo** — es que WhatsApp no respondió la
+    consulta —, así que se reporta aparte para no descartar contactos buenos por
+    un timeout.
+    """
+    sesion = SesionWhatsApp.objects.filter(id=request.POST.get('id'), usuario=request.user).first()
+    if not sesion:
+        return JsonResponse({'error': True, 'message': 'Sesión no encontrada.'})
+    if not sesion.es_baileys:
+        return JsonResponse({'error': True,
+                             'message': 'La verificación de números solo está disponible en sesiones no oficiales.'})
+
+    crudo = (request.POST.get('numeros') or '').strip()
+    if not crudo:
+        return JsonResponse({'error': True, 'message': 'Pegá al menos un número para verificar.'})
+
+    import re
+    numeros, vistos = [], set()
+    for parte in re.split(r'[\s,;]+', crudo):
+        limpio = re.sub(r'\D', '', parte)
+        if limpio and limpio not in vistos:
+            vistos.add(limpio)
+            numeros.append(limpio)
+
+    if not numeros:
+        return JsonResponse({'error': True, 'message': 'No se reconoció ningún número en el texto.'})
+
+    TOPE = 200
+    recortados = max(0, len(numeros) - TOPE)
+    numeros = numeros[:TOPE]
+
+    servicio = WhatsAppService()
+    existen, no_existen, indeterminados = [], [], []
+    for numero in numeros:
+        res = servicio.verificar_numero(sesion.session_id, numero)
+        if not res.get('success'):
+            indeterminados.append(numero)
+        elif res.get('existe') is True:
+            existen.append(numero)
+        elif res.get('existe') is False:
+            no_existen.append(numero)
+        else:
+            indeterminados.append(numero)
+
+    partes = [f'{len(existen)} con WhatsApp', f'{len(no_existen)} sin WhatsApp']
+    if indeterminados:
+        partes.append(f'{len(indeterminados)} sin confirmar')
+    mensaje = ' · '.join(partes)
+    if recortados:
+        mensaje += f'. Se verificaron los primeros {TOPE}; quedaron {recortados} sin revisar.'
+
+    return JsonResponse({
+        'error': False,
+        'message': mensaje,
+        'existen': existen,
+        'no_existen': no_existen,
+        'indeterminados': indeterminados,
+        'recortados': recortados,
+    })
+
+
 _ACCIONES = {
+    'antiban_estado':              _accion_antiban_estado,
+    'antiban_verificar_lote':      _accion_antiban_verificar_lote,
     'baileys_start':               _accion_baileys_start,
     'baileys_status':              _accion_baileys_status,
     'baileys_verificar':           _accion_baileys_verificar,
     'disconnect':                  _accion_disconnect,
     'delete':                      _accion_delete,
+    'delete_bulk':                 _accion_delete_bulk,
+    'delete_pausadas_huerfanas':   _accion_delete_pausadas_huerfanas,
     'meta_validar':                _accion_meta_validar,
+    'meta_test_credenciales':      _accion_meta_test_credenciales,
+    'meta_actualizar_credenciales': _accion_meta_actualizar_credenciales,
     'meta_plantilla_prueba':       _accion_meta_plantilla_prueba,
     'editar':                      _accion_editar,
     'toggle_activo':               _accion_toggle_activo,
+    'ads_guardar_config':          _accion_ads_guardar_config,
+    'ads_probar':                  _accion_ads_probar,
+    'ads_campanas':                _accion_ads_campanas,
     'menu_rapido_listar':          _accion_menu_rapido_listar,
     'menu_rapido_guardar':         _accion_menu_rapido_guardar,
     'menu_rapido_eliminar':        _accion_menu_rapido_eliminar,
     'menu_rapido_enviar':          _accion_menu_rapido_enviar,
+    'respuesta_rapida_listar':     _accion_respuesta_rapida_listar,
+    'respuesta_rapida_guardar':    _accion_respuesta_rapida_guardar,
+    'respuesta_rapida_eliminar':   _accion_respuesta_rapida_eliminar,
     'guardar_usuarios':            _accion_guardar_usuarios,
+    'cambiar_rol_usuario':         _accion_cambiar_rol_usuario,
+    'toggle_asignacion_masiva':    _accion_toggle_asignacion_masiva,
     'eliminar_usuario':            _accion_eliminar_usuario,
 }
 
@@ -695,6 +1251,27 @@ def _get_partial(request, accion):
         ).order_by('nombre') if cfg else []
         tpl = 'whatsapp/sesiones/_modal_plantilla_prueba.html'
 
+    elif accion == 'respuestas_rapidas_modal':
+        from .models import RespuestaRapidaSesion
+        ctx['respuestas'] = RespuestaRapidaSesion.objects.filter(
+            sesion=sesion, status=True,
+        ).order_by('titulo')
+        tpl = 'whatsapp/sesiones/_modal_respuestas_rapidas.html'
+
+    elif accion == 'menus_rapidos_modal':
+        from .models import MenuRapidoSesion
+        ctx['menus'] = MenuRapidoSesion.objects.filter(
+            sesion=sesion, status=True,
+        ).order_by('nombre')
+        tpl = 'whatsapp/sesiones/_modal_menus_rapidos.html'
+
+    elif accion == 'ads_config_modal':
+        cfg = getattr(sesion, 'config_meta', None)
+        ctx['config_meta'] = cfg
+        ctx['ad_account_id'] = getattr(cfg, 'ad_account_id', '') if cfg else ''
+        ctx['tiene_token_ads'] = bool(getattr(cfg, 'ads_access_token', '')) if cfg else False
+        tpl = 'whatsapp/sesiones/_modal_ads_config.html'
+
     else:
         return JsonResponse({'ok': False, 'message': 'Partial desconocido.'})
 
@@ -731,11 +1308,65 @@ def sesionesView(request):
             if not sesion:
                 return JsonResponse({'result': False, 'message': 'Sesión no encontrada.'})
             html = get_template('whatsapp/sesiones/_modal_usuarios.html').render(
-                {'sesion': sesion, 'filtro': sesion, 'request': request},
+                {'sesion': sesion, 'filtro': sesion, 'roles': ROLES_SESION, 'request': request},
                 request,
             )
             return JsonResponse({'result': True, 'data': html})
         except Exception as ex:
+            return JsonResponse({'result': False, 'message': str(ex)})
+
+    if accion_get == 'post-conexion':
+        try:
+            from django.conf import settings
+            from .common_meta import get_meta_app_credentials
+            from .models import PlantillaWhatsApp
+            pk = int(request.GET.get('id') or 0)
+            sesion = SesionWhatsApp.objects.filter(id=pk, usuario=request.user).first()
+            if not sesion:
+                return JsonResponse({'result': False, 'message': 'Sesion no encontrada.'})
+            if not sesion.es_meta:
+                return JsonResponse({'result': False, 'message': 'Solo aplica a sesiones Meta.'})
+            cfg = getattr(sesion, 'config_meta', None)
+            if not cfg:
+                return JsonResponse({'result': False, 'message': 'La sesion no tiene ConfigMeta cargada.'})
+            app_id, _ = get_meta_app_credentials()
+            bid = cfg.business_account_id or ''
+            if not bid:
+                try:
+                    from seguridad.models import Configuracion, CredencialMetaApp
+                    confi = Configuracion.get_instancia()
+                    if confi and confi.pk:
+                        cred = CredencialMetaApp.objects.filter(configuracion=confi).first()
+                        if cred and cred.business_id:
+                            bid = cred.business_id
+                except Exception:
+                    pass
+            # Status real del número en Meta: para no mostrar el "Paso crítico —
+            # Registrar" cuando el número ya está CONNECTED (envía/recibe OK).
+            numero_conectado = False
+            try:
+                from .meta_diagnostico_view import _consultar_phone_number
+                _pi = _consultar_phone_number(cfg)
+                if _pi.get('ok'):
+                    numero_conectado = (_pi.get('data') or {}).get('status') == 'CONNECTED'
+            except Exception:
+                pass
+            ctx = {
+                'sesion': sesion,
+                'cfg': cfg,
+                'app_id': app_id,
+                'bid': bid,
+                'numero_conectado': numero_conectado,
+                'webhook_url': getattr(settings, 'URL_GENERAL', '') + '/whatsapp/meta_webhook/',
+                'n_plantillas_aprobadas': PlantillaWhatsApp.objects.filter(
+                    config_meta=cfg, estado_meta='APPROVED', status=True,
+                ).count(),
+                'request': request,
+            }
+            html = get_template('whatsapp/sesiones/_modal_post_conexion.html').render(ctx, request)
+            return JsonResponse({'result': True, 'data': html})
+        except Exception as ex:
+            logger.exception("Error en post-conexion: %s", ex)
             return JsonResponse({'result': False, 'message': str(ex)})
 
     if accion_get == 'buscarpersonas':
@@ -769,12 +1400,107 @@ def sesionesView(request):
     }
     addData(request, data)
 
+    if request.GET.get('action') == 'carga_asesores':
+        sesion_ca = SesionWhatsApp.objects.filter(
+            id=request.GET.get('id'), status=True,
+        ).first()
+        if not sesion_ca or not (
+            sesion_ca.usuario_id == request.user.id
+            or sesion_ca.es_participante(request.user)
+            or request.user.is_superuser
+        ):
+            log('Sesión no encontrada o sin acceso al ver carga de asesores.', request)
+            return redirect('/whatsapp/sesiones/')
+        from .funciones_carga_asesores import reporte_carga_asesores
+
+        filas, resumen = reporte_carga_asesores(sesion_ca)
+        data['titulo'] = f'Carga de asesores · {sesion_ca.nombre or sesion_ca.numero}'
+        data['descripcion'] = 'Conversaciones abiertas y actividad reciente de cada asesor de la sesión.'
+        data['filas'] = filas
+        data['resumen'] = resumen
+        data['sesion_ca'] = sesion_ca
+        data['sesion_token'] = encrypt_sesion_id(sesion_ca.id)
+        data['titulo_scope'] = (
+            f'Carga de asesores de "{sesion_ca.nombre or sesion_ca.numero}" — '
+            f'conversaciones abiertas y actividad de las últimas {resumen["horas"]} horas.'
+        )
+        return render(request, 'whatsapp/sesiones/carga_asesores.html', data)
+
+    if request.GET.get('action') == 'carga_asesores_detalle':
+        sesion_det = SesionWhatsApp.objects.filter(
+            id=request.GET.get('id'), status=True,
+        ).first()
+        if not sesion_det or not (
+            sesion_det.usuario_id == request.user.id
+            or sesion_det.es_participante(request.user)
+            or request.user.is_superuser
+        ):
+            return JsonResponse({'error': True, 'message': 'Sesión no encontrada o sin acceso.'})
+        estado_det = request.GET.get('estado', '')
+        if estado_det not in ('abiertas', 'caducadas', 'pendientes', 'finalizadas'):
+            return JsonResponse({'error': True, 'message': 'Estado no válido.'})
+        from .funciones_carga_asesores import detalle_carga_asesor
+
+        filas_det = detalle_carga_asesor(sesion_det, request.GET.get('asesor'), estado_det)
+        return JsonResponse({'error': False, 'estado': estado_det, 'filas': filas_det})
+
+    if request.GET.get('action') == 'logs_notificaciones':
+        sesion_logs = SesionWhatsApp.objects.filter(
+            id=request.GET.get('id'), status=True,
+        ).first()
+        if not sesion_logs or not (
+            sesion_logs.usuario_id == request.user.id
+            or sesion_logs.es_participante(request.user)
+            or request.user.is_superuser
+        ):
+            return JsonResponse({'error': True, 'message': 'Sesión no encontrada o sin acceso.'})
+        from crm.models import LogNotificacionAsignacion
+        from django.template.loader import get_template as _get_template
+        logs = (
+            LogNotificacionAsignacion.objects
+            .filter(conversacion__contacto__sesion=sesion_logs, status=True)
+            .select_related('agente', 'conversacion')[:100]
+        )
+        html = _get_template('whatsapp/conversaciones/_modal_logs_notif.html').render({
+            'logs': logs,
+            'titulo_scope': f'Avisos de asignación de la sesión "{sesion_logs.nombre or sesion_logs.numero}" (últimos 100)',
+            'mostrar_conversacion': True,
+        })
+        return JsonResponse({'result': True, 'data': html})
+
     criterio = (request.GET.get('criterio') or '').strip()
-    filtros = Q(status=True, usuario=request.user)
+    # Este tablero es SOLO WhatsApp (baileys/meta). Instagram, Messenger y TikTok
+    # tienen su propia página (/instagram/sesiones/, /facebook/sesiones/,
+    # /tiktok/sesiones/) con su card y menú propios — no se mezclan acá.
+    filtros = Q(status=True, usuario=request.user, proveedor__in=['baileys', 'meta'])
     if criterio:
         filtros &= (Q(nombre__icontains=criterio) | Q(numero__icontains=criterio))
 
-    sesiones = SesionWhatsApp.objects.filter(filtros).select_related('config_meta').order_by('-fecha_registro')
+    # Mismo criterio que el inbox /whatsapp/conversaciones/ (manager `sin_expirar`):
+    # activa = estado_conversacion=0 + no finalizada + dentro de la ventana
+    # (fecha_hora_expira >= ahora). Sin el filtro de expiración la campanita
+    # contaba de más (conversaciones vencidas que el inbox ya no muestra).
+    from django.utils import timezone as _tz
+    _ahora_conv = _tz.now()
+    sesiones = (
+        SesionWhatsApp.objects.filter(filtros)
+        .select_related('config_meta', 'config_instagram', 'config_messenger', 'config_tiktok', 'agente_ia', 'departamento_default')
+        .prefetch_related('departamentos', 'perfilsesionwhatsapp_set__usuario')
+        .annotate(
+            conv_abiertas=Count(
+                'contacto__conversaciones',
+                filter=Q(
+                    contacto__conversaciones__estado_conversacion=0,
+                    contacto__conversaciones__conversacion_finalizada=False,
+                    contacto__conversaciones__fecha_hora_expira__gte=_ahora_conv,
+                    contacto__conversaciones__status=True,
+                    contacto__status=True,
+                ),
+                distinct=True,
+            )
+        )
+        .order_by('-fecha_registro')
+    )
     data['sesiones'] = sesiones
     data['total']    = sesiones.count()
 
@@ -783,6 +1509,16 @@ def sesionesView(request):
         pendientes=Count('id', filter=Q(estado='pendiente')),
         desconectadas=Count('id', filter=Q(estado='desconectado')),
         errores=Count('id', filter=Q(estado='error')),
+        pausadas=Count('id', filter=Q(activo=False), distinct=True),
+    )
+    stats['pausadas_huerfanas'] = (
+        SesionWhatsApp.objects.filter(
+            status=True, usuario=request.user, activo=False,
+            proveedor__in=['baileys', 'meta'],
+        )
+        .annotate(_nc=Count('contacto'))
+        .filter(_nc=0)
+        .count()
     )
     data['stats'] = stats
     data['criterio'] = criterio

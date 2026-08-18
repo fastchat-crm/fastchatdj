@@ -39,3 +39,11 @@ class ConversacionWhatsAppManager(Manager):
         # con conversacion_finalizada=True pero estado_conversacion=0
         # (estado inconsistente) aparezcan como finalizadas.
         return self.get_queryset().filter(estado_conversacion=1)
+
+    @property
+    def pendientes_reconexion(self):
+        # Conversaciones finalizadas con una plantilla de reconexión enviada,
+        # aún esperando que el cliente responda.
+        return self.get_queryset().filter(
+            estado_conversacion=1, pendiente_reconexion=True, reconectada=False
+        )

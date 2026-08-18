@@ -222,6 +222,14 @@ class Turno(ModeloBase):
     )
     notas = models.TextField('Notas', blank=True, default='')
     recordatorio_enviado = models.BooleanField('Recordatorio enviado', default=False, db_index=True)
+    recordatorio_horas_antes = models.PositiveIntegerField(
+        'Horas de anticipación del recordatorio', null=True, blank=True,
+        help_text='Anula el valor del grupo solo para este turno. Vacío = usa el del grupo.'
+    )
+    recordatorio_intentos = models.PositiveSmallIntegerField(
+        'Intentos de envío del recordatorio', default=0,
+        help_text='Cantidad de envíos fallidos; al llegar al tope el cron deja de reintentar.'
+    )
     turno_anterior = models.ForeignKey(
         'self', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='reagendamientos',

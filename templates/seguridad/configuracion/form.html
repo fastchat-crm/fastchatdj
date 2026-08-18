@@ -20,6 +20,11 @@
                         <div class="col">
                             <h5 class="card-title mb-0">Formulario</h5>
                         </div>
+                        <div class="col-auto">
+                            <span class="badge bg-secondary" id="badgeEstadoTika">
+                                <i class="fa fa-circle-notch fa-spin me-1"></i> Tika: verificando…
+                            </span>
+                        </div>
                     </div>
                 </div>
 
@@ -84,6 +89,34 @@
 
         $(document).ready(function () {
             FormSummernote.init();
+        });
+
+        function verificarEstadoTika() {
+            var badge = $('#badgeEstadoTika');
+            $.post('{{ ruta }}', {
+                action: 'estado_tika',
+                url: $('#id_tika_url').val() || '',
+                csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').val()
+            }).done(function (resp) {
+                var estado = (resp && resp.estado) || {};
+                if (estado.activo) {
+                    badge.removeClass('bg-secondary bg-danger').addClass('bg-success');
+                    badge.html('<i class="fa fa-check-circle me-1"></i> Tika activo (v' + (estado.version || '?') + ')');
+                    badge.attr('title', estado.url || '');
+                } else {
+                    badge.removeClass('bg-secondary bg-success').addClass('bg-danger');
+                    badge.html('<i class="fa fa-times-circle me-1"></i> Tika inactivo');
+                    badge.attr('title', estado.error || '');
+                }
+            }).fail(function () {
+                badge.removeClass('bg-secondary bg-success').addClass('bg-danger');
+                badge.html('<i class="fa fa-times-circle me-1"></i> Tika sin respuesta');
+            });
+        }
+
+        $(document).ready(function () {
+            verificarEstadoTika();
+            $('#id_tika_url').on('change', verificarEstadoTika);
         });
 
         $(function () {

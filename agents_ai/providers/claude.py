@@ -1,7 +1,7 @@
 """Provider para Anthropic Claude."""
 import requests
 
-from .base import BaseProvider
+from .base import BaseProvider, LLM_TIMEOUT_SEGUNDOS, LLM_MAX_RETRIES
 
 CLAUDE_MODELS_URL = "https://api.anthropic.com/v1/models"
 CLAUDE_API_VERSION = "2023-06-01"
@@ -13,7 +13,8 @@ class ClaudeProvider(BaseProvider):
     def default_model(self) -> str:
         return "claude-haiku-4-5-20251001"
 
-    def get_llm(self, apikey, model_name, max_output_tokens, temperature=0.1):
+    def get_llm(self, apikey, model_name, max_output_tokens, temperature=0.1, base_url=None,
+                razonamiento=True):
         # Import diferido — el paquete no se carga si nunca usamos Claude
         from langchain_anthropic import ChatAnthropic
         return ChatAnthropic(
@@ -21,9 +22,11 @@ class ClaudeProvider(BaseProvider):
             anthropic_api_key=apikey,
             max_tokens=max_output_tokens,
             temperature=temperature,
+            default_request_timeout=LLM_TIMEOUT_SEGUNDOS,
+            max_retries=LLM_MAX_RETRIES,
         )
 
-    def get_embeddings(self, apikey):
+    def get_embeddings(self, apikey, base_url=None):
         # Anthropic NO ofrece API de embeddings propia. Para FAISS/vectorstores,
         # el usuario debe registrar otra API Key con Gemini u OpenAI.
         raise NotImplementedError(

@@ -3,9 +3,6 @@
     <input type="hidden" name="pk" value="{{ pk|default:0 }}"/>
     <input type="hidden" name="action" value="{{ action }}"/>
 
-    {# Inputs ocultos con el resto del formulario: preservamos los valores del grupo
-       para que el POST no los borre, pero el modal de "Configurar URLs" solo
-       muestra el selector de URLs (resto de campos se editan desde el listado). #}
     {% for field in form %}
         {% if field.name != 'modulos' %}
             <input type="hidden" name="{{ field.name }}" value="{{ field.value|default_if_none:'' }}"/>

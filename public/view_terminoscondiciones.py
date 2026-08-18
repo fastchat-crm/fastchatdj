@@ -4,8 +4,9 @@ from seguridad.models import *
 
 
 def terminosycondiciones(request):
+    es_privacidad = 'privacidad' in request.path
     data = {
-        'titulo': 'Terminos y Condiciones',
+        'titulo': 'Política de Privacidad' if es_privacidad else 'Términos y Condiciones',
         'ruta': request.path,
         'fecha': datetime.now(),
     }

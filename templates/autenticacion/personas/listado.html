@@ -73,131 +73,35 @@
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-body">
-            <div class="table-responsive">
-                <table id="tabla" class="table table-hover table-striped">
-                    <thead>
-                    <tr>
-                        <th class="text-center">Cod</th>
-                        <th class="text-center">Persona</th>
-                        <th class="text-center">Datos de Contacto</th>
-                        <th class="text-center">Grupos</th>
-                        <th class="text-center">Perfiles</th>
-                        <th class="text-center">Fecha Registro</th>
-                        <th class="text-center">Acción</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {% for l in listado %}
-                        <tr>
-                            <td class="text-left">
-                                <b>Cod. User</b> {{ l.id }}<br>
-                            </td>
-                            <td class="text-left">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    {% with person=l %}
-                                        <div class="d-flex align-items-center">
-                                            <a href="{{ person.get_foto_gris }}"
-                                               data-fancybox="image"
-                                               data-width="2048"
-                                               data-height="1365"
-                                               title="{{ person.user.username }}">
-                                                <img id="presentaimg2" class="img-circle"
-                                                     src="{{ person.get_foto_gris }}"
-                                                     style="border-radius: 2.375rem;" width="55px"
-                                                     height="55px">
-                                            </a>
-                                            <div class="info-top ml-4">
-                                                <span><i class="fa fa-tag"></i> {{ person.username }}</span><br>
-                                                <span>{{ person.documento }}</span><br>
-                                                <span><b>{{ person.datos }}</b></span><br>
-                                                {% if person.email %}
-                                                    <a href="mailto:{{ person.email }}"><i
-                                                            class="fa fa-envelope"></i> {{ person.email }}
-                                                    </a><br>
-                                                {% endif %}
-                                                {% if person.emailinst %}
-                                                    <a href="mailto:{{ person.emailinst }}"><i
-                                                            class="fa fa-envelope"></i> {{ person.emailinst }}
-                                                    </a><br>
-                                                {% endif %}
-                                                {% if person.celular %}
-                                                    <a href="javascript:void(0)"
-                                                       onclick="contactWS('{{ person.celular }}', '{{ person.datos }}')">
-                                                        <i class="fa-brands fa-whatsapp"></i>
-                                                        +593 {{ person.celular }}
-                                                    </a><br>
-                                                {% endif %}
-                                                {% if person.celularinst %}
-                                                    <a href="javascript:void(0)"
-                                                       onclick="contactWS('{{ person.celularinst }}', '{{ person.datos }}')">
-                                                        <i class="fa-brands fa-whatsapp"></i>
-                                                        +593 {{ person.celularinst }}
-                                                    </a><br>
-                                                {% endif %}
-                                                {% if not l.es_persona %}
-                                                    <span class="text-danger"><i class="fa fa-info-circle"></i> Perfil Desactivado</span>
-                                                {% endif %}
-                                            </div>
-                                        </div>
-                                    {% endwith %}
+    <div class="row row-cols-1 row-cols-md-2 row-cols-xxl-3 g-3">
+        {% for l in listado %}
+            <div class="col">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="row g-2 align-items-start">
+                            <div class="col-auto">
+                                <a href="{{ l.get_foto_gris }}"
+                                   data-fancybox="image"
+                                   data-width="2048"
+                                   data-height="1365"
+                                   title="{{ l.username }}">
+                                    <img class="img-circle rounded-circle"
+                                         src="{{ l.get_foto_gris }}" width="55px" height="55px">
+                                </a>
+                            </div>
+                            <div class="col">
+                                <div class="fw-bold text-truncate">{{ l.datos }}</div>
+                                <div class="text-muted small text-truncate">
+                                    <i class="fa fa-tag me-1"></i>{{ l.username }}
                                 </div>
-                            </td>
-                            <td>
-                                {% if l.fecha_nacimiento %}
-                                    <div class="mb-0">
-                                        <i class="fa fa-birthday-cake text-danger me-1"></i> {{ l.fecha_nacimiento|date:'d/M/Y'|safe }}
+                                {% if l.documento %}
+                                    <div class="text-muted small text-truncate">
+                                        <i class="fa fa-id-card me-1"></i>{{ l.documento }}
                                     </div>
                                 {% endif %}
-                                <div class="mb-0">
-                                    <i class="fa fa-phone text-success me-1"></i>
-                                    <a href="javascript:void(0)" class="text-primary"
-                                       onclick="contactarwhatsapp('{{ l.telefono_formateado }}', '{{ l.get_full_name }}')">
-                                        {{ l.telefono_formateado }}
-                                    </a>
-                                </div>
-                                <div class="mb-0">
-                                    <i class="fa fa-envelope text-primary me-1"></i>
-                                    <a href="mailto:{{ l.email|default:'' }}"
-                                       class="text-primary">{{ l.email|default:'' }}</a>
-                                </div>
-                                {% if l.ciudad %}
-                                    <div>
-                                        <i class="fa fa-map-marked text-info me-1"></i>
-                                        <small>{{ l.ciudad.nombre }}, {{ l.ciudad.provincia.nombre }}, {{ l.ciudad.provincia.pais.nombre }}</small>
-                                    </div>
-                                {% endif %}
-                            </td>
-                            <td class="text-center">
-                                {{ l.groups_str }}
-                            </td>
-                            <td>
-                                <div class="mb-0">
-                                    <span class="fw-bold">¿Activo?:</span>
-                                    <i class="{{ l.usuario_activo|safe }}"></i>
-                                </div>
-                                <div class="mb-0">
-                                    <span class="fw-bold">Administrativo:</span>
-                                    {% if l.es_administrativo %}
-                                        <i class="fas fa-check-circle text-success"></i>
-                                    {% else %}
-                                        <i class="fas fa-times-circle text-danger"></i>
-                                    {% endif %}
-                                </div>
-                                <div>
-                                    <span class="fw-bold">Cliente:</span>
-                                    {% if l.es_persona %}
-                                        <i class="fas fa-check-circle text-success"></i>
-                                    {% else %}
-                                        <i class="fas fa-times-circle text-danger"></i>
-                                    {% endif %}
-                                </div>
-                            </td>
-                            <td class="text-center">
-                                {{ l.fecha_registro|date:'d/M/Y H:i'|safe }}
-                            </td>
-                            <td class="text-center">
+                                <div class="text-muted small">Cod. User {{ l.id }}</div>
+                            </div>
+                            <div class="col-auto">
                                 <div class="dropdown">
                                     <button class="btn btn-icon" type="button" id="dropdownMenuButton-{{ l.pk }}"
                                             data-bs-toggle="dropdown" aria-expanded="false"
@@ -261,12 +165,114 @@
                                         {% endif %}
                                     </ul>
                                 </div>
-                            </td>
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
+                            </div>
+                        </div>
+
+                        <div class="d-flex flex-wrap gap-1 mt-2">
+                            {% if l.is_active %}
+                                <span class="badge bg-success">Activo</span>
+                            {% else %}
+                                <span class="badge bg-danger">Inactivo</span>
+                            {% endif %}
+                            {% if not l.es_persona %}
+                                <span class="badge bg-danger">Perfil Desactivado</span>
+                            {% endif %}
+                        </div>
+
+                        <hr class="my-2">
+
+                        <div class="small">
+                            {% if l.fecha_nacimiento %}
+                                <div class="text-truncate">
+                                    <i class="fa fa-birthday-cake text-danger me-1"></i>{{ l.fecha_nacimiento|date:'d/M/Y'|safe }}
+                                </div>
+                            {% endif %}
+                            {% if l.telefono_formateado %}
+                                <div class="text-truncate">
+                                    <i class="fa fa-phone text-success me-1"></i>
+                                    <a href="javascript:void(0)" class="text-primary"
+                                       onclick="contactarwhatsapp('{{ l.telefono_formateado }}', '{{ l.get_full_name }}')">{{ l.telefono_formateado }}</a>
+                                </div>
+                            {% endif %}
+                            {% if l.celular %}
+                                <div class="text-truncate">
+                                    <i class="fa-brands fa-whatsapp text-success me-1"></i>
+                                    <a href="javascript:void(0)" class="text-primary"
+                                       onclick="contactWS('{{ l.celular }}', '{{ l.datos }}')">+593 {{ l.celular }}</a>
+                                </div>
+                            {% endif %}
+                            {% if l.celularinst %}
+                                <div class="text-truncate">
+                                    <i class="fa-brands fa-whatsapp text-success me-1"></i>
+                                    <a href="javascript:void(0)" class="text-primary"
+                                       onclick="contactWS('{{ l.celularinst }}', '{{ l.datos }}')">+593 {{ l.celularinst }}</a>
+                                </div>
+                            {% endif %}
+                            {% if l.email %}
+                                <div class="text-truncate">
+                                    <i class="fa fa-envelope text-primary me-1"></i>
+                                    <a href="mailto:{{ l.email }}" class="text-primary">{{ l.email }}</a>
+                                </div>
+                            {% endif %}
+                            {% if l.emailinst %}
+                                <div class="text-truncate">
+                                    <i class="fa fa-envelope text-primary me-1"></i>
+                                    <a href="mailto:{{ l.emailinst }}" class="text-primary">{{ l.emailinst }}</a>
+                                </div>
+                            {% endif %}
+                            {% if l.ciudad %}
+                                <div class="text-truncate">
+                                    <i class="fa fa-map-marked text-info me-1"></i>
+                                    {{ l.ciudad.nombre }}, {{ l.ciudad.provincia.nombre }}, {{ l.ciudad.provincia.pais.nombre }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        {% if l.groups_str %}
+                            <hr class="my-2">
+                            <div class="small">
+                                <span class="fw-bold">Grupos:</span> {{ l.groups_str }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="card-footer">
+                        <div class="row g-2 align-items-center small">
+                            <div class="col-auto">
+                                <span class="fw-bold">Administrativo:</span>
+                                {% if l.es_administrativo %}
+                                    <i class="fas fa-check-circle text-success"></i>
+                                {% else %}
+                                    <i class="fas fa-times-circle text-danger"></i>
+                                {% endif %}
+                            </div>
+                            <div class="col-auto">
+                                <span class="fw-bold">Cliente:</span>
+                                {% if l.es_persona %}
+                                    <i class="fas fa-check-circle text-success"></i>
+                                {% else %}
+                                    <i class="fas fa-times-circle text-danger"></i>
+                                {% endif %}
+                            </div>
+                            <div class="col-12 col-xl text-xl-end text-muted">
+                                <i class="fa fa-calendar me-1"></i>{{ l.fecha_registro|date:'d/M/Y H:i'|safe }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
+        {% empty %}
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body text-center text-muted">
+                        <i class="fa fa-inbox me-1"></i> No se encontraron registros
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    <div class="card mt-3">
+        <div class="card-body">
             {% include "paginacion.html" %}
         </div>
     </div>

@@ -2,7 +2,9 @@
 {% load static %}
 
 {% block head %}
-    <link rel="stylesheet" href="{% static 'stylenew/sesiones.css' %}">
+    <link rel="stylesheet" href="/static/stylenew/sesiones.css?v2.2">
+    <link rel="stylesheet" href="/static/css/whatsapp/respuestas_rapidas.css?v1.3">
+    <link rel="stylesheet" href="/static/css/whatsapp/tablero_canales.css?v1.1">
 {% endblock %}
 
 {% block content %}
@@ -46,6 +48,32 @@
             <button class="conex-chip" data-filtro="error">
                 <span class="dot dot-err"></span> Con incidencias <span class="n">{{ stats.errores }}</span>
             </button>
+            <button class="conex-chip" data-filtro="pausadas" data-attr="activo" data-val="0">
+                <i class="fa fa-pause-circle text-warning"></i> Pausadas <span class="n">{{ stats.pausadas }}</span>
+            </button>
+        </div>
+
+        <div class="conex-bulk-bar d-none" id="conex-bulk-bar">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <span class="small text-muted">
+                    <i class="fa fa-info-circle me-1"></i>
+                    Paused sessions: <b>{{ stats.pausadas }}</b> · Orphan (no contacts): <b>{{ stats.pausadas_huerfanas }}</b>
+                </span>
+                <button type="button" class="conex-btn conex-btn-light btn-sm" id="conex-bulk-select-all">
+                    <i class="fa fa-check-square me-1"></i> Select all visible
+                </button>
+                <button type="button" class="conex-btn conex-btn-light btn-sm" id="conex-bulk-clear">
+                    <i class="fa fa-square me-1"></i> Clear
+                </button>
+                <button type="button" class="conex-btn conex-btn-danger btn-sm" id="conex-bulk-delete" disabled>
+                    <i class="fa fa-trash me-1"></i> Delete selected (<span id="conex-bulk-count">0</span>)
+                </button>
+                {% if stats.pausadas_huerfanas %}
+                    <button type="button" class="conex-btn conex-btn-warning btn-sm" id="conex-bulk-delete-orphans">
+                        <i class="fa fa-broom me-1"></i> Delete all orphan paused ({{ stats.pausadas_huerfanas }})
+                    </button>
+                {% endif %}
+            </div>
         </div>
 
         {# ───────── Grid de cards ───────── #}
@@ -93,7 +121,7 @@
                         </button>
                     {% endif %}
                     {% if canales_activos.instagram %}
-                        <button class="conex-canal" data-canal="instagram">
+                        <button class="conex-canal" type="button" data-canal="instagram">
           <span class="ic ig-grad">
             <i class="fab fa-instagram"></i>
           </span>
@@ -109,7 +137,7 @@
                         </button>
                     {% endif %}
                     {% if canales_activos.tiktok %}
-                        <button class="conex-canal" data-canal="tiktok">
+                        <button class="conex-canal" type="button" data-canal="tiktok">
           <span class="ic" style="background:#000;color:#fff;">
             <i class="fab fa-tiktok"></i>
           </span>
@@ -619,18 +647,18 @@
                     {% endif %}
 
                     {% if canales_activos.instagram %}
-                        <div class="pane pane-hidden pane-proximamente" data-pane="instagram">
-                            {% include 'whatsapp/sesiones/_proximamente.html' with nombre='Instagram' icono='fab fa-instagram' color='#e1306c' %}
+                        <div class="pane pane-hidden" data-pane="instagram">
+                            {% include 'whatsapp/sesiones/_pane_instagram.html' %}
                         </div>
                     {% endif %}
                     {% if canales_activos.messenger %}
-                        <div class="pane pane-hidden pane-proximamente" data-pane="facebook">
-                            {% include 'whatsapp/sesiones/_proximamente.html' with nombre='Facebook' icono='fab fa-facebook' color='#1877f2' %}
+                        <div class="pane pane-hidden" data-pane="facebook">
+                            {% include 'whatsapp/sesiones/_pane_facebook.html' %}
                         </div>
                     {% endif %}
                     {% if canales_activos.tiktok %}
-                        <div class="pane pane-hidden pane-proximamente" data-pane="tiktok">
-                            {% include 'whatsapp/sesiones/_proximamente.html' with nombre='TikTok' icono='fab fa-tiktok' color='#000' %}
+                        <div class="pane pane-hidden" data-pane="tiktok">
+                            {% include 'whatsapp/sesiones/_pane_tiktok.html' %}
                         </div>
                     {% endif %}
 
@@ -644,33 +672,20 @@
         <div class="detail-panel" id="conex-detail-content" role="dialog"></div>
     </div>
 
-    {# ───────── Modal Webhook Info (Meta) ───────── #}
-    <div class="man-val-backdrop" id="webhook-info-modal" aria-hidden="true">
-        <div class="man-val-panel" role="dialog" aria-labelledby="webhook-info-title" style="max-width:640px">
-            <div class="man-val-header">
-                <div class="man-val-header-title">
-                    <i class="fa fa-link" style="color:#2563eb"></i>
-                    <h5 id="webhook-info-title">Datos del webhook</h5>
-                </div>
-                <button type="button" class="man-val-close" data-webhook-close aria-label="Cerrar">
-                    <i class="fa fa-times"></i>
-                </button>
+    {# ───────── Offcanvas lateral de acciones de sesión ───────── #}
+    <div class="acc-oc-backdrop" id="acc-offcanvas-backdrop" aria-hidden="true"></div>
+    <aside class="acc-oc" id="acc-offcanvas" role="dialog" aria-label="Acciones de la sesión" aria-hidden="true">
+        <div class="acc-oc-header">
+            <div class="acc-oc-titlewrap">
+                <i class="fa fa-bolt"></i>
+                <h5 id="acc-offcanvas-title">Acciones</h5>
             </div>
-            <div class="man-val-body" id="webhook-info-body">
-                <div class="man-val-loader">
-                    <i class="fa fa-spinner fa-spin"></i>
-                    <p>Cargando datos del webhook...</p>
-                </div>
-            </div>
-            <div class="man-val-footer">
-                <button type="button" class="conex-btn conex-btn-ghost" data-webhook-close>Cerrar</button>
-                <a href="#" target="_blank" rel="noopener" class="conex-btn conex-btn-primary"
-                   id="webhook-info-meta-link" style="display:none">
-                    <i class="fa fa-up-right-from-square"></i> Configurar en Meta
-                </a>
-            </div>
+            <button type="button" class="acc-oc-close" id="acc-offcanvas-close" aria-label="Cerrar">
+                <i class="fa fa-times"></i>
+            </button>
         </div>
-    </div>
+        <div class="acc-oc-body" id="acc-offcanvas-body"></div>
+    </aside>
 
     {# ───────── Modal Eco / Test envío (Meta) ───────── #}
     <div class="man-val-backdrop" id="eco-modal" aria-hidden="true">
@@ -803,7 +818,28 @@
             });
         }
     </script>
-    <script src="{% static 'stylenew/sesiones.js' %}?v=3"></script>
+    <script>
+        function verLogsNotif(id) {
+            if (typeof pantallaespera === 'function') pantallaespera();
+            $.get(window.location.pathname, { action: 'logs_notificaciones', id: id }, function (r) {
+                $.unblockUI();
+                if (r && r.result === true) {
+                    Swal.fire({
+                        title: 'Avisos al asesor',
+                        html: '<div style="text-align:left;max-height:60vh;overflow:auto;">' + r.data + '</div>',
+                        width: '900px',
+                        confirmButtonText: 'Cerrar'
+                    });
+                } else {
+                    if (typeof mensajeWarning === 'function') mensajeWarning((r && r.message) || 'No se pudo cargar el log.');
+                }
+            }, 'json').fail(function () {
+                $.unblockUI();
+                if (typeof mensajeWarning === 'function') mensajeWarning('Error de conexión.');
+            });
+        }
+    </script>
+    <script src="/static/stylenew/sesiones.js?v=10"></script>
 {% endblock %}
 {% block jscript %}
     <script src="/static/js/forms.js?version=1"></script>

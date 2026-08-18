@@ -14,9 +14,10 @@ def convert_audio(input_file, output_file="converted.wav"):
             "-c:a", "pcm_s16le", output_file
         ], check=True)
         return output_file
-    except subprocess.CalledProcessError:
-        print("Error al convertir el audio.")
-        sys.exit(1)
+    except subprocess.CalledProcessError as ex:
+        # OJO: nunca sys.exit() acá — esto corre dentro del worker de Daphne,
+        # no como script CLI. Un exit mataba el proceso del servidor.
+        raise RuntimeError(f'ffmpeg no pudo convertir el audio: {ex}')
 
 def extract_voiced_audio(input_wav, output_wav="voiced.wav", aggressiveness=1):
     """Usa WebRTC VAD para conservar solo voz"""
@@ -40,11 +41,19 @@ def extract_voiced_audio(input_wav, output_wav="voiced.wav", aggressiveness=1):
     clean.export(output_wav, format="wav")
     return output_wav
 
+_MODELOS_WHISPER = {}
+
+
 def transcribe_audio(wav_file, model_size="base", lang='es'):
-    """Transcribe el audio WAV a texto usando Whisper"""
-    print("Cargando modelo Whisper...")
-    model = whisper.load_model(model_size)  # tiny, base, small, medium, large
-    print("Transcribiendo...")
+    """Transcribe el audio WAV a texto usando Whisper.
+
+    El modelo se cachea en memoria por tamaño: cargarlo (10-60s según tamaño
+    y disco) dominaba la latencia de CADA transcripción — con el cache solo
+    la primera del proceso paga la carga."""
+    model = _MODELOS_WHISPER.get(model_size)
+    if model is None:
+        model = whisper.load_model(model_size)  # tiny, base, small, medium, large
+        _MODELOS_WHISPER[model_size] = model
     result = model.transcribe(wav_file, language=lang)
     return result['text']
 

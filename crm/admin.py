@@ -3,7 +3,6 @@ from django.contrib import admin
 from crm.models import (
     DepartamentoChatBot,
     OpcionDepartamentoChatBot,
-    PerfilDepartamentoChatBot,
     CredencialApiChatbot,
     EndpointApiChatbot,
     ConexionNodoChatbot,
@@ -86,10 +85,3 @@ class EstadoFlujoChatbotAdmin(admin.ModelAdmin):
     readonly_fields = ('actualizado',)
     autocomplete_fields = ('departamento', 'nodo_actual')
     raw_id_fields = ('conversacion',)
-
-
-@admin.register(PerfilDepartamentoChatBot)
-class PerfilDepartamentoChatBotAdmin(admin.ModelAdmin):
-    list_display = ('usuario', 'departamento', 'status')
-    list_filter = ('departamento', 'status')
-    autocomplete_fields = ('usuario', 'departamento')

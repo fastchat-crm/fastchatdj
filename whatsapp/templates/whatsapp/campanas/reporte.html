@@ -1,0 +1,390 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid p-0">
+    <div class="row align-items-center mb-3">
+        <div class="col-md-6">
+            <a href="/whatsapp/campanas/" class="btn btn-link"><i class="fa fa-arrow-left"></i> Volver al listado</a>
+        </div>
+        <div class="col-md-6 text-md-end">
+            <button type="button" class="btn btn-primary" id="btn-sync-meta">
+                <i class="fa fa-cloud-arrow-down me-1"></i> Traer campañas de Meta
+            </button>
+        </div>
+    </div>
+
+    <div class="row row-cols-2 row-cols-lg-4 g-3 mb-3">
+        <div class="col">
+            <div class="card h-100"><div class="card-body text-center">
+                <div class="text-muted small">Conversaciones</div>
+                <div class="h4 mb-0">{{ reporte_totales.total }}</div>
+            </div></div>
+        </div>
+        <div class="col">
+            <div class="card h-100"><div class="card-body text-center">
+                <div class="text-muted small">Leads</div>
+                <div class="h4 mb-0 text-primary">{{ reporte_totales.leads }}</div>
+            </div></div>
+        </div>
+        <div class="col">
+            <div class="card h-100"><div class="card-body text-center">
+                <div class="text-muted small">Sin asesor</div>
+                <div class="h4 mb-0 text-danger">{{ reporte_totales.sin_asesor }}</div>
+            </div></div>
+        </div>
+        <div class="col">
+            <div class="card h-100"><div class="card-body text-center">
+                <div class="text-muted small">En pipeline</div>
+                <div class="h4 mb-0 text-success">{{ reporte_totales.en_pipeline }}</div>
+            </div></div>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <h6 class="mb-3">Clasificación de todas las conversaciones</h6>
+            <div class="d-flex flex-wrap gap-2">
+                {% for c in reporte_clasificaciones %}
+                    <span class="badge bg-secondary">{{ c.label }}: {{ c.total }}</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs mb-3" id="tabs-reporte" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-sistema" type="button" role="tab">
+                <i class="fa fa-paper-plane me-1"></i> Campañas del sistema
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-meta" type="button" role="tab">
+                <i class="fa fa-bullhorn me-1"></i> Campañas en redes
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        <div class="tab-pane fade show active" id="tab-sistema" role="tabpanel">
+            <div class="row row-cols-1 row-cols-xl-2 g-3">
+                {% for f in reporte_sistema %}
+                    <div class="col">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <div class="row g-2 align-items-start">
+                                    <div class="col">
+                                        <div class="fw-bold">{{ f.campana.nombre }}</div>
+                                        <div class="text-muted small">
+                                            {{ f.campana.sesion.nombre }} · {{ f.campana.get_estado_display }} ·
+                                            {{ f.campana.fecha_registro|date:"d/m/Y" }}
+                                        </div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <button type="button" class="btn btn-secondary btn-sm btn-ver-leads"
+                                                data-origen="sistema" data-pk="{{ f.campana.id }}">
+                                            <i class="fa fa-list me-1"></i> Ver leads
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <hr class="my-2">
+
+                                <div class="row g-2 text-center small">
+                                    <div class="col-4">
+                                        <div class="text-muted">Enviados</div>
+                                        <div class="fw-bold">{{ f.enviados }}</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="text-muted">Conversaciones</div>
+                                        <div class="fw-bold">{{ f.resumen.total }}</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="text-muted">Leads</div>
+                                        <div class="fw-bold text-primary">{{ f.resumen.leads }}</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="text-muted">Atendidos</div>
+                                        <div class="fw-bold text-success">{{ f.resumen.atendidos }}</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="text-muted">Sin asesor</div>
+                                        <div class="fw-bold text-danger">{{ f.resumen.sin_asesor }}</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="text-muted">Clientes</div>
+                                        <div class="fw-bold">{{ f.resumen.clientes }}</div>
+                                    </div>
+                                </div>
+
+                                {% if f.etiquetas %}
+                                    <hr class="my-2">
+                                    <div class="d-flex flex-wrap gap-1">
+                                        {% for e in f.etiquetas %}
+                                            <span class="badge" style="background-color: {{ e.color }};">{{ e.nombre }} ({{ e.total }})</span>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+
+                                {% if f.pipeline %}
+                                    <hr class="my-2">
+                                    <div class="small fw-bold mb-1">Pipeline</div>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        {% for p in f.pipeline %}
+                                            <span class="badge" style="background-color: {{ p.color }};">{{ p.etapa }}: {{ p.total }}</span>
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    <hr class="my-2">
+                                    <div class="small text-muted">Sin conversaciones en pipeline</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% empty %}
+                    <div class="col-12">
+                        <div class="card"><div class="card-body text-center text-muted">
+                            <i class="fa fa-inbox me-1"></i> Todavía no hay campañas con leads
+                        </div></div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="tab-meta" role="tabpanel">
+            <div class="row row-cols-1 row-cols-xl-2 g-3">
+                {% for f in reporte_meta %}
+                    <div class="col">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <div class="row g-2 align-items-start">
+                                    <div class="col">
+                                        <div class="fw-bold">{{ f.campaign_name }}</div>
+                                        <div class="text-muted small">ID {{ f.campaign_id }}</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <button type="button" class="btn btn-secondary btn-sm btn-ver-leads"
+                                                data-origen="meta" data-campaign="{{ f.campaign_id }}">
+                                            <i class="fa fa-list me-1"></i> Ver leads
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <hr class="my-2">
+
+                                <div class="row g-2 text-center small">
+                                    <div class="col-4">
+                                        <div class="text-muted">Conversaciones</div>
+                                        <div class="fw-bold">{{ f.resumen.total }}</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="text-muted">Leads</div>
+                                        <div class="fw-bold text-primary">{{ f.resumen.leads }}</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="text-muted">Clientes</div>
+                                        <div class="fw-bold">{{ f.resumen.clientes }}</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="text-muted">Atendidos</div>
+                                        <div class="fw-bold text-success">{{ f.resumen.atendidos }}</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="text-muted">Sin asesor</div>
+                                        <div class="fw-bold text-danger">{{ f.resumen.sin_asesor }}</div>
+                                    </div>
+                                    <div class="col-4">
+                                        <div class="text-muted">En pipeline</div>
+                                        <div class="fw-bold">{{ f.resumen.en_pipeline }}</div>
+                                    </div>
+                                </div>
+
+                                {% if f.etiquetas %}
+                                    <hr class="my-2">
+                                    <div class="d-flex flex-wrap gap-1">
+                                        {% for e in f.etiquetas %}
+                                            <span class="badge" style="background-color: {{ e.color }};">{{ e.nombre }} ({{ e.total }})</span>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+
+                                {% if f.pipeline %}
+                                    <hr class="my-2">
+                                    <div class="small fw-bold mb-1">Pipeline</div>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        {% for p in f.pipeline %}
+                                            <span class="badge" style="background-color: {{ p.color }};">{{ p.etapa }}: {{ p.total }}</span>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% empty %}
+                    <div class="col-12">
+                        <div class="card"><div class="card-body text-center text-muted">
+                            <i class="fa fa-bullhorn me-1"></i>
+                            Todavía no llegaron conversaciones desde anuncios. Usa "Traer campañas de Meta"
+                            para conocer las campañas de la cuenta publicitaria.
+                        </div></div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalLeadsCampana" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalLeadsTitulo">Leads de la campaña</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                            <tr>
+                                <th>Contacto</th>
+                                <th>Clasificación</th>
+                                <th>Estado</th>
+                                <th>Asesor</th>
+                                <th>Atendida</th>
+                                <th>Etiquetas</th>
+                                <th>Pipeline / Etapa</th>
+                                <th>Fecha</th>
+                            </tr>
+                            </thead>
+                            <tbody id="tbody-leads-campana"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" data-bs-dismiss="modal">
+                        <i class="fa fa-window-close me-1"></i> Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalCampanasMeta" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Campañas de la cuenta publicitaria</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                            <tr>
+                                <th>Campaña</th>
+                                <th>Objetivo</th>
+                                <th>Estado</th>
+                                <th>Inicio</th>
+                            </tr>
+                            </thead>
+                            <tbody id="tbody-campanas-meta"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" data-bs-dismiss="modal">
+                        <i class="fa fa-window-close me-1"></i> Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block jscript %}
+<script>
+    function pintarLeads(data) {
+        var filas = '';
+        (data.listado || []).forEach(function (l) {
+            var etiquetas = (l.etiquetas || []).map(function (e) {
+                return '<span class="badge me-1" style="background-color:' + e.color + ';">' + e.nombre + '</span>';
+            }).join('');
+            var pipeline = l.etapa ? (l.pipeline + ' / ' + l.etapa) : '<span class="text-muted">—</span>';
+            var atendida = l.atendida
+                ? '<i class="fas fa-check-circle text-success"></i>'
+                : '<i class="fas fa-times-circle text-danger"></i>';
+            filas +=
+                '<tr>' +
+                '<td>' + l.contacto + '<div class="text-muted small">' + l.numero + '</div></td>' +
+                '<td>' + (l.clasificacion || '') + '</td>' +
+                '<td>' + l.estado + '</td>' +
+                '<td>' + (l.asesor || '<span class="text-danger">Sin asesor</span>') + '</td>' +
+                '<td class="text-center">' + atendida + '</td>' +
+                '<td>' + (etiquetas || '<span class="text-muted">—</span>') + '</td>' +
+                '<td>' + pipeline + '</td>' +
+                '<td>' + l.fecha + '</td>' +
+                '</tr>';
+        });
+        if (!filas) {
+            filas = '<tr><td colspan="8" class="text-center text-muted">Sin leads para esta campaña</td></tr>';
+        }
+        $('#modalLeadsTitulo').text('Leads de ' + (data.titulo || 'la campaña'));
+        $('#tbody-leads-campana').html(filas);
+        new bootstrap.Modal(document.getElementById('modalLeadsCampana')).show();
+    }
+
+    $(document).on('click', '.btn-ver-leads', function () {
+        var btn = $(this);
+        var params = { action: 'reporte_detalle', origen: btn.data('origen') };
+        if (btn.data('origen') === 'meta') {
+            params.campaign_id = btn.data('campaign');
+        } else {
+            params.pk = btn.data('pk');
+        }
+        pantallaespera();
+        $.get('{{ ruta }}', params, function (data) {
+            $.unblockUI();
+            if (data.error) {
+                mensajeWarning(data.message || 'No se pudo cargar el detalle.');
+                return;
+            }
+            pintarLeads(data);
+        }, 'json').fail(function (xhr) {
+            $.unblockUI();
+            mensajeDanger('Error al cargar los leads (' + xhr.status + ').');
+        });
+    });
+
+    $(document).on('click', '#btn-sync-meta', function () {
+        var btn = $(this);
+        btn.prop('disabled', true);
+        pantallaespera();
+        $.post('{{ ruta }}', {
+            action: 'sync_campanas_meta',
+            csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val()
+        }, function (data) {
+            $.unblockUI();
+            btn.prop('disabled', false);
+            if (data.error) {
+                mensajeWarning(data.message || 'No se pudieron traer las campañas.');
+                return;
+            }
+            var filas = '';
+            (data.campanas || []).forEach(function (c) {
+                filas +=
+                    '<tr><td>' + (c.nombre || '') + '<div class="text-muted small">ID ' + c.id + '</div></td>' +
+                    '<td>' + (c.objetivo || '') + '</td>' +
+                    '<td>' + (c.estado || '') + '</td>' +
+                    '<td>' + (c.inicio || '') + '</td></tr>';
+            });
+            if (!filas) {
+                filas = '<tr><td colspan="4" class="text-center text-muted">La cuenta no tiene campañas</td></tr>';
+            }
+            $('#tbody-campanas-meta').html(filas);
+            new bootstrap.Modal(document.getElementById('modalCampanasMeta')).show();
+        }, 'json').fail(function (xhr) {
+            $.unblockUI();
+            btn.prop('disabled', false);
+            mensajeDanger('Error al consultar Meta (' + xhr.status + ').');
+        });
+    });
+</script>
+{% endblock %}

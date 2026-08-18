@@ -60,6 +60,7 @@ def build_llm(apikey_obj, *, force_json: bool = True, max_tokens: int = 16000,
     clave = validar_apikey(apikey_obj)
     provider = get_provider(apikey_obj.proveedor)
     modelo = (getattr(apikey_obj, 'modelo', '') or '').strip() or provider.default_model()
+    base_url = (getattr(apikey_obj, 'base_url', '') or '').strip() or None
 
     if force_json:
         if provider.name == 'gemini':
@@ -74,17 +75,21 @@ def build_llm(apikey_obj, *, force_json: bool = True, max_tokens: int = 16000,
             return llm, modelo, provider
         if provider.name == 'openai':
             from langchain_community.chat_models import ChatOpenAI
-            llm = ChatOpenAI(
+            kwargs = dict(
                 model_name=modelo,
                 openai_api_key=clave,
                 max_tokens=max_tokens,
                 temperature=temperature,
                 model_kwargs={'response_format': {'type': 'json_object'}},
             )
+            if base_url:
+                kwargs['openai_api_base'] = base_url
+            llm = ChatOpenAI(**kwargs)
             return llm, modelo, provider
-        # Otros providers (Claude, futuros): sin force_json nativo, depender del prompt.
+        # Otros providers (Claude, Ollama, DeepSeek, Huawei): sin force_json nativo,
+        # depender del prompt.
 
-    llm = provider.get_llm(clave, modelo, max_tokens, temperature)
+    llm = provider.get_llm(clave, modelo, max_tokens, temperature, base_url=base_url)
     return llm, modelo, provider
 
 

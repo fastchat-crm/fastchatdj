@@ -1,0 +1,43 @@
+<div class="row g-2">
+    <input type="hidden" name="action" value="guardar_grupos_modulo">
+    <input type="hidden" name="pk_modulo" value="{{ modulo.id }}">
+    <div class="col-12">
+        <div class="alert alert-light border mb-3">
+            <div class="small text-muted">Module</div>
+            <div class="fw-semibold">{{ modulo.nombre }}</div>
+            <div class="small text-muted">{{ modulo.url }}</div>
+        </div>
+    </div>
+    <div class="col-12">
+        <label class="form-label small mb-2">Select groups this URL belongs to</label>
+        <div class="grupos-modulo-list">
+            {% for g in grupos %}
+                <div class="form-check py-1">
+                    <input class="form-check-input" type="checkbox" name="c_grupos"
+                           value="{{ g.id }}" id="grupo_check_{{ g.id }}"
+                           {% if g.id in grupos_actuales_ids %}checked{% endif %}>
+                    <label class="form-check-label" for="grupo_check_{{ g.id }}">
+                        {% if g.icono %}<i class="{{ g.icono }} me-1"></i>{% endif %}
+                        {{ g.nombre }}
+                        {% if g.prioridad is not None %}
+                            <span class="badge bg-light text-dark border ms-1">#{{ g.prioridad }}</span>
+                        {% endif %}
+                    </label>
+                </div>
+            {% empty %}
+                <div class="text-muted">No groups available.</div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="border-top my-3"></div>
+
+<div class="d-flex justify-content-end">
+    <button type="button" class="btn btn-danger btn-sm me-1" data-bs-dismiss="modal">
+        <i class="fa fa-window-close me-1"></i>Cancel
+    </button>
+    <button type="submit" class="btn btn-success btn-sm">
+        <i class="fa fa-save me-1"></i>Save
+    </button>
+</div>

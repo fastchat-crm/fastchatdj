@@ -13,10 +13,95 @@ dos vistas paralelas que comparten layout (`base_chat.html`) y partials, pero
 difieren en queryset, footer y acciones permitidas.
 
 **Vistas:**
-- `whatsapp/view_conversaciones.py:141` → `conversacionesView` — chats activos
-  (`estado_conversacion=0`).
-- `whatsapp/view_conversaciones_finalizadas.py:35` → `conversacionesFinalizadasView`
-  — chats cerrados (`estado_conversacion=1`).
+- `whatsapp/view_conversaciones.py` → `conversacionesView(request, canal_fijo=None)` — chats activos
+  (`estado_conversacion=0`). Con `canal_fijo` ('instagram'/'tiktok') el mismo inbox se acota a las
+  sesiones de ese proveedor: `/instagram/conversaciones/` y `/tiktok/conversaciones/` son wrappers
+  directos (2026-07). Por eso el JS de `listado.html` usa `{{ ruta }}` (request.path) y NO URLs
+  hardcodeadas a `/whatsapp/conversaciones/` — mantener esa regla al agregar acciones.
+  Desde 2026-07-09 el filtro base del listado y el badge `total_sin_leer` usan el queryset
+  `sesiones` (ya acotado por `canal_fijo`), NO `sesiones_visibles(...)` directo: antes, un canal
+  sin sesiones (`sesion_seleccionada=None`, caso TikTok) mostraba conversaciones de TODOS los
+  canales. El modal `#modalSinSesiones` de `listado.html` también es per-canal (copy + link a
+  `/instagram/sesiones/` o `/tiktok/sesiones/`). Mantener ese scoping al agregar filtros.
+- `whatsapp/view_conversaciones_finalizadas.py` → `conversacionesFinalizadasView(request, canal_fijo=None)`
+  — chats cerrados (`estado_conversacion=1`). Acepta `canal_fijo` igual que activas (2026-07-16).
+- `whatsapp/view_conversaciones_pendiente_reconexion.py` → `conversacionesPendienteReconexionView(request, canal_fijo=None)`
+  — chats pendientes de reconexión. Acepta `canal_fijo` igual que activas (2026-07-16).
+
+**Aislamiento por canal (2026-07-16):** cada red solo ve lo suyo.
+- Sin `canal_fijo` (inbox `/whatsapp/`) las sesiones se filtran a
+  `PROVEEDORES_WHATSAPP = ('baileys', 'meta')` — ya no aparecen sesiones de
+  Instagram/Messenger/TikTok en el selector del inbox WhatsApp.
+- `canal_conversacion_permitido(sesion, canal_fijo)` (`view_conversaciones.py`)
+  valida que una conversación pertenezca al canal del inbox. Se aplica en las 3
+  vistas a: `action=ver_mensajes` (responde `{'error': True, 'canal_invalido': True}`),
+  el `contactoId` guardado en `request.session` (se ignora si es de otro canal)
+  y el deep-link `?conv=<token>` (no auto-abre convs de otro canal).
+- Las claves de `localStorage` que recuerdan la última conv abierta van
+  namespaced por canal: `wa_last_conv_finalizada[_<canal>]`,
+  `wa_last_conv_pendiente[_<canal>]` y la cola offline `wa_offline_queue[_<canal>]`
+  (sufijo solo cuando hay `canal_fijo`; WhatsApp conserva la clave histórica).
+  Antes la clave compartida hacía que `/facebook/conversaciones-finalizadas/`
+  auto-abriera la última conversación de WhatsApp. El handler `success` de
+  `cargarMensajes` en finalizadas/pendientes ahora limpia la clave y muestra el
+  `message` cuando el server responde `error: true`.
+- `base_chat.html` tiene rama `messenger` en el brand del navbar (ícono
+  `fa-facebook-messenger` + "Messenger Workspace"); antes caía al default
+  "WhatsApp Workspace".
+
+**Botón "WhatsApp Web" solo en canal WhatsApp (2026-07-16):** en los 3 listados
+(`listado.html`, `listado_expirado.html`, `listado_pendiente_reconexion.html`)
+el `#btn-wa-web` se oculta cuando hay `canal_fijo` — antes el PSID/IGSID pasaba
+el filtro de dígitos y FB/IG/TikTok mostraban un link wa.me/ inválido.
+
+**Traza de envíos del panel (2026-07-16):** el action `send` de
+`view_conversaciones.py` mide la duración del `service.send_*` y registra
+`TrazaMensajeIA` (etapa `error_general`, detalle `accion=send_panel` con
+proveedor/duración/error/status) cuando falla o tarda >5s — revisar
+`/whatsapp/trazas/` para diagnosticar "no se envió"/"demoró" en Messenger/IG.
+
+**Acción `consultar_datos_red` (2026-07-16):** ítem "Consultar datos de la red"
+(id `consultar_datos_red`, clase `form_modal`) en el offcanvas de acciones
+(activas) y en el dropdown de finalizadas — usa el flujo `formModal` genérico.
+GET `?action=consultar_datos_red&id=<conv>` (acepta `pk` o `id`) → handler
+compartido `funcionesWhatsappConversacion.consultar_datos_red(request,
+canal_fijo)`: consulta en vivo al proveedor y devuelve `{result, data: html}`
+renderizando `whatsapp/conversaciones/_modal_datos_red.html` — modal de dos
+columnas estilo formulario: izquierda lo que respondió la red (cada campo con
+su origen: endpoint Graph / campo del webhook) y derecha lo guardado en BD con
+`tabla.campo` (`whatsapp_contacto.contacto_nombre`, `external_id`, `canal`,
+`meta_user_id`, `whatsapp_conversacionwhatsapp.proveedor_atencion`, etc.), con
+ambas fotos para comparar. Por proveedor: Messenger → User Profile API
+(nombre/foto; fallback `GET /{page_id}/conversations?user_id=<psid>` →
+`participants.name` cuando la app no tiene Advanced Access y el GET directo al
+PSID da error 100.33); Instagram → name/username/foto + follower_count y flags
+follow (según permisos); WhatsApp Cloud → sin endpoint de perfil (solo push
+name + meta_user_id guardados); Baileys → `getUserImage` del Node +
+nombre/alias de `contacts_list`; TikTok → solo lo que trajo el webhook. En
+fallo Meta el mensaje incluye el error crudo de Graph + diagnóstico del token
+(`meta/perfiles.py::diagnosticar_token` — GET /me: vivo y a qué página
+pertenece) + page_id/PSID. Si obtiene nombre/foto y el contacto no los tenía,
+los persiste. Valida `puede_ver_conversacion` + `canal_conversacion_permitido`.
+La lógica de consulta vive en `_datos_red_de(conversacion)` (levanta NameError
+con mensaje diagnóstico) y la autorización en `_conversacion_para_datos_red`.
+El modal incluye botón "Actualizar contacto con estos datos" → POST
+`action=aplicar_datos_red` (`aplicar_datos_red(request, canal_fijo)`): a
+diferencia del GET (solo completa lo que falta), SOBREESCRIBE
+`contacto_nombre`/`contacto_foto` con lo que devuelva la red; el JS cierra el
+modal, actualiza header/sidebar y muestra Swal. El enriquecimiento automático
+del webhook usa cache key `perfil_social_v2_<canal>_<sender>` (v2 = bust tras
+agregar el fallback de Conversations, para reintentar perfiles que habían
+quedado cacheados como fallo).
+
+**Contactos por red (2026-07-16):** `whatsapp/view_contacto.py::contactoView`
+acepta `canal_fijo`. Sin él (módulo `/whatsapp/contacto/`) filtra sesiones a
+`PROVEEDORES_WHATSAPP`; con él, al proveedor de la red. Wrappers:
+`/facebook/contactos/`, `/instagram/contactos/`, `/tiktok/contactos/`
+(`<app>/view_contactos.py`). El filtro aplica al listado, duplicados,
+combo de sesiones y form de alta; en canales sociales el template oculta
+"Nuevo contacto"/"Importar" (los contactos nacen del webhook). Para usuarios
+staff no-superuser hay que registrar el módulo (url `/facebook/contactos/`,
+etc.) en Seguridad → Módulos y asignarlo al grupo.
 
 **Proveedores de transporte** soportados (snapshot en `ConversacionWhatsApp.proveedor_atencion`):
 Meta Cloud API, Baileys (Node), Instagram DM, Messenger. Selección vía dispatcher
@@ -164,7 +249,13 @@ SENTIMIENTO_CHOICES  # muy_positiva / positiva / neutral / tibia / pasiva / nega
 
 ### Flujo inicial de la vista
 
-1. Carga sesiones del usuario (`SesionWhatsApp.objects.filter(usuario_id=request.user.id, status=True)`).
+1. Carga sesiones vía `sesiones_visibles(request.user)` (`whatsapp/permisos_sesion.py`):
+   solo sesiones donde el usuario es dueño (`usuario=`) o participante por
+   `PerfilSesionWhatsApp` activo (rol supervisor o asesor). Sin bypass de
+   superuser en el selector — un superuser sin participación no ve la sesión
+   listada (sí puede abrir cualquier conversación por deep-link:
+   `puede_ver_conversacion` mantiene su bypass). Aplica a los tres canales
+   (WhatsApp/Instagram/TikTok), finalizadas y pendiente-reconexión.
 2. Resuelve sesión seleccionada vía `leer_sesion_id(request)` o el primer match.
 3. Soporte `request.session.pop('contactoId')` — usado al volver de finalizadas tras reactivar.
 4. Soporte deep-link `?conv=<token>` (`view_conversaciones.py:168-181`):
@@ -180,25 +271,38 @@ SENTIMIENTO_CHOICES  # muy_positiva / positiva / neutral / tibia / pasiva / nega
 | `ver_estadisticas` | 241 | Solo el bloque de estadísticas (refresh del panel) | JSON con dict de `_estadisticas_conversacion` |
 | `cambiar-clasificacion` | 247 | Form modal | JSON + HTML de `form.html` |
 | `cambiar-nombre-contacto` | 259 | Form modal | JSON + HTML de `form.html` |
-| `asignar-conversacion` | 271 | Form modal con dropdown de agentes (anotados con carga de trabajo) | JSON + HTML de `form.html` |
+| `asignar-conversacion` | 271 | Form modal con dropdown de agentes (anotados con carga de trabajo). El select usa clase `jselect2` — se inicializa vía `static/js/form-controls-init.js` (incluido en `base_chat.html`), que engancha `shown.bs.modal` con `dropdownParent` al modal; sin ese include el combo queda como select plano sin buscador | JSON + HTML de `form.html` |
 | `listar_plantillas_meta` | 280 | Lista plantillas `APPROVED` de `sesion.config_meta` | JSON `{plantillas: [...]}` |
+| `guardar-contacto` | (POST) | Ítem "Guardar en contactos" del offcanvas (todos los canales). Red de seguridad idempotente: reactiva `status=True` si el contacto quedó soft-deleted y completa `contacto_numero`/`contacto_nombre` vacíos desde `from_number` — repara los casos en que la conversación se ve pero el contacto no sale en el módulo Contactos | JSON `{error, message}` |
+| `ficha_cliente` | 477 | Ficha CRM de la conversación: clientes registrados + form de alta manual con prefill de variables del flujo (`_prefill_ficha_cliente`) | JSON + HTML de `_modal_ficha_cliente.html` |
+| `historial_cliente` / `historial_mensajes` | 471 / 495 | Historial de conversaciones/mensajes del contacto (`funcionesWhatsappConversacion`) | JSON |
+| `logs-notificaciones` | (GET) | Avisos de asignación enviados al asesor (interna/correo/WhatsApp) de esta conversación — `crm.LogNotificacionAsignacion`. Item "Avisos al asesor" (`form_modal`) en el dropdown del header, replicado en las 3 copias. La misma tabla se ve por sesión desde el kebab del tablero `/whatsapp/sesiones/` (action `logs_notificaciones` en `view_sesiones.py`) | JSON `{result, data}` con `_modal_logs_notif.html` |
+
+**Ficha estricta por conversación:** `_clientes_de_conversacion(conv)` (tope del
+módulo) solo matchea `Q(conversacion_origen=conv) | Q(origenes__conversacion=conv)`.
+Clientes del mismo contacto registrados en conversaciones anteriores NO aparecen
+— la vista finalizadas reusa el mismo helper. El alta manual
+(`POST action=crear_cliente_manual`) delega en `crm.funciones_cliente.cliente_upsert`,
+que crea el `ClienteOrigen` amarrado a la conversación (unique `cliente+conversacion`).
 
 ### Acciones POST (`action=...`)
 
 | Action | Línea | Mutación principal | Side effects |
 |--------|-------|---------------------|--------------|
-| `send` | 323 | Persiste `MensajeWhatsApp` con `agente=request.user`, `ia_generado=False` | Llama service según proveedor, registra `primer_agente` si no existe, log |
-| `enviar_plantilla_meta` | 403 | Persiste mensaje renderizado con placeholders sustituidos | Solo Meta + plantilla `APPROVED` |
+| `send` | 323 | Persiste `MensajeWhatsApp` con `agente=request.user`, `ia_generado=False` | Llama service según proveedor, registra `primer_agente` si no existe, **setea `ai_activo=False`** (al escribir un humano desde plataforma se desactivan IA y flujo tradicional — `procesar_mensaje` gatea ambos por ese flag), log |
+| `tomar-conversacion` | (POST) | El primer asesor que toca "Tomar" queda como `asignado_a` (UPDATE condicional `asignado_a__isnull=True` = atómico ante clicks simultáneos) + `ai_activo=False` + `primer_agente` si vacío + `HistorialAsignacion` | Broadcast a `whatsapp_sessionroom_<sid>` para que el botón desaparezca en las demás pantallas; si perdió la carrera responde `{error, tomada_por}` |
+| `enviar_plantilla_meta` | 403 | Persiste mensaje renderizado con placeholders sustituidos | Solo Meta + plantilla `APPROVED`. También setea `ai_activo=False` (envío humano desde plataforma desactiva IA + flujo tradicional); idem el `send` de finalizadas. La plantilla de RECONEXIÓN (`enviar_plantilla_reconexion` en `funcionesWhatsappConversacion.py`) NO lo hace — su flujo pendiente_reconexion se maneja aparte. **Reinicio de flujo por reconexión**: si la sesión es `tradicional`/`hibrido` y la ventana Meta estaba **caducada** al enviar (`_bloqueo_ventana_meta`), marca `ConversacionWhatsApp.reiniciar_flujo_al_responder=True`; cuando el cliente responde, `procesar_mensaje` reactiva `ai_activo=True`, limpia el flag y corre `reiniciar_flujo_tradicional(conv)` (menú desde nodo_inicio) en vez de dejar el bot pausado en silencio. El flag distingue este caso del bot pausado a mano por un asesor. **Campo nuevo → requiere `makemigrations whatsapp` + `migrate` (lo corre el developer).** |
 | `cambiar-clasificacion` | 483 | `clasificacion` | Form save + log |
 | `cambiar-nombre-contacto` | 497 | `Contacto.contacto_nombre` | Form save + log |
-| `asignar-conversacion` | 512 | `asignado_a`, `fecha_asignacion`, **`ai_activo=False`**, `nota_interna` | Crea `HistorialAsignacion` + `Notificacion` al agente; envía mensaje de handoff vía service con `simularEscritura=True` |
+| `asignar-conversacion` | 512 | `asignado_a`, `fecha_asignacion`, **`ai_activo=False`**, `nota_interna` | Crea `HistorialAsignacion` + `Notificacion` al agente; envía mensaje de handoff vía service con `simularEscritura=True` y lo **persiste + difunde por WS** (`_persistir_y_difundir_automatico` — sin eso el mensaje llegaba al cliente pero no aparecía en el historial del panel, sobre todo en Meta que no rebota por webhook). Idem la presentación de `tomar-conversacion` |
 | `toggle-bot` | 594 | Invierte `ai_activo` | — |
 | `toggle-bloquear-cierre` | 601 | Invierte `bloquear_cierre` | — |
-| `reiniciar-flujo` | 608 | Llama `crm.motor_flujo_chatbot.reiniciar_flujo_tradicional()` | Solo si `sesion.modo_bot='tradicional'` |
+| `reiniciar-flujo` | 608 | Llama `crm.motor_flujo_chatbot.reiniciar_flujo_tradicional()` | Solo si `sesion.modo_bot in ('tradicional','hibrido')`. **Gate ventana Meta 24h**: antes de intentar enviar corre `_bloqueo_ventana_meta(conv)`; si está caducada devuelve `{error:True, requiere_plantilla:True}` con copy "envía una plantilla aprobada" en vez de reventar en el transporte (el free-form del saludo lo rechaza Meta). En éxito devuelve `respuestas_enviadas` (int) — el JS solo loguea el conteo si viene `!= null` |
 | `marcar-resuelto` | 633 | `conversacion.cerrar(enviar_despedida=True)` | Resume IA + envía despedida + cierra |
 | `terminar-sin-despedida` | 655 | `conversacion.cerrar(enviar_despedida=False)` | Cierra silenciosamente |
-| `transcribe_audio` | 665 | Llama `WhatsAppService.transcribe_audio(msg, 'small', lang)` | Whisper local; al terminar broadcast WS |
+| `transcribe_audio` | 665 | Llama `WhatsAppService.transcribe_audio(msg, 'small', lang)` | Whisper local en background; al terminar broadcast WS. Candado en cache `transcribiendo_<msg_id>` (TTL 5 min) contra doble-click — el re-render del chat por WS pierde el spinner y el usuario re-pulsaba, duplicando transcripciones. El modelo Whisper se cachea en memoria por tamaño (`transcribe_whatsapp_audio._MODELOS_WHISPER`) — antes se recargaba en CADA audio (10-60s extra) |
 | `feedback-mensaje` | 675 | Crea `FeedbackMensajeBot`. Si incorrecto + corrección → crea `FaqAgente` aprobada y la agrega al vectorstore FAISS | — |
+| `cambiar_estado_atencion` / `posponer_conversacion` / `reabrir_conversacion` | `_gestionar_atencion` (~256) | Solo estado de **bandeja** (`estado_atencion` abierta/pendiente/resuelta + `snooze_hasta`). **No** reabren la ventana Meta, **no** reactivan el bot, **no** escriben al cliente. Las tres devuelven `message` explícito (ej. "Conversación marcada como Abierta en la bandeja"); el JS (`setEstadoAtencion`/`posponerConversacion`/`reabrirConversacion`) muestra `mensajeSuccess` + refresca la lista vía `window.cargarConversaciones()` — antes en éxito no decían ni refrescaban nada |
 
 ### Listado (`view_conversaciones.py:762-867`)
 
@@ -219,11 +323,227 @@ filtros = Q(
 - `?clasificacion=<int>`
 - `?sin_responder=1` — Subquery sobre el último mensaje, excluye los que mandó la sesión
 - `?mis_conv=1` — `asignado_a=request.user`
+- `?asesor=<user_id>` — `asignado_a_id=<id>`. El dropdown "Asesor" del sidebar
+  solo se renderiza con vista completa (`es_vista_completa`); candidatos salen
+  de `PerfilSesionWhatsApp` de la sesión seleccionada (dedupe por usuario). En
+  deep-link (ej. desde "Carga de asesores") si el `<user_id>` ya no es perfil
+  activo pero tiene conversaciones asignadas, se agrega como candidato para que
+  el chip resuelva su nombre. La vista expone `nombre_asesor_filtro` y el chip lo
+  muestra como "Asesor: <nombre>" (etiqueta base fija con `data-label-base`). El
+  JS arma `load_conversations` desde `filtros_activos_qs` (los filtros activos sin
+  el fragmento `&sesion=`), no con un replace sobre el token firmado.
+- `?sin_asesor=1` — chip "Sin asesor": `asignado_a__isnull=True`. El chip solo se
+  renderiza con vista completa (`mostrar_filtro_asesor`) y muestra el contador
+  `total_sin_asesor` (mismo alcance que los contadores de abiertas/finalizadas).
+- `?por_caducar=1` — chip "Por caducar": ventana Meta de 24h a la que le quedan
+  menos horas que el aviso configurado en la sesión. Se filtra en el branch load
+  sobre la anotación `fecha_ultimo_entrante` (último entrante entre `24-N` y 24h
+  de antigüedad) + `sesion__proveedor='meta'`. El umbral `N` sale de
+  `SesionWhatsApp.horas_aviso_por_caducar` vía
+  `funcionesWhatsappConversacion.horas_aviso_de_sesion(sesion)` — **6h por
+  defecto**, rango 1-23, se edita en el modal "Editar sesión" de
+  `/whatsapp/sesiones/` (campo "Avisar cuando falten (horas)", solo sesiones
+  Meta) y lo valida `view_sesiones`.
+- `?caducada=1` — ventana Meta de 24h **ya vencida por completo**
+  (`fecha_ultimo_entrante <= now - 24h` + `sesion__proveedor='meta'`). Espejo del
+  gate `_bloqueo_ventana_meta`. **No es un chip**: es la base fija de la pestaña
+  dedicada **Caducadas** (`/whatsapp/conversaciones-caducadas/`, ver §Pestañas).
+  Al abrir una conversación caducada, el composer se **bloquea** (ver §5).
 
-**AJAX `?load_conversations=1`** (línea 824): retorna solo el HTML del partial.
+**Caducadas independiente del timer interno (clave):** "caducada" se define por
+la **ventana Meta de 24h** (último entrante), NO por `fecha_hora_expira`/`expirado`.
+Con `min_sesion≈1440` ambos coincidían y las caducadas quedaban `expirado=True` →
+ocultas de `sin_expirar` (la pestaña marcaba 0 teniendo cientos). Por eso:
+- La vista Caducadas parte del **manager base** (`ConversacionWhatsApp.objects`,
+  no `sin_expirar`) + `estado_conversacion=0` + `conversacion_finalizada=False`
+  + Meta + `fecha_ultimo_entrante <= now-24h`. Así surgen aunque `expirado=True`.
+- **Abiertas EXCLUYE las caducadas** (`qs.exclude(proveedor='meta',
+  fecha_ultimo_entrante<=now-24h)` en el branch load, y el badge `total_abiertas`
+  igual). Quedan **disjuntas**: `<24h` Abiertas · `>24h` Caducadas.
+- Badge `total_caducadas` (mismo scope que los otros contadores) en la pestaña,
+  refrescado por AJAX (`load_conversations` lo devuelve). Solo se computa en la
+  vista Abiertas/Caducadas (`conversacionesView`); las vistas finalizadas/
+  pendientes muestran la pestaña sin contador.
+- El cron de cierre por inactividad (`fecha_hora_expira`) es ortogonal: sigue
+  respetando las asignadas a un humano. Para que las caducadas **sin asignar**
+  tampoco se autocierren hay que apagar el timer interno de la sesión
+  (`min_sesion=0` + `dias_cierre_higienico=0`).
+
+**Pestaña "Caducadas"** (`/whatsapp/conversaciones-caducadas/`): cuarta pestaña
+del inbox junto a Abiertas/Finalizadas/Pendientes. **Comparte layout y template
+con Abiertas** (`base_chat.html` + `listado.html`) porque las caducadas siguen
+siendo conversaciones **activas** (`estado_conversacion=0`) con chat/composer —
+por eso NO clona el template (evita duplicar ~4000 líneas, coherente con la
+unificación 2026-07-15). La vista es el wrapper
+`conversacionesCaducadasView` → `conversacionesView(request,
+forzar_caducada=True)`, que fuerza `filtro_caducada='1'` server-side (robusto:
+persiste aunque los chips rápidos reseteen `filtroActivo`) y setea
+`data['vista_actual']='caducadas'`. El template renderiza la pestaña activa según
+`vista_actual` (Abiertas pasa a link, Caducadas a botón activo). Solo se muestra
+en el inbox WhatsApp (`branding.tiene_caducadas=True` solo para `canal_fijo=None`;
+Instagram/Messenger/TikTok no tienen ventana de 24h). Ruta registrada en
+`whatsapp/urls.py` (`sub_urls`) — staff no-superuser necesita el módulo
+`/whatsapp/conversaciones-caducadas/` en Seguridad (como finalizadas/pendientes).
+
+**Exportar Caducadas a Excel (2026-07-28):** chip `#btn-exportar-caducadas`
+("Exportar Excel", clase `cs-chip-export`) al final de `#filtros-rapidos` en
+`listado.html`, renderizado solo con `vista_actual == 'caducadas'`. El JS arma
+`{{ ruta }}?exportar_excel=true` agregando `sesion`, `criterio` y `filtroActivo`
+— mismos parámetros que `cargarConversaciones`, así el archivo respeta lo que el
+asesor ve en pantalla. Server-side el branch vive en `conversacionesView` justo
+antes de `load_conversations` y solo dispara con `filtro_caducada` activo (la
+vista Abiertas no exporta). La lógica está en
+`whatsapp/funciones_conversaciones_excel.py`:
+- `queryset_caducadas_export(filtros)` — parte del **manager base** (igual que el
+  listado, no `sin_expirar`), acota a `proveedor='meta'` +
+  `fecha_ultimo_entrante <= ahora - 24h`, y resuelve por `Subquery` el último
+  mensaje **entrante** (`exclude(remitente=sesion.numero)`) y el último
+  **saliente** (`remitente=sesion.numero`) con su fecha y tipo — sin N+1.
+- `exportar_caducadas_excel(qs)` — Workbook openpyxl (hoja `Caducadas`, header
+  bold + `freeze_panes`). Columnas: Cod · Contacto · Número · **WhatsApp**
+  (celda con `hyperlink` a `https://wa.me/<solo dígitos>`, estilo `Hyperlink`,
+  texto "Abrir chat") · Sesión · **Asesor asignado** (`asignado_a` con fallback a
+  `primer_agente`, "Sin asesor" si no hay) · **Última respuesta enviada** +
+  fecha · **Último mensaje del cliente** + fecha · Ventana Meta venció.
+  Los adjuntos sin cuerpo salen etiquetados (`[Imagen]`, `[Audio]`, …) vía
+  `ETIQUETA_POR_TIPO`; los textos se cortan a 1000 chars.
+  Ojo: "última respuesta enviada" es el último saliente **sea del asesor o del
+  bot** (se filtra por `remitente == sesion.numero`, que no distingue origen).
+  Para separar humano de automático habría que sumar subqueries sobre
+  `MensajeWhatsApp.es_automatico` / `ia_generado` / `agente`.
+- **USE_TZ=False** (está comentado en `settings.py`): los datetimes del proyecto
+  son naive. Por eso `_fecha()` solo aplica `timezone.localtime()` si el valor
+  es aware, y el nombre del archivo usa `timezone.now().date()` y NO
+  `timezone.localdate()` — esa función revienta con naive datetimes
+  (`ValueError: localtime() cannot be applied to a naive datetime`).
+Mismo patrón que `autenticacion.funciones_usuario.exportar_usuarios_excel`
+(openpyxl + `HttpResponse` con `Content-Disposition`) y deja traza con `log()`.
+
+**Reactivar en finalizadas de Messenger/Instagram (fix 2026-07-28).** Reporte:
+"en `/facebook/conversaciones-finalizadas/` no tenemos opción de revivir
+conversaciones". Eran dos problemas encadenados en `listado_expirado.html`:
+- El aviso `#bloqueo-reactivar-aviso` y todo el footer vivían dentro de
+  `if (r.es_meta === true)`, o sea **solo WhatsApp Cloud**. Messenger e Instagram
+  caían al `else`, que hace `$('#chat-footer').hide()`. Como el botón
+  `#reactivar-btn` ya se oculta cuando `reactivar_bloqueada`, la pantalla
+  quedaba **muda**: ni botón ni explicación. Ahora hay una rama
+  `else if (proveedor === 'messenger' || 'instagram')` que muestra el footer con
+  el aviso y esconde `#footer-plantillas-row` (las plantillas son de WhatsApp;
+  Messenger/IG no tienen forma de reabrir fuera de ventana). El backend expone
+  `proveedor` en la respuesta de `ver_mensajes`.
+  **Ojo con el DOM:** `#bloqueo-reactivar-aviso` está DENTRO de `#chat-footer` —
+  para mostrar el aviso hay que mostrar el footer, no ocultarlo.
+- `_bloqueo_reactivar()` medía la ventana desde `fecha_registro` (creación de la
+  conversación) en vez del **último mensaje entrante**, al revés que
+  `_bloqueo_ventana_meta()`. Una conversación abierta hace 5 días con el cliente
+  escribiendo hace 10 minutos quedaba bloqueada para siempre. Ahora usa el último
+  entrante con fallback a `fecha_registro`. Medido al aplicarlo: **0 de 949
+  finalizadas cambiaron de estado**, así que es correctitud a futuro, no un
+  desbloqueo masivo.
+
+Lo que el fix **no** hace: revivir conversaciones fuera de ventana. Si el cliente
+escribió hace más de `HORAS_VENTANA_REACTIVAR` (23h), Meta rechaza el envío y no
+hay plantilla de reapertura para Messenger/IG — la única salida es que el cliente
+escriba de nuevo. El fix hace que la UI lo diga en vez de no mostrar nada.
+
+**Alerta "por caducar" del panel** (`/panel/`): `seguridad/view_index.py` publica
+`alertas_por_caducar` / `total_por_caducar` a partir de
+`funcionesWhatsappConversacion.conversaciones_por_caducar_por_sesion(usuario, sesiones)`.
+- Una entrada **por sesión Meta** con `total`, `horas_aviso`, `vence_en` (la que
+  cierra primero), `sesion_token` y `conversacion_token`. Mismo criterio y mismo
+  umbral por sesión que `?por_caducar=1` (`horas_aviso_de_sesion`, default
+  `HORAS_AVISO_POR_CADUCAR=6` sobre `HORAS_VENTANA_META_CUSTOMER_SERVICE=24`),
+  así que el conteo del panel y el listado del inbox no se contradicen.
+- El alcance pasa por `filtro_conversaciones_por_rol(usuario, sesion)`: el asesor
+  solo cuenta las suyas; supervisor y dueño de la sesión cuentan todas.
+- Se calcula **antes** del corte `es_administrativo()` de la vista: el asesor no ve
+  el resto del panel pero sí esta alerta, que es la que tiene que atender.
+- Cada tarjeta enlaza a `/whatsapp/conversaciones/?sesion=<token>&por_caducar=1`;
+  cuando queda una sola conversación usa el deep-link `?conv=<token>` para abrir
+  su ventana directamente.
+
+**Acción masiva `asignacion-automatica-masiva`** (botón "Asignación automática",
+al lado del chip "Sin asesor"): reparte asesor a todas las conversaciones
+abiertas sin asignar de la sesión visible. Sale solo si
+`permisos_sesion.puede_asignar_masivo(user, sesion)` → permiso por sesión
+`PerfilSesionWhatsApp.puede_asignar_masivo_asesores` (superusuario siempre), que
+se marca con el switch "Asignación masiva" del modal "Usuarios asignables" de
+`/whatsapp/sesiones/` (acción `toggle_asignacion_masiva`).
+- Handler: `asignacion_automatica_masiva_post(request, sesiones, sesion_seleccionada)`
+  en `whatsapp/funcionesWhatsappConversacion.py`; el alcance sale de
+  `filtro_conversaciones_sin_asesor(usuario, sesiones, sesion_seleccionada)`
+  (mismo Q que el chip: sesiones visibles + rol en sesión + abiertas + sin asesor).
+- Se despacha **antes** del `transaction.atomic()` de la vista: hace envíos de
+  WhatsApp, emails y notificaciones por conversación y no debe encerrarlos en una
+  transacción larga.
+- Cada conversación pasa por `crm.helpers_asignacion.auto_asignar_agente(conv,
+  motivo='masivo', asignador=request.user, avisar_cliente=False, pausar_ia=False)`
+  — conserva `HistorialAsignacion` y los avisos al asesor (notificación/webpush +
+  email + WhatsApp, logueados en `LogNotificacionAsignacion`). **Es un reparto
+  administrativo**: no cierra la conversación, no pausa el bot y no le manda nada
+  al cliente. El bot solo se pausa cuando el cliente elige "hablar con un asesor"
+  en el flujo.
+- El reparto queda justo porque `candidatos_ordenados` se recalcula en cada
+  iteración: ordena por asignaciones de las últimas 24h, luego `ultimo_asignado_en`,
+  luego carga abierta.
+- **Por lotes con barra de progreso**: cada POST procesa `lote` conversaciones
+  (`LOTE_ASIGNACION_MASIVA = 10`, tope `LIMITE_ASIGNACION_MASIVA = 200`) y
+  devuelve `total_pendientes`, `procesadas`, `asignadas`, `sin_candidato`,
+  `restantes` y `continuar`. El inbox encadena lotes en `repartirLoteMasiva()`
+  pintando `#modalAsignacionMasiva`, y al terminar recarga la página.
+  `continuar` es False si un lote no asignó nada (sin candidatos disponibles),
+  para no quedar pidiendo lotes en vano.
+
+**Acción masiva `reasignacion-masiva-asesor`** (botón "Reasignar asesor", mismo
+permiso `puede_asignar_masivo`): pasa todas las conversaciones **abiertas** de un
+asesor a otro (vacaciones, bajas, rebalanceo). Handler
+`reasignacion_masiva_asesor_post`. Escribe `asignado_a` + `fecha_asignacion` +
+`HistorialAsignacion`, y manda **una** notificación por lote al asesor destino
+(no una por conversación). Tampoco cierra, ni pausa el bot, ni le escribe al
+cliente. Lotes de `LOTE_REASIGNACION_MASIVA = 50` con la misma barra de progreso.
+
+**Chips de filtro con dropdown:** `aplicarFiltro()` marca el chip padre
+(`.filter-btn.dropdown-toggle`) cuando el filtro viene de un `.filter-link`
+(Etapa / Asesor) y le agrega el valor elegido al label. Antes solo buscaba un
+`.filter-btn[data-filter=...]`, que no existe para las opciones del dropdown, y
+por eso filtrar por asesor no marcaba nada como activo.
+
+**Imágenes del hilo:** los `<a>` de las imágenes en `mensajes_partial.html` y
+`mensaje_enviado_partial.html` usan `data-fancybox="chat"` y ya **no** llevan
+`target="_blank"` — se abren en el visor Fancybox sin sacar al usuario del chat.
+El bind vive en `base_chat.html` y en `base.html` (`Fancybox.bind('[data-fancybox="chat"]')`),
+que delega en document, así los mensajes que llegan por websocket también lo usan.
+
+**Orden del listado:** explícito por `contacto__fecha_ultimo_mensaje` DESC
+(nulls last), NO por el default `-order` del modelo — el snapshot `order` puede
+estar desactualizado (solo se recalcula en save(); ver nota de
+procesar_mensaje). Es el mismo dato que muestra el "hace X min" de la card,
+así el orden visible siempre coincide.
+
+**AJAX `?load_conversations=1`** (línea 824): retorna el HTML del partial más
+`listado_count`, `total_abiertas` y `total_finalizadas` (el JS refresca los
+badges de las pestañas en cada recarga).
 Optimización con `select_related('contacto', 'contacto__sesion', 'contacto__sesion__config_meta', 'contacto__sesion__config_baileys', 'asignado_a')` + `.distinct()` (línea 830-841) para evitar N+1.
 
 **Conteo `total_sin_leer`** (línea 815) — badge global en el header.
+
+**Conteos `total_abiertas` / `total_finalizadas`** — badges `cs-tab-total` en
+las pestañas Abiertas/Finalizadas del sidebar. Mismo alcance de visibilidad
+que `total_sin_leer` (rol + sesiones visibles) acotado a la sesión
+seleccionada. Abiertas usa el manager `sin_expirar` (el MISMO criterio del
+listado) — con `estado_conversacion=0` a secas contaba expiradas-sin-cerrar
+que la lista oculta (badge 3, lista vacía en /facebook/). Finalizadas =
+`estado_conversacion=1`.
+
+**Expiración por canal:** Messenger y TikTok nunca expiran por inactividad —
+`obtener_o_crear_activa` fuerza `fecha_hora_expira=None` aunque la sesión
+tenga `min_sesion` (el asesor finaliza a mano). Datos viejos atascados se
+reparan con `python manage.py normalizar_conversaciones_social`.
+
+**Contactos por sesión (`view_contacto.py`):** visibilidad = `sesiones_visibles`
+(dueño O miembro por `PerfilSesionWhatsApp`), igual que el inbox. Antes
+filtraba solo `sesion__usuario=request.user`: miembros no-dueños veían
+conversaciones pero cero contactos (típico en canales sociales).
 
 **Render final** (línea 874): `render(request, 'whatsapp/conversaciones/listado.html', data)`.
 
@@ -237,8 +557,9 @@ Método `ConversacionWhatsApp.cerrar(*, enviar_despedida=True, ...)` en `models.
    `mensaje_despedida` de la sesión. No bloquea si falla envío — deja traza.
 4. Marca `conversacion_finalizada=True`, `estado_conversacion=1`.
 
-Disparado por: `marcar-resuelto`, `terminar-sin-despedida`, cron job de
-inactividad y `enviar_plantilla_meta` (cuando reactiva).
+Disparado por: `marcar-resuelto`, `terminar-sin-despedida` y cron job de
+inactividad. (`enviar_plantilla_meta` ya NO reactiva ni cierra: deja la conv
+finalizada con `pendiente_reconexion=True` — ver flujo de reconexión abajo.)
 
 ---
 
@@ -278,7 +599,7 @@ muestra `#bloqueo-reactivar-aviso` con la fecha de vencimiento.
 | Action | Línea | Comportamiento |
 |--------|-------|----------------|
 | `send` | 182 | Permitido solo dentro de la ventana 6h (caso raro: agente reactivó manualmente y aún la conv está abierta) |
-| `enviar_plantilla_meta` | 257 | Sustituye `{{N}}` server-side con `_render_cuerpo`, llama `service.send_template`, **reactiva la conv** (`estado_conversacion=0`, recalcula `fecha_hora_expira` con `min_sesion`), persiste mensaje, guarda `primer_agente` si vacío, setea `request.session['contactoId']` y devuelve `{reactivada: True, url: '/whatsapp/conversaciones/'}` para que el JS redirija |
+| `enviar_plantilla_meta` | delega en `enviar_plantilla_reconexion` (`funcionesWhatsappConversacion.py`) | Sustituye `{{N}}` server-side con `_render_cuerpo`, llama `service.send_template`, persiste el mensaje en la MISMA conversación y la marca `pendiente_reconexion=True, reconectada=False` (NO la reabre). Cuando el cliente responde, `obtener_o_crear_activa` REABRE esa misma conversación (estado 0, limpia fecha_fin/despedida/duración, renueva `fecha_hora_expira`, `reconectada=True`) — se conserva historial (plantillas enviadas incluidas) y asesor asignado. Devuelve `{pendiente: true, mensaje_html}` |
 | `cambiar-clasificacion` | 365 | Idem abiertas |
 | `marcar-reactivar` | 379 | Reset puro: `estado_conversacion=0`, limpia `fecha_fin_conversacion`, `despedida_enviado`, `conversacion_finalizada`, `fecha_hora_expira`, `duracion_conversacion`. Setea `contactoId` en sesión y redirige |
 
@@ -299,6 +620,71 @@ Bajo `whatsapp/templates/whatsapp/conversaciones/`. Ambas vistas extienden
 <link rel="stylesheet" href="/static/stylenew/conversacion_plantillas.css">
 <link rel="stylesheet" href="/static/stylenew/conversaciones.css">
 ```
+
+### Tema y template por canal (2026-07-09; unificado 2026-07-15)
+
+Historia: el 2026-07-09 cada canal tuvo su copia completa del template de inbox
+(pedido del usuario de entonces). El 2026-07-15, en la revisión clean-code, el
+usuario pidió revertirlo: las 4 copias (whatsapp/IG/TikTok/FB) diferían solo en
+8 puntos de branding y cada fix del chat había que replicarlo a mano.
+
+Hoy existe **un único template**: `whatsapp/templates/whatsapp/conversaciones/listado.html`,
+parametrizado por el dict `canal_branding` que arma `BRANDING_INBOX_CANAL` en
+`whatsapp/view_conversaciones.py` (ícono, nombre del canal para toasts, URL de
+sesiones y textos del modal sin-sesiones). Los wrappers solo pasan `canal_fijo`:
+
+| Vista | `canal_fijo` |
+|---|---|
+| `/whatsapp/conversaciones/` | `None` (default WhatsApp) |
+| `/instagram/conversaciones/` | `instagram` |
+| `/facebook/conversaciones/` | `messenger` |
+| `/tiktok/conversaciones/` | `tiktok` |
+
+Desde 2026-07-16 las pestañas Finalizadas y Pendientes también son per-canal:
+cada app (`facebook/`, `instagram/`, `tiktok/`) registra
+`conversaciones-finalizadas/` (y `conversaciones-pendiente-reconexion/` solo
+en Instagram) como wrappers de las vistas compartidas de `whatsapp/` con su
+`canal_fijo` (`facebook/view_conversaciones.py`, etc. — antes las pestañas
+mandaban al inbox de WhatsApp). `BRANDING_INBOX_CANAL` ganó las claves
+`url_conversaciones`, `url_finalizadas`, `url_pendientes` y
+`tiene_pendientes`, y los tres templates (`listado.html`,
+`listado_expirado.html`, `listado_pendiente_reconexion.html`) las usan en
+tabs, AJAX (`load_conversations`, `ver_mensajes`, `transcribe_audio`,
+`_fbUrl`), alert de sesión pausada y modal `#modalSinSesiones` — no volver a
+hardcodear `/whatsapp/...` en esos templates. Las respuestas JSON con `url` de
+redirección (`marcar-resuelto`, `terminar-sin-despedida`, `send` reactivador,
+`marcar-reactivar`, deep-link `?conv=`) también salen de `branding`.
+Los nuevos módulos por canal deben registrarse en seguridad (sincronizar
+módulos desde `sub_urls`) para usuarios no superuser.
+
+**Messenger y TikTok no tienen Pendientes** (`tiene_pendientes=False`): el
+inbox muestra solo Abiertas y Finalizadas, y no existen las rutas
+`/facebook|tiktok/conversaciones-pendiente-reconexion/`. El ciclo de vida es
+un solo hilo por contacto: el asesor finaliza a mano y, si el cliente vuelve a
+escribir, `ConversacionWhatsApp.obtener_o_crear_activa` (whatsapp/models.py)
+REABRE la última conversación finalizada del contacto (proveedor 'messenger' o
+'tiktok') en vez de crear una nueva — el historial completo queda en el mismo
+hilo. WhatsApp e Instagram conservan el flujo clásico (nueva conversación tras
+finalizar, salvo sonda `pendiente_reconexion`).
+
+El tema de color por canal sigue viniendo de `base_chat.html`
+(`body.canal-{{ canal_fijo }}` + `chat_tema_canal.css`). Para agregar un canal:
+entrada en `BRANDING_INBOX_CANAL` + bloque de tema en el CSS — sin copiar HTML.
+Un cambio de lógica del inbox ahora se hace **una sola vez**.
+
+Identidad visual (aplica a las tres, vía layout compartido):
+
+- `base_chat.html` agrega la clase `canal-<canal_fijo>` al `<body>`, cambia el
+  `chat-brand-sub` ("Instagram Workspace" / "TikTok Workspace"), el ícono de marca
+  (`fa-instagram` / `fa-tiktok`) y el `theme-color`.
+- `static/css/whatsapp/chat_tema_canal.css` (cargado siempre en `base_chat.html`)
+  redefine sobre `body.canal-instagram` / `body.canal-tiktok` las variables
+  `--chat-primary*` y burbujas enviadas, más el gradiente del `.chat-brand-icon`,
+  el `.conversacion-item.active` y el fondo del toast `#toast-nuevo-mensaje`
+  (cuyo fondo default verde vive en ese CSS, no inline).
+- El selector de sesiones muestra 🎵 TikTok (`sesion.es_tiktok`).
+
+Sin `canal_fijo` todo queda igual (verde WhatsApp).
 
 ### Layout — tres zonas
 
@@ -326,6 +712,7 @@ Bajo `whatsapp/templates/whatsapp/conversaciones/`. Ambas vistas extienden
 | `#dropdowns-btn`, `#btn-estadisticas`, `#btn-control-respuestas`, `#ver-resumen-btn` | ambas | Acciones secundarias |
 | `#bot-toggle-container`, `#resolver-btn`, `#asignado-container`, `#tokens-container`, `#referral-container` | abiertas | Solo durante chat activo |
 | `#reactivar-btn` | finalizadas | Reset de estado |
+| `#btn-wa-web` | finalizadas | Link `https://wa.me/<numero>` con `target="_blank"` — abre el chat del contacto en WhatsApp Web; se hidrata/oculta en `cargarMensajes`/`_resetChat` |
 
 ### Paneles colapsables (toggle desde el dropdown)
 
@@ -338,6 +725,19 @@ Bajo `whatsapp/templates/whatsapp/conversaciones/`. Ambas vistas extienden
 textarea con auto-grow, emoji picker, input de archivo (`#archivo`),
 botón plantillas Meta (`#plantillas-btn`). Al enviar, `action=send`.
 Al pulsar enviar el JS pausa la IA preventivamente para evitar double-reply.
+
+**Composer bloqueado por ventana Meta vencida (caducada):** cuando `ver_mensajes`
+devuelve `meta_bloqueada=True` (= `vence_meta_expirada`), `aplicarBloqueoCaducado()`
+(en `listado.html`) deshabilita textarea/emoji/adjuntar/enviar (clase
+`cm-composer-caducado` en `#chat-footer`) y muestra `#composer-caducado-banner`
+con el contador vivo "Caducada hace Xh Ym" (`_fmtMetaElapsed`) y dos acciones que
+siguen activas: **Enviar plantilla** (`#cad-btn-plantilla` → abre `#plantillas-btn`)
+y **Finalizar** (`#cad-btn-finalizar` → dispara `#marcar-resuelto`). El mismo
+contador vivo se pinta en el badge del header (`#meta-countdown-header`) y en la
+card del sidebar (`.meta-caducada[data-vence]` en `conversacion_item.html`) vía
+`tickMetaCountdowns()` — que ahora conserva `data-vence` tras vencer en vez de fijar
+"Vencido" estático. El backend igual bloquea el envío (`_bloqueo_ventana_meta` →
+`requiere_plantilla:True`); el bloqueo del composer es la capa visual.
 
 **Finalizadas** (footer reemplazado):
 - `#bloqueo-reactivar-aviso` (oculto por defecto) — alerta amarilla cuando la
@@ -352,7 +752,7 @@ Al pulsar enviar el JS pausa la IA preventivamente para evitar double-reply.
 | Archivo | Propósito |
 |---------|-----------|
 | `conversaciones_partial.html` | Wrapper que itera `{% for conversacion in conversaciones %}` y delega |
-| `conversacion_item.html` | Card individual: avatar, status dot, badges (plataforma/clasif/IA-OFF/sentimiento/asignado), nombre, snippet, hora relativa, badge no-leído |
+| `conversacion_item.html` | Card individual: avatar, status dot, badges (plataforma/clasif/IA-OFF/sentimiento/asignado), nombre, snippet, hora relativa, badge no-leído. Si la conv está abierta y sin `asignado_a`, muestra botón `.ci-tomar-btn` ("Tomar conversación") — handler delegado en las tres copias de `listado.html` que hace POST `tomar-conversacion` |
 | `mensajes_partial.html` | Historial completo. Dos ramas: `msg-out` (agente o IA) y `msg-in` (cliente). Soporta texto, imagen (fancybox), sticker, audio (con botón transcribir), video, documento. Incluye ack states + feedback IA + form de corrección |
 | `mensaje_enviado_partial.html` | Render mínimo de un mensaje recién enviado, para inyección AJAX sin recargar el chat |
 | `modal_resumen_conversacion.html` | Resumen IA con sentimiento + barra de puntuación + agente asignado |
@@ -416,16 +816,64 @@ $(document).on('click', '.cargar-conversacion', function() {
 });
 ```
 
+**Deadlock del spinner en móvil (2026-07-28) — no quitar estas guardas.** El
+`cargarMensajes` de los 3 listados usa la pareja `_cargandoMensajes` /
+`conversacionActiva` como anti-doble-click:
+`if (_cargandoMensajes || id == conversacionActiva) return;`. El AJAX
+`?action=ver_mensajes` **no tenía `timeout`**, así que en redes móviles
+inestables (cambio WiFi↔4G, pantalla bloqueada, iOS Safari suspendiendo el XHR
+al pasar a segundo plano) la petición quedaba colgada sin disparar `success` ni
+`error`: `_cargandoMensajes` se quedaba en `true` **para siempre** y el spinner
+"Cargando mensajes..." no se iba nunca. Peor: la guarda bloqueaba después
+cualquier tap sobre cualquier otra conversación, así que el inbox entero quedaba
+muerto hasta recargar la página. En móvil no se nota que es un cuelgue porque
+`chat-mobile-open` ya tapó la lista y solo se ve el panel del chat girando.
+Lo que sostiene el fix (los 3 listados: `listado.html`, `listado_expirado.html`,
+`listado_pendiente_reconexion.html`):
+- `timeout: 25000` en el `$.ajax` → jQuery dispara `error` con
+  `status === 'timeout'` en vez de colgarse indefinidamente.
+- `complete:` que resetea `_cargandoMensajes` — se ejecuta sí o sí (éxito, error,
+  timeout y abort), es el backstop del reset que ya hacían `success`/`error`.
+- `conversacionActiva = null` en el handler de `error`: sin esto, tras un fallo
+  volver a tocar **la misma** conversación chocaba con
+  `id == conversacionActiva` y no hacía nada — segundo camino de bloqueo.
+- Botón `.btn-reintentar-mensajes` (con `data-id`) en el estado de error, con
+  handler delegado que limpia ambas variables y reintenta, para que el asesor se
+  recupere sin recargar. Copy distinto si fue timeout ("La conexión tardó
+  demasiado…") o error genérico.
+
 ### Específico de finalizadas — plantillas Meta
 
 - Cache local `_plantillasCache[convId]` evita refetch.
 - `_detectarVarsEnCuerpo(body)` extrae IDs de `{{N}}` con regex `/\{\{(\d+)\}\}/g`.
-- `_plantillaNecesitaFormulario(p)` decide si abrir el form de variables.
+- Click en una plantilla SIEMPRE abre el form: muestra preview del mensaje
+  (`.pp-envio-preview`: header TEXT + cuerpo + footer) y un aviso
+  (`.pp-envio-info`) de qué pasará al enviar (cliente lo recibe ya; la conv pasa
+  a Pendientes de reconexión; al responder se reanuda ESA misma conversación con
+  su historial). Sin variables, el form solo pide confirmar.
 - Si `header_tipo` ∈ `{IMAGE, VIDEO, DOCUMENT}` → input URL obligatorio + filename opcional para DOCUMENT.
 - Al enviar, POST `action=enviar_plantilla_meta` con `params_cuerpo_json` y
-  `params_header_json`. Si la respuesta trae `{reactivada: true, url}`, redirige
-  a la vista de abiertas — la conv ya quedó preseleccionada por
-  `request.session['contactoId']`.
+  `params_header_json`. La respuesta trae `{pendiente: true, mensaje_html}`: el
+  JS inyecta el mensaje y muestra el toast; no hay redirect.
+- Mismo patrón en `listado_pendiente_reconexion.html` (reenvío de sonda).
+- Precarga de variables: `listar_plantillas_meta` devuelve `contexto`
+  ({nombre, numero, campos: {clave/nombre → valor de campos personalizados}});
+  `_valorPorDefecto(info, idx)` precarga cada `{{N}}` matcheando el `nombre` de
+  la variable (nombre/cliente → contacto, teléfono/número → número, resto →
+  campo personalizado). Editable siempre.
+- Logging: `_enviarPlantilla` loguea payload (`[plantillas] enviando`),
+  respuesta completa (`[plantillas] respuesta servidor`) y errores
+  (`[plantillas] envio error|fail`) en console; avisos vía `_avisarError`
+  (alertaWarning → mensajeWarning → alert).
+- Header de finalizadas: botón `#btn-trazas` → `/whatsapp/trazas/?conversacion=<id>`
+  (target _blank) para ver toda la trazabilidad/errores de la conversación
+  (incluye etapa `envio_fallido` con código Meta y detalle).
+- **Gotcha delegación:** `#plantillas-panel` tiene un handler directo con
+  `e.stopPropagation()` (evita que el click dentro cierre el panel). Por eso los
+  clicks de `.pp-item` DEBEN delegarse desde `#plantillas-list`
+  (`$('#plantillas-list').on('click', '.pp-item', ...)`) — delegarlos desde
+  `document` nunca dispara (el evento no llega; bug fix 2026-07-15, aplicado en
+  las 3 vistas).
 
 ---
 
@@ -484,14 +932,35 @@ si no, los demás clientes no verán el mensaje hasta refrescar.
    ▼
 POST /whatsapp/meta_webhook/  ó  /whatsapp/webhook_handler/
    │   (validación verify_token / X-API-Key NODE_SECRET_KEY)
+   │   Meta: firma HMAC X-Hub-Signature-256 validada con meta.webhook.
+   │   validar_firma_hmac (acepta str o LISTA de secrets — get_meta_app_secrets;
+   │   la copia local str-only de meta_webhook_view marcaba TODO como firma
+   │   inválida al recibir la lista, hoy delega en el helper compartido).
+   │   Evento rechazado queda en EventoMetaRecibido (procesado=False,
+   │   error=firma_hmac_invalida) y se recupera con:
+   │   python manage.py reprocesar_eventos_meta [--dias N | --evento-id X | --dry-run]
    ▼
 procesar_mensaje.process_incoming_message()
    │
-   ├─ idempotencia por mensaje_id_externo
+   ├─ idempotencia en dos capas: candado cache SET NX 60s (cierra la carrera de
+   │  dos entregas simultáneas del mismo id) + chequeo BD por mensaje_id_externo
+   │  (reenvíos tardíos de Meta/Baileys)
    ├─ persiste / actualiza Contacto
-   ├─ persiste / actualiza ConversacionWhatsApp (recalcula fecha_hora_expira)
+   ├─ persiste / actualiza ConversacionWhatsApp (recalcula fecha_hora_expira;
+   │  save(update_fields=['order']) explícito para burbujear al tope del inbox —
+   │  `order` deriva de contacto.fecha_ultimo_mensaje DENTRO de save() y
+   │  obtener_o_crear_activa retorna la conv existente sin guardar)
    ├─ persiste MensajeWhatsApp
    ├─ actualiza EstadisticasConversacion
+   ├─ secuencias drip: mensaje entrante cancela inscripciones activas con
+   │  salir_al_responder=True (funciones_secuencias.cancelar_por_respuesta)
+   ├─ growth links: texto con "(ref: codigo)" → funciones_growth aplica
+   │  etiqueta/secuencia y, si hay respuesta fija, corta el pipeline
+   │  (modo growth_link). Corre después de la cancelación de secuencias
+   │  para que el mismo mensaje no cancele lo que el enlace inscribe
+   ├─ respuesta a recordatorio de turno: "confirmar"/"cancelar" con turno
+   │  recordado vigente → agenda/respuestas_recordatorio.py resuelve sin LLM
+   │  y corta el pipeline (modo respuesta_recordatorio)
    │
    ▼
 async_to_sync(channel_layer.group_send) → ChatConsumer + SessionRoomConsumer
@@ -533,25 +1002,27 @@ JsonResponse({mensaje_html: ...})
 real lo regenera ChatConsumer.get_messages_html para todos los demás clientes)
 ```
 
-### Reactivación de finalizada (Meta-only)
+### Reconexión de finalizada por plantilla (Meta-only)
 
 ```
-[JS] click en plantilla → form de variables → POST action=enviar_plantilla_meta
+[JS] click en plantilla → SIEMPRE abre form (preview + aviso de qué pasará
+     + variables si las hay) → POST action=enviar_plantilla_meta
    ▼
-view_conversaciones_finalizadas.enviar_plantilla_meta  (línea 257)
+enviar_plantilla_reconexion  (funcionesWhatsappConversacion.py)
    │
-   ├─ valida _bloqueo_reactivar() → si vencida: error
    ├─ valida sesion.es_meta + plantilla APPROVED
    ├─ get_whatsapp_service(sesion).send_template(...)
-   ├─ render placeholders + persiste mensaje local
-   ├─ estado_conversacion=0, recalcula fecha_hora_expira
-   ├─ request.session['contactoId'] = encrypt(conv.id)
+   ├─ render placeholders + persiste mensaje en la MISMA conversación
+   ├─ pendiente_reconexion=True, reconectada=False  (sigue en estado 1)
    ▼
-JsonResponse({reactivada: true, url: '/whatsapp/conversaciones/'})
+JsonResponse({pendiente: true, mensaje_html})
    ▼
-[JS] window.location.href = '/whatsapp/conversaciones/'
+[JS] inyecta mensaje + toast "se reanudará automáticamente cuando responda"
    ▼
-conversacionesView lee contactoId de session y abre la conv automáticamente
+(cliente responde) webhook → obtener_o_crear_activa REABRE la misma conv:
+   estado_conversacion=0, conversacion_finalizada=False, limpia fecha_fin/
+   despedida/duración, renueva fecha_hora_expira, reconectada=True
+   → historial íntegro (plantillas enviadas incluidas) + mismo asesor
 ```
 
 ---
@@ -565,10 +1036,18 @@ conversacionesView lee contactoId de session y abre la conv automáticamente
 | Sustitución `{{N}}` server-side | `_render_cuerpo()` antes de persistir | Garantiza que el historial muestre el texto final, no el template |
 | Auto-pausa IA al asignar humano | `asignar-conversacion` setea `ai_activo=False` | Evita que la IA pise la respuesta del agente |
 | Snapshot de proveedor en la conv | `ConversacionWhatsApp.proveedor_atencion` | Si la sesión migra de Baileys a Meta, las conversaciones existentes mantienen su transporte original |
-| Cierre por inactividad | Cron job evalúa `fecha_hora_expira < now` y llama `cerrar()` | Liberar conversaciones colgadas; respeta `bloquear_cierre=True` |
+| Cierre por inactividad | Cron job evalúa `fecha_hora_expira < now` y llama `cerrar()` | Liberar conversaciones colgadas; respeta `bloquear_cierre=True`. **`min_sesion=0` (default) = SIN cierre por inactividad corta**: `fecha_hora_expira=None`, la conversación la termina el asesor (2026-07-13; antes `or 10` convertía el 0 en 10 min) — con red de seguridad: el cron aplica **cierre higiénico** tras `Configuracion.dias_cierre_higienico` días sin mensajes (default 3, 0=nunca), SIN despedida, incluso asignadas, para que corran resumen/sentimiento/reglas de fin. La ventana Meta de 24h sigue gobernando el envío: pasadas 24h sin mensaje del cliente, `send` se bloquea y solo queda plantilla (`_bloqueo_ventana_meta`) |
 | Manager `expirado` | `models_querysetmanagers.py:37` filtra solo por `estado_conversacion=1` | Fuente de verdad — evita que estados inconsistentes (`conversacion_finalizada=True` pero `estado_conversacion=0`) aparezcan en finalizadas |
-| Idempotencia webhook | Unique `mensaje_id_externo` | Meta y Baileys reintentan; sin esto se duplicarían mensajes |
+| Idempotencia webhook | Candado cache SET NX 60s + chequeo BD por `mensaje_id_externo` (`procesar_mensaje.py`) | Meta y Baileys reintentan; el chequeo BD solo no cubría dos entregas SIMULTÁNEAS del mismo id (ambas pasaban el `.exists()` antes de que ninguna guardara → doble respuesta IA y tokens dobles). TTL corto a propósito: si el procesamiento falla antes de guardar, el reintento legítimo debe poder procesarse |
+| Cliente vuelve tras un silencio largo con el bot apagado | `procesar_mensaje.py` (bloque de renovación de ventana, tercer guard): si `ai_activo=False` y el último mensaje **ya guardado** de la conversación es más viejo que `SesionWhatsApp.horas_reactivar_bot` (default 12 h, 0=nunca), se reactiva el bot con traza `bot_reactivado_por_inactividad` | El `ai_activo=False` lo deja un asesor al responder, y nunca se revierte solo: un cliente que reaparece días después quedaba en **silencio total**, esperando a un asesor que ya dio el caso por cerrado (medido 2026-08-02: 243 de 243 conversaciones con el bot apagado llevaban +12 h de silencio). El umbral evita el falso positivo obvio — si el cliente responde a los 5 min mientras el asesor está atendiendo, el bot NO se mete. **Se mide contra el último `MensajeWhatsApp` de la conversación, no contra `contacto.fecha_ultimo_mensaje`**: ese último ya fue actualizado al mensaje entrante actual unas líneas más arriba y daría siempre 0 h |
+| Cliente vuelve tras "resuelta" | `procesar_mensaje.py` (bloque de renovación de ventana): si `estado_atencion=='resuelta'` y escribe el cliente → `estado_atencion='abierta'` + `ai_activo=True` (con traza `reabierta_por_cliente_tras_resuelta`) | "Marcar como resuelta" NO cierra la conversación; como el asesor al escribir deja `ai_activo=False`, sin este guard el cliente que volvía quedaba en silencio total (ni bot ni asesor) |
+| Cliente responde plantilla de reconexión (caducada) | `procesar_mensaje.py` (mismo bloque): si `reiniciar_flujo_al_responder=True` y `session.modo_bot in ('tradicional','hibrido')` → limpia el flag, `ai_activo=True`, y tras persistir el entrante corre `reiniciar_flujo_tradicional(conv)` (menú desde nodo_inicio) cortando el pipeline normal (`modo: reinicio_flujo_por_reconexion`) | El flag lo pone `enviar_plantilla_meta` solo cuando la ventana Meta estaba caducada al enviar. Distingue "plantilla de reconexión del bot" de "asesor humano pausó el bot a mano" — sin él, ambos casos dejan `ai_activo=False` y no se pueden separar. Campo nuevo: correr `makemigrations whatsapp` + `migrate` |
+| Anti-duplicado de conversaciones | `obtener_o_crear_activa` (`models.py:1028`): (a) serializa con `select_for_update` sobre la fila del `Contacto`; (b) si la conv está abierta pero con ventana vencida y el cron aún no la cerró, la REUSA renovando `fecha_hora_expira` en vez de crear otra; (c) si el contacto tiene una sonda `pendiente_reconexion=True` sin responder, REABRE esa misma conversación (no crea una nueva enlazada; `iniciada_por_plantilla`/`conv_origen` quedan solo como datos históricos del flujo anterior) | Dos mensajes en paralelo creaban DOS conversaciones (carrera), y un mensaje llegado tras vencer `min_sesion` pero antes del cron de cierre abría una duplicada mientras la vieja seguía visible (fix 2026-07-13) |
 | Rate limit Node | Cache `wa_rate_limited_<session_id>` | Si Baileys reporta saturación, `process_incoming_message` corta antes de invocar IA |
+| Número Baileys bloqueado por WhatsApp | Evento `banned` en `webhook_baileys_view.py` → `estado='desconectado'`, `ConfigBaileys.desconectado_manualmente=True`, cache `wa_baneada_<session_id>` (7 días), traza `node_banned`, notificación a superusers | El gateway emite `banned` cuando WhatsApp responde **403 forbidden**. `desconectado_manualmente=True` es deliberado: impide que el cron `reconectar_sesiones.py` vuelva a intentar, porque reconectar en bucle tras un 403 convierte un bloqueo temporal en definitivo. Sale del estado sólo re-vinculando el número con un QR nuevo |
+| Cuota anti-baneo visible en el tablero | Kebab de la tarjeta → «Cuota y calentamiento» (`antiban_estado`) y «Verificar números antes de enviar» (`antiban_verificar_lote`), ambos solo en sesiones Baileys. Consumen `GET /api/antiban/:sessionId` y `.../verificar` del gateway | Las cuotas existían pero eran invisibles: el operador se enteraba del corte cuando un envío fallaba. **El anti-ban recién registra la sesión al abrir el socket por primera vez**, así que antes de conectar devuelve los valores de una sesión nueva (día 0, cuota 40) aunque el número lleve meses de alta — por eso la vista manda `conectada` y el panel lo aclara en vez de decir «en calentamiento» de un número establecido. En el verificador, `existe=None` es **indeterminado, no inexistente**: WhatsApp no respondió, y tratarlo como malo descartaría contactos buenos por un timeout |
+| Error de envío del gateway Baileys | `WhatsAppService._error_del_gateway` parsea el JSON de la respuesta (`error`, `codigo`, `bloqueadoPorAntiban`) y devuelve `{'success': False, 'error': <motivo en español>, 'codigo': ..., 'bloqueado_por_antiban': ...}` | Antes se hacía `f"Error al enviar mensaje: {status} - {response.text}"`, así que el motivo del anti-ban —que ya viene redactado en español desde el gateway— le llegaba al usuario **envuelto en el JSON crudo**, y el `codigo` se perdía. Con el código se puede distinguir un error del dato (número inexistente: no reintentar) de uno transitorio (sesión caída: reintentar). El `success: False` no cambió, así que los consumidores existentes siguen funcionando |
+| Envío rechazado por anti-ban | Evento `envio_bloqueado` → traza `node_envio_bloqueado` + broadcast al `SessionRoom`; sólo `cuota_diaria`, `cuota_contactos_frios` y `sesion_bloqueada` notifican a superusers y cachean `wa_cuota_<session_id>` | El gateway valida cada envío antes de tocar WhatsApp (número inexistente, cuota diaria con rampa de calentamiento, cuota de contactos fríos, tope por contacto, texto idéntico repetido). Los rechazos puntuales (un número sin WhatsApp) no deben generar ruido de notificaciones; los que detienen la operación sí. Códigos y umbrales documentados en la sección *Anti-ban* del README de `fastchatnj` |
 | Dispatcher único | Siempre `get_whatsapp_service(sesion)` | Nunca hardcodear `if sesion.proveedor=='meta'` — esparce lógica de transporte |
 | `select_related` obligatorio en listado | `view_conversaciones.py:830-841` | El partial `conversacion_item.html` toca `sesion.config_meta`, `sesion.config_baileys`, `asignado_a.foto` — sin `select_related` son N+1 |
 
@@ -630,11 +1109,12 @@ conversacionesView lee contactoId de session y abre la conv automáticamente
 | `whatsapp/services_instagram.py` | `InstagramService`, `MessengerService` |
 | `whatsapp/consumers.py` | `ChatConsumer`, `SessionConsumer`, `SessionRoomConsumer` |
 | `whatsapp/routing.py` | Rutas WS |
-| `whatsapp/procesar_mensaje.py` | Handler del webhook entrante (broadcast WS) |
+| `whatsapp/procesar_mensaje.py` | Handler del webhook entrante (broadcast WS). Web push (`_push_to_team`, 2026-07-20): conversación NUEVA → dueño de sesión + equipo (una vez); mensaje en conversación existente → SOLO el asesor `asignado_a` (releído de BD en el on_commit), sin asignado no se pushea — la notificación de asignación la cubre `crm.helpers_asignacion.notificar_agente_asignado` |
 | `whatsapp/meta_webhook_view.py` | Endpoint `/meta_webhook/` (Meta) |
 | `whatsapp/webhook_baileys_view.py` | Endpoint `/webhook_handler/` (Baileys) |
+| `whatsapp/meta_social_webhook_view.py` | Webhooks IG DM + Messenger. `_enriquecer_perfil_social` (2026-07-16): antes de `process_incoming_message` completa `pushName`/`userImage` del evento con el User Profile API de Meta (`meta/perfiles.py::obtener_perfil_usuario_messenger` — first_name/last_name/profile_pic; `obtener_perfil_usuario_instagram` — name/username/profile_pic + follower_count/flags follow). Solo pega a Graph si el `Contacto` aún no tiene nombre o foto; resultado cacheado 6h por sender (incluye fallo, para no reintentar por mensaje). Messenger/IG no exponen email ni teléfono. TikTok ya trae `nickname`/`avatar` en el propio payload (`tiktok/webhook_view.py::_a_evento_interno`) |
 | `whatsapp/urls.py` | Registro de rutas |
-| `whatsapp/templates/whatsapp/conversaciones/listado.html` | Template abiertas |
+| `whatsapp/templates/whatsapp/conversaciones/listado.html` | Template abiertas. WS sessionroom `new_message`: la card se mueve al TOPE de la lista (remove + prepend, estilo WhatsApp); si la card no existía (conversación nueva) incrementa el badge `#total-abiertas-badge` en el cliente — los totales exactos se recalculan en cada `cargarConversaciones`. Menús rápidos: la barra tiene "Ver menús" (`#mr-bar-ver`) y "+ Nuevo menú" (`#mr-bar-add`) — ambos abren `modalMenusRapidos`, que lista los menús con editar/eliminar (delete = acción `menu_rapido_eliminar` de `view_sesiones.py`, confirmación SweetAlert) |
 | `whatsapp/templates/whatsapp/conversaciones/listado_expirado.html` | Template finalizadas |
 | `whatsapp/templates/whatsapp/conversaciones/conversaciones_partial.html` | Wrapper sidebar |
 | `whatsapp/templates/whatsapp/conversaciones/conversacion_item.html` | Card de conversación |
@@ -645,3 +1125,11 @@ conversacionesView lee contactoId de session y abre la conv automáticamente
 | `whatsapp/templates/whatsapp/conversaciones/form.html` | Modal genérico |
 | `static/stylenew/conversacion_plantillas.css` | CSS panel plantillas Meta |
 | `static/stylenew/conversaciones.css` | CSS layout chat |
+
+## Hardening 2026-07-16 (ultrareview)
+
+Regla: **toda acción por `pk`/`id` de conversación valida `puede_ver_conversacion(request.user, conv)`** (`permisos_sesion.py`). El guard vive dentro de los helpers compartidos de `funcionesWhatsappConversacion.py` (`cambiar_clasificacion_get`, `cambiar_nombre_contacto_get`, `historial_cliente_list`, `historial_cliente_mensajes`, `listar_plantillas_meta`, `enviar_plantilla_reconexion`), así que las tres vistas (abiertas, finalizadas, pendiente-reconexión) quedan cubiertas por igual. Además:
+
+- **`enviar_plantilla_meta`** entró al set `ACCIONES_CONV` (era IDOR de escritura facturable). `transcribe_audio` y `feedback-mensaje` validan vía `msg.conversacion`.
+- **Finalizadas/pendiente:** `ver_resumen_conversacion` y `ficha_cliente` validan pertenencia; el `except: pass` de `ver_mensajes` ahora devuelve JSON de error; fechas/`clasificacion` inválidas ya no dan 500.
+- **Consumers (`consumers.py`):** `SessionConsumer.connect` exige propiedad de la sesión (`rol_en_sesion`) antes de aceptar — cierra la fuga del QR de Baileys (secuestro de cuenta). `ChatConsumer` valida en `connect` y en cada query usa `puede_ver_conversacion` (antes filtraba solo por dueño, rompiendo el chat en vivo para asesores/supervisores). `SessionRoomConsumer` gatea `connect` y aplica el filtro por rol asesor en `get_conversacion_data`.

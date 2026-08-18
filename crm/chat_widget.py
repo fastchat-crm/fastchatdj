@@ -147,15 +147,16 @@ def widget_mensaje_view(request):
     agente = AgentesIA.objects.filter(pk=payload['a'], status=True).first()
     if not agente:
         return _cors(JsonResponse({'ok': False, 'error': 'Agente no disponible.'}, status=404), request)
-    apikey_obj = agente.apikey.filter(estado=True, status=True).first()
+    apikey_obj = agente.apikey_activa()
     if not apikey_obj:
         return _cors(JsonResponse({'ok': False, 'error': 'Agente sin API Key activa.'}, status=409), request)
 
-    provider_map = {2: 'gemini', 3: 'openai', 4: 'claude', 5: 'ollama'}
+    provider_map = {2: 'gemini', 3: 'openai', 4: 'claude', 5: 'ollama', 8: 'ollama_local'}
     provider = provider_map.get(apikey_obj.proveedor, 'gemini')
     _default_model = {
         'gemini': 'gemini-2.5-flash', 'openai': 'gpt-4o-mini',
         'claude': 'claude-haiku-4-5-20251001', 'ollama': 'gpt-oss:20b',
+        'ollama_local': 'llama3.1',
     }
     model_name = apikey_obj.modelo or _default_model.get(provider, 'gemini-2.5-flash')
 

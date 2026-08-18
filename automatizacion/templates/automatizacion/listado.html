@@ -1,0 +1,486 @@
+{% extends 'base.html' %}
+
+{% block head %}
+    <link rel="stylesheet" href="/static/css/automatizacion/automatizacion.css?v1.2">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <div class="aut-hero">
+        <div>
+            <h4><i class="fa fa-bolt me-2"></i>Automatizaciones</h4>
+            <p>Cuando pasa algo en el sistema, hacé que reaccione solo: esperar dos días y pedir
+               una reseña, etiquetar y asignar, avisar por correo. Sin que nadie tenga que acordarse.</p>
+        </div>
+        <button type="button" class="btn btn-light btn-sm" id="autNueva">
+            <i class="fa fa-plus me-1"></i>Nueva automatización
+        </button>
+    </div>
+
+    {% if automatizaciones %}
+        <div class="row">
+            {% for a in automatizaciones %}
+                <div class="col-xl-4 col-lg-6">
+                    <div class="aut-card {% if not a.activo %}aut-card-pausada{% endif %}">
+                        <div class="aut-card-top">
+                            <span class="aut-estado {% if a.activo %}aut-estado-on{% else %}aut-estado-off{% endif %}">
+                                {% if a.activo %}Activa{% else %}Pausada{% endif %}
+                            </span>
+                            <div>
+                                <button type="button" class="aut-icon-btn aut-toggle" data-pk="{{ a.id }}"
+                                        title="{% if a.activo %}Pausar{% else %}Activar{% endif %}">
+                                    <i class="fa {% if a.activo %}fa-pause{% else %}fa-play{% endif %}"></i>
+                                </button>
+                                <button type="button" class="aut-icon-btn aut-editar"
+                                        data-pk="{{ a.id }}" data-nombre="{{ a.nombre }}"
+                                        data-evento="{{ a.evento }}" data-descripcion="{{ a.descripcion }}"
+                                        data-condiciones="{{ a.condiciones_json }}"
+                                        title="Editar"><i class="fa fa-pen"></i></button>
+                                <button type="button" class="aut-icon-btn aut-borrar"
+                                        data-pk="{{ a.id }}" data-nombre="{{ a.nombre }}"
+                                        title="Eliminar"><i class="fa fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <h6>{{ a.nombre }}</h6>
+                        <p class="aut-disparador">
+                            <i class="fa fa-play-circle me-1"></i>{{ a.get_evento_display }}
+                        </p>
+                        {% if a.condiciones_texto %}
+                            <div class="aut-cond-chips">
+                                {% for c in a.condiciones_texto %}<span class="aut-chip">{{ c }}</span>{% endfor %}
+                            </div>
+                        {% endif %}
+                        {% if a.descripcion %}<p class="aut-desc">{{ a.descripcion }}</p>{% endif %}
+                        <div class="aut-flujo">{{ a.resumen_acciones }}</div>
+                        <div class="aut-stats">
+                            <span>{{ a.total_ejecuciones }} ejecución{{ a.total_ejecuciones|pluralize:"es" }}</span>
+                            {% if a.pendientes %}<span class="aut-pendiente">{{ a.pendientes }} en curso</span>{% endif %}
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary w-100 aut-acciones"
+                                data-pk="{{ a.id }}">
+                            <i class="fa fa-list-ol me-1"></i>Acciones
+                        </button>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="aut-vacio">
+            <i class="fa fa-bolt"></i>
+            <h6>Todavía no hay automatizaciones</h6>
+            <p>Una automatización escucha un evento y ejecuta pasos en orden. El paso «esperar»
+               se guarda: podés hacer que algo pase dos días después sin dejar nada corriendo.</p>
+            <button type="button" class="btn btn-primary btn-sm" id="autNuevaVacio">
+                <i class="fa fa-plus me-1"></i>Crear la primera
+            </button>
+        </div>
+    {% endif %}
+
+    {% if ejecuciones %}
+        <div class="aut-card aut-card-plano mt-3">
+            <div class="aut-card-head"><h6>Últimas ejecuciones</h6></div>
+            <div class="table-responsive">
+                <table class="aut-tabla">
+                    <thead>
+                        <tr><th>Automatización</th><th>Estado</th><th>Paso</th><th>Próxima corrida</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        {% for e in ejecuciones %}
+                            <tr>
+                                <td>{{ e.automatizacion.nombre }}</td>
+                                <td><span class="aut-badge aut-badge-{{ e.estado }}">{{ e.get_estado_display }}</span></td>
+                                <td class="text-muted">{{ e.indice_accion }}</td>
+                                <td class="text-muted">{{ e.ejecutar_en|date:"d/m/Y H:i" }}</td>
+                                <td class="text-end">
+                                    {% if e.estado == 'pendiente' or e.estado == 'esperando' %}
+                                        <button type="button" class="aut-icon-btn aut-cancelar" data-pk="{{ e.id }}"
+                                                title="Cancelar"><i class="fa fa-times"></i></button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<div class="modal fade" id="autModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title" id="autModalTitulo">Nueva automatización</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="autPk">
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Nombre</label>
+                    <input type="text" class="form-control form-control-sm" id="autNombre"
+                           placeholder="Pedir reseña después de la cita">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Cuándo se dispara</label>
+                    <select class="form-select form-select-sm" id="autEvento">
+                        {% for valor, label in eventos %}<option value="{{ valor }}">{{ label }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Descripción</label>
+                    <textarea class="form-control form-control-sm" id="autDescripcion" rows="2"></textarea>
+                </div>
+
+                <div class="aut-condiciones">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <label class="form-label small fw-semibold mb-0">Condiciones</label>
+                        <button type="button" class="btn btn-sm btn-link p-0" id="condAgregar">
+                            <i class="fa fa-plus me-1"></i>Agregar
+                        </button>
+                    </div>
+                    <p class="form-text mt-0">
+                        Sin condiciones, la automatización corre <strong>cada vez</strong> que ocurre el evento.
+                        Si agregás varias, deben cumplirse todas.
+                    </p>
+                    <div id="condLista"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-sm btn-primary" id="autGuardar">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="autAccionesModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">Acciones de <span id="autAccionesNombre"></span></h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="autAccionesId">
+
+                <div class="aut-form-accion">
+                    <div class="row g-2">
+                        <div class="col-md-5">
+                            <label class="form-label small fw-semibold">Tipo de acción</label>
+                            <select class="form-select form-select-sm" id="accionTipo">
+                                {% for valor, label in tipos_accion %}<option value="{{ valor }}">{{ label }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-7" id="accionParametros"></div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-primary mt-2" id="accionAgregar">
+                        <i class="fa fa-plus me-1"></i>Agregar paso
+                    </button>
+                </div>
+
+                <div id="autAccionesLista" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block jscript %}
+<script>
+function autEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+}
+
+function autPost(datos, alTerminar) {
+    datos.csrfmiddlewaretoken = '{{ csrf_token }}';
+    $.post('{{ request.path }}', datos).done(function (r) {
+        if (r.error) {
+            Swal.fire({ type: 'error', title: 'No se pudo completar', text: r.message });
+            return;
+        }
+        alTerminar(r);
+    }).fail(function () {
+        Swal.fire({ type: 'error', title: 'Error', text: 'No se pudo contactar al servidor.' });
+    });
+}
+
+function autRecargar(mensaje) {
+    Swal.fire({ type: 'success', title: 'Listo', text: mensaje, timer: 1500, showConfirmButton: false });
+    setTimeout(function () { location.reload(); }, 1200);
+}
+
+// ---- Armador de condiciones ----
+var AUT_CAMPOS_EVENTO = {{ campos_por_evento|safe }};
+var AUT_OPERADORES = [
+    {% for v, l in operadores %}{value: '{{ v }}', label: '{{ l }}'}{% if not forloop.last %},{% endif %}{% endfor %}
+];
+var AUT_OP_SIN_VALOR = {{ operadores_sin_valor|safe }};
+
+function condFilaHtml(cond) {
+    cond = cond || {campo: '', operador: 'igual', valor: ''};
+    var campos = AUT_CAMPOS_EVENTO[$('#autEvento').val()] || [];
+
+    // El campo va como datalist, no como select cerrado: los objetos
+    // personalizados aportan claves que no están en el catálogo (datos.precio),
+    // así que hay que poder escribir una a mano.
+    var opciones = campos.map(function (c) {
+        return '<option value="' + autEsc(c.campo) + '">' + autEsc(c.label) + '</option>';
+    }).join('');
+
+    var ops = AUT_OPERADORES.map(function (o) {
+        return '<option value="' + o.value + '"' + (o.value === cond.operador ? ' selected' : '') + '>'
+             + autEsc(o.label) + '</option>';
+    }).join('');
+
+    var sinValor = AUT_OP_SIN_VALOR.indexOf(cond.operador) !== -1;
+
+    return '<div class="cond-fila">'
+        + '<input type="text" class="form-control form-control-sm cond-campo" list="condCamposLista" '
+        + 'placeholder="campo" value="' + autEsc(cond.campo) + '">'
+        + '<datalist id="condCamposLista">' + opciones + '</datalist>'
+        + '<select class="form-select form-select-sm cond-op">' + ops + '</select>'
+        + '<input type="text" class="form-control form-control-sm cond-valor" placeholder="valor" '
+        + 'value="' + autEsc(cond.valor) + '"' + (sinValor ? ' disabled' : '') + '>'
+        + '<button type="button" class="aut-icon-btn cond-quitar"><i class="fa fa-times"></i></button>'
+        + '</div>';
+}
+
+function condPintar(condiciones) {
+    var html = (condiciones || []).map(condFilaHtml).join('');
+    $('#condLista').html(html);
+}
+
+function condRecolectar() {
+    var out = [];
+    $('#condLista .cond-fila').each(function () {
+        var $f = $(this);
+        out.push({
+            campo: $f.find('.cond-campo').val(),
+            operador: $f.find('.cond-op').val(),
+            valor: $f.find('.cond-valor').val()
+        });
+    });
+    return out;
+}
+
+$('#condAgregar').on('click', function () {
+    $('#condLista').append(condFilaHtml());
+});
+
+$(document).on('click', '.cond-quitar', function () {
+    $(this).closest('.cond-fila').remove();
+});
+
+// Los operadores de presencia no comparan contra nada: se deshabilita el valor
+// para que no quede un dato escrito que la evaluación ignora en silencio.
+$(document).on('change', '.cond-op', function () {
+    var $valor = $(this).closest('.cond-fila').find('.cond-valor');
+    var sinValor = AUT_OP_SIN_VALOR.indexOf($(this).val()) !== -1;
+    $valor.prop('disabled', sinValor);
+    if (sinValor) { $valor.val(''); }
+});
+
+// Cambiar el disparador cambia los campos disponibles: se repinta la lista
+// conservando lo escrito, porque puede seguir siendo válido.
+$('#autEvento').on('change', function () {
+    condPintar(condRecolectar());
+});
+
+$('#autNueva, #autNuevaVacio').on('click', function () {
+    $('#autPk').val('');
+    $('#autNombre, #autDescripcion').val('');
+    condPintar([]);
+    $('#autModalTitulo').text('Nueva automatización');
+    new bootstrap.Modal(document.getElementById('autModal')).show();
+});
+
+$('.aut-editar').on('click', function () {
+    var $b = $(this);
+    $('#autPk').val($b.data('pk'));
+    $('#autNombre').val($b.data('nombre'));
+    $('#autEvento').val($b.data('evento'));
+    $('#autDescripcion').val($b.data('descripcion'));
+    var cond = $b.attr('data-condiciones');
+    try { condPintar(JSON.parse(cond || '[]')); } catch (e) { condPintar([]); }
+    $('#autModalTitulo').text('Editar automatización');
+    new bootstrap.Modal(document.getElementById('autModal')).show();
+});
+
+$('#autGuardar').on('click', function () {
+    var pk = $('#autPk').val();
+    autPost({
+        action: pk ? 'change' : 'add',
+        pk: pk,
+        nombre: $('#autNombre').val(),
+        evento: $('#autEvento').val(),
+        descripcion: $('#autDescripcion').val(),
+        condiciones: JSON.stringify(condRecolectar())
+    }, function (r) { autRecargar(r.message); });
+});
+
+$('.aut-toggle').on('click', function () {
+    autPost({ action: 'toggle', pk: $(this).data('pk') }, function (r) { autRecargar(r.message); });
+});
+
+$('.aut-borrar').on('click', function () {
+    var pk = $(this).data('pk');
+    Swal.fire({
+        title: '¿Eliminar "' + $(this).data('nombre') + '"?',
+        text: 'Las ejecuciones en curso se detienen.',
+        type: 'warning', showCancelButton: true,
+        confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar'
+    }).then(function (res) {
+        if (!res.value) { return; }
+        autPost({ action: 'delete', pk: pk }, function (r) { autRecargar(r.message); });
+    });
+});
+
+$('.aut-cancelar').on('click', function () {
+    autPost({ action: 'cancelar_ejecucion', pk: $(this).data('pk') }, function (r) { autRecargar(r.message); });
+});
+
+var AUT_CAMPOS = {
+    esperar: '<div class="row g-2">'
+           + '<div class="col-6"><label class="form-label small fw-semibold">Cantidad</label>'
+           + '<input type="number" min="1" class="form-control form-control-sm" data-param="cantidad" value="1"></div>'
+           + '<div class="col-6"><label class="form-label small fw-semibold">Unidad</label>'
+           + '<select class="form-select form-select-sm" data-param="unidad">'
+           + '{% for v, l in unidades %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select></div></div>',
+    enviar_whatsapp: '<label class="form-label small fw-semibold">Mensaje</label>'
+           + '<textarea class="form-control form-control-sm" data-param="mensaje" rows="2"'
+           + ' placeholder="Hola {% templatetag openvariable %}contacto_nombre{% templatetag closevariable %}, ¿cómo te fue?"></textarea>'
+           + '<div class="form-text">Podés interpolar datos del evento con {% templatetag openvariable %}campo{% templatetag closevariable %}.</div>',
+    enviar_email: '<label class="form-label small fw-semibold">Destinatario</label>'
+           + '<input type="text" class="form-control form-control-sm" data-param="destinatario" placeholder="correo@dominio.com">'
+           + '<label class="form-label small fw-semibold mt-1">Asunto</label>'
+           + '<input type="text" class="form-control form-control-sm" data-param="asunto">'
+           + '<label class="form-label small fw-semibold mt-1">Cuerpo</label>'
+           + '<textarea class="form-control form-control-sm" data-param="cuerpo" rows="2"></textarea>',
+    agregar_etiqueta: '<label class="form-label small fw-semibold">Etiqueta</label>'
+           + '<input type="text" class="form-control form-control-sm" data-param="etiqueta" placeholder="Nombre exacto de la etiqueta">',
+    asignar_asesor: '<p class="text-muted small mb-0 pt-4">Usa la misma selección por carga y disponibilidad que el handoff del chat.</p>',
+    webhook: '<label class="form-label small fw-semibold">URL</label>'
+           + '<input type="url" class="form-control form-control-sm" data-param="url" placeholder="https://">',
+    notificar: '<label class="form-label small fw-semibold">ID de usuario</label>'
+           + '<input type="number" class="form-control form-control-sm" data-param="usuario_id">'
+           + '<label class="form-label small fw-semibold mt-1">Mensaje</label>'
+           + '<textarea class="form-control form-control-sm" data-param="mensaje" rows="2"></textarea>'
+};
+
+var AUT_OBJETOS = {{ objetos_custom|safe }};
+
+function autHtmlCrearRegistro() {
+    if (!AUT_OBJETOS.length) {
+        return '<p class="text-muted small mb-0 pt-3">No hay objetos personalizados todavía. '
+             + 'Creá uno en <a href="/objetos/">Objetos personalizados</a>.</p>';
+    }
+    var ops = AUT_OBJETOS.map(function (o) {
+        return '<option value="' + autEsc(o.slug) + '">' + autEsc(o.nombre) + '</option>';
+    }).join('');
+    return '<label class="form-label small fw-semibold">Objeto</label>'
+        + '<select class="form-select form-select-sm" id="crObjeto" data-param="objeto_slug">' + ops + '</select>'
+        + '<div id="crCampos" class="mt-2"></div>';
+}
+
+function autPintarCamposObjeto() {
+    var slug = $('#crObjeto').val();
+    var obj = AUT_OBJETOS.filter(function (o) { return o.slug === slug; })[0];
+    if (!obj) { $('#crCampos').html(''); return; }
+    var html = '<p class="form-text mt-0">Podés usar '
+             + '{% templatetag openvariable %}campo{% templatetag closevariable %} para tomar datos del evento.</p>';
+    obj.campos.forEach(function (c) {
+        html += '<label class="form-label small fw-semibold">' + autEsc(c.etiqueta)
+             +  (c.requerido ? ' <span class="text-danger">*</span>' : '') + '</label>'
+             +  '<input type="text" class="form-control form-control-sm mb-1 cr-valor" '
+             +  'data-campo="' + autEsc(c.nombre) + '" placeholder="' + autEsc(c.nombre) + '">';
+    });
+    $('#crCampos').html(html);
+}
+
+$(document).on('change', '#crObjeto', autPintarCamposObjeto);
+
+function autPintarParametros() {
+    var tipo = $('#accionTipo').val();
+    if (tipo === 'crear_registro') {
+        $('#accionParametros').html(autHtmlCrearRegistro());
+        autPintarCamposObjeto();
+        return;
+    }
+    $('#accionParametros').html(AUT_CAMPOS[tipo] || '');
+}
+
+$('#accionTipo').on('change', autPintarParametros);
+
+function autRenderAcciones(acciones) {
+    if (!acciones.length) {
+        $('#autAccionesLista').html('<p class="aut-vacio-mini">Todavía no hay pasos. Agregá el primero arriba.</p>');
+        return;
+    }
+    var html = '<ol class="aut-pasos">';
+    acciones.forEach(function (a, i) {
+        html += '<li><span>' + autEsc(a.resumen) + '</span><span class="aut-pasos-btns">'
+             +  '<button type="button" class="aut-icon-btn accion-mover" data-pk="' + a.id + '" '
+             +  'data-dir="subir" title="Subir"' + (i === 0 ? ' disabled' : '') + '>'
+             +  '<i class="fa fa-arrow-up"></i></button>'
+             +  '<button type="button" class="aut-icon-btn accion-mover" data-pk="' + a.id + '" '
+             +  'data-dir="bajar" title="Bajar"' + (i === acciones.length - 1 ? ' disabled' : '') + '>'
+             +  '<i class="fa fa-arrow-down"></i></button>'
+             +  '<button type="button" class="aut-icon-btn accion-borrar" data-pk="' + a.id + '" title="Eliminar">'
+             +  '<i class="fa fa-trash"></i></button>'
+             +  '</span></li>';
+    });
+    $('#autAccionesLista').html(html + '</ol>');
+}
+
+function autCargarAcciones() {
+    autPost({ action: 'listar_acciones', pk: $('#autAccionesId').val() }, function (r) {
+        $('#autAccionesNombre').text(r.nombre);
+        autRenderAcciones(r.acciones);
+    });
+}
+
+$('.aut-acciones').on('click', function () {
+    $('#autAccionesId').val($(this).data('pk'));
+    autPintarParametros();
+    autCargarAcciones();
+    new bootstrap.Modal(document.getElementById('autAccionesModal')).show();
+});
+
+$('#accionAgregar').on('click', function () {
+    var parametros = {};
+    $('#accionParametros').find('[data-param]').each(function () {
+        parametros[$(this).data('param')] = $(this).val();
+    });
+    // «Crear registro» arma un mapa campo → plantilla, no un par plano.
+    if ($('#accionTipo').val() === 'crear_registro') {
+        var valores = {};
+        $('#crCampos .cr-valor').each(function () {
+            var v = $(this).val();
+            if (v !== '') { valores[$(this).data('campo')] = v; }
+        });
+        parametros.valores = valores;
+    }
+    autPost({
+        action: 'add_accion',
+        automatizacion_id: $('#autAccionesId').val(),
+        tipo: $('#accionTipo').val(),
+        parametros: JSON.stringify(parametros)
+    }, function () {
+        autPintarParametros();
+        autCargarAcciones();
+    });
+});
+
+$(document).on('click', '.accion-borrar', function () {
+    autPost({ action: 'delete_accion', pk: $(this).data('pk') }, function () { autCargarAcciones(); });
+});
+
+$(document).on('click', '.accion-mover', function () {
+    autPost({ action: 'mover_accion', pk: $(this).data('pk'), direccion: $(this).data('dir') },
+        function () { autCargarAcciones(); });
+});
+</script>
+{% endblock %}

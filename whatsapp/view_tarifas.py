@@ -126,6 +126,41 @@ def tarifasView(request):
         status=True
     ).values_list('pais', flat=True).distinct().order_by('pais')
 
+    try:
+        from django.db.models import Sum, Count
+        from django.utils import timezone
+        from .models import EnvioPlantillaMeta
+        ahora = timezone.now()
+        mes_ini = ahora.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        qs_envios = EnvioPlantillaMeta.objects.filter(status=True)
+        data['consumo_total'] = qs_envios.aggregate(total=Sum('costo_estimado'), n=Count('id'))
+        data['consumo_mes'] = qs_envios.filter(fecha_registro__gte=mes_ini).aggregate(
+            total=Sum('costo_estimado'), n=Count('id'))
+        origen_labels = dict(EnvioPlantillaMeta.ORIGENES)
+        consumo_por_origen = list(
+            qs_envios.values('origen').annotate(n=Count('id'), total=Sum('costo_estimado')).order_by('origen')
+        )
+        for o in consumo_por_origen:
+            o['origen_label'] = origen_labels.get(o['origen'], o['origen'])
+        data['consumo_por_origen'] = consumo_por_origen
+        consumo_sesiones = list(
+            qs_envios.values(
+                'sesion_id', 'sesion__nombre', 'sesion__numero',
+                'sesion__config_meta__waba_id', 'sesion__config_meta__business_account_id',
+            ).annotate(n=Count('id'), total=Sum('costo_estimado')).order_by('-total')
+        )
+        totales_mes = dict(
+            qs_envios.filter(fecha_registro__gte=mes_ini)
+            .values_list('sesion_id')
+            .annotate(t=Sum('costo_estimado'))
+            .values_list('sesion_id', 't')
+        )
+        for c in consumo_sesiones:
+            c['total_mes'] = totales_mes.get(c['sesion_id'])
+        data['consumo_sesiones'] = consumo_sesiones
+    except Exception:
+        data['consumo_total'] = None
+
     paginador(request, listado, 30, data, url_vars)
 
     hoy = data['hoy']

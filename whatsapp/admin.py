@@ -268,3 +268,28 @@ class EntregaWebhookSalienteAdmin(admin.ModelAdmin):
     date_hierarchy = 'fecha'
     raw_id_fields = ('webhook',)
     readonly_fields = ('payload', 'respuesta')
+
+
+from .models import RespuestaRapidaGlobal, CampoPersonalizadoContacto, ValorCampoContacto
+
+
+@admin.register(RespuestaRapidaGlobal)
+class RespuestaRapidaGlobalAdmin(admin.ModelAdmin):
+    list_display = ('id', 'atajo', 'titulo')
+    search_fields = ('atajo', 'titulo', 'cuerpo')
+    list_filter = ('status',)
+
+
+@admin.register(CampoPersonalizadoContacto)
+class CampoPersonalizadoContactoAdmin(admin.ModelAdmin):
+    list_display = ('id', 'orden', 'nombre', 'clave', 'tipo')
+    list_editable = ('orden',)
+    search_fields = ('nombre', 'clave')
+    list_filter = ('tipo', 'status')
+
+
+@admin.register(ValorCampoContacto)
+class ValorCampoContactoAdmin(admin.ModelAdmin):
+    list_display = ('id', 'contacto', 'campo', 'valor')
+    raw_id_fields = ('contacto', 'campo')
+    search_fields = ('valor',)

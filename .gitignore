@@ -23,6 +23,7 @@
 #git rm --cached archivo.ext
 #git rm --cached -r carpeta
 venv
+/docs/
 # Backups de deploy (no versionar)
 .deploy_bak_*
 *.bak_*

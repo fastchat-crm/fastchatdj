@@ -21,8 +21,35 @@ from .models import Usuario, PerfilAdministrativo, PerfilPersona
 from .view_persona import personasView
 
 
+PERMISOS_ESPECIALES = [
+    {
+        'app': 'crm',
+        'codename': 'puede_ver_citas_all',
+        'nombre': 'Ver todas las citas de la agenda',
+        'descripcion': 'Sin este permiso el usuario solo ve las citas de los recursos que tiene asignados. Los superusuarios siempre ven todo.',
+    },
+]
+
+
+def _permisos_especiales_de(usuario):
+    from django.contrib.auth.models import Permission
+    resultado = []
+    for p in PERMISOS_ESPECIALES:
+        asignado = usuario.user_permissions.filter(
+            content_type__app_label=p['app'], codename=p['codename']
+        ).exists()
+        resultado.append({
+            'clave': f"{p['app']}.{p['codename']}",
+            'nombre': p['nombre'],
+            'descripcion': p['descripcion'],
+            'asignado': asignado,
+        })
+    return resultado
+
+
 @login_required
 @secure_module
+
 def usuarioView(request):
     data = {
         'titulo': 'Control de Usuarios Administrativos',
@@ -96,6 +123,27 @@ def usuarioView(request):
                         res_json.append({'error': False, "reload": True})
                     else:
                         raise NameError(f"Usuario ya cuenta con perfil persona")
+                elif action == 'permisos_especiales':
+                    from django.contrib.auth.models import Permission
+                    filtro = model.objects.get(pk=int(request.POST['pk']))
+                    seleccion = request.POST.getlist('permisos')
+                    for p in PERMISOS_ESPECIALES:
+                        perm = Permission.objects.filter(
+                            content_type__app_label=p['app'], codename=p['codename']
+                        ).first()
+                        if not perm:
+                            res_json.append({
+                                'error': True,
+                                'message': f"El permiso {p['codename']} no existe todavía en la base — corre las migraciones de crm.",
+                            })
+                            return JsonResponse(res_json, safe=False)
+                        clave = f"{p['app']}.{p['codename']}"
+                        if clave in seleccion:
+                            filtro.user_permissions.add(perm)
+                        else:
+                            filtro.user_permissions.remove(perm)
+                    log(f"Permisos especiales actualizados para {filtro.username} - {filtro.get_full_name()}", request, "change")
+                    res_json.append({'error': False, 'message': 'Permisos actualizados.', 'reload': True})
                 elif action == 'changegroup':
                     filtro = model.objects.get(pk=int(request.POST['pk']))
                     form = GrupoUserForm(request.POST, request.FILES, instance=filtro, request=request)
@@ -150,6 +198,38 @@ def usuarioView(request):
                     messages.success(request, "Contraseña del usuario {} / {} cambiada".format(user.get_full_name(),
                                                                                                user.username))
                     res_json.append({'error': False,'reload': True})
+                elif action == 'change_password_masivo':
+                    # Cambia la contraseña de TODOS los usuarios que matchean el
+                    # filtro actual del listado (el modal reenvía el querystring
+                    # en filtros_qs). El propio usuario se excluye para no
+                    # invalidar su sesión; los superusuarios solo los puede
+                    # tocar otro superusuario.
+                    from django.http import QueryDict
+                    from .funciones_usuario import filtros_listado_usuarios
+                    password = (request.POST.get('password') or '').strip()
+                    if len(password) < 6:
+                        raise ValueError('La contraseña debe tener al menos 6 caracteres.')
+                    params = QueryDict((request.POST.get('filtros_qs') or '').lstrip('?'))
+                    filtros_masivo = filtros_listado_usuarios(params)
+                    usuarios_masivo = (
+                        model.objects.filter(filtros_masivo)
+                        .filter(perfiladministrativo__isnull=False)
+                        .exclude(pk=request.user.pk)
+                        .distinct()
+                    )
+                    if not request.user.is_superuser:
+                        usuarios_masivo = usuarios_masivo.exclude(is_superuser=True)
+                    total_masivo = 0
+                    for usuario_m in usuarios_masivo:
+                        usuario_m.set_password(password)
+                        usuario_m.save(request)
+                        total_masivo += 1
+                    log(f"Cambio masivo de contraseña a {total_masivo} usuarios según filtro ({params.urlencode()})",
+                        request, "change")
+                    messages.success(request,
+                                     f"Contraseña actualizada para {total_masivo} usuarios. "
+                                     "Tu propio usuario queda excluido.")
+                    res_json.append({'error': False, 'reload': True})
                 elif action == 'eliminar_foto':
                     user = model.objects.get(pk=int(request.POST['pk']))
                     user.foto = ""
@@ -281,6 +361,16 @@ def usuarioView(request):
                     form.fields['ciudad'].queryset = Ciudad.objects.none()
                 data["form"] = form
                 return render(request, 'autenticacion/usuario/form.html', data)
+            elif action == 'permisos_especiales':
+                try:
+                    data['id'] = id = int(request.GET['pk'])
+                    data['filtro'] = filtro = Usuario.objects.get(pk=id)
+                    data['permisos_especiales'] = _permisos_especiales_de(filtro)
+                    titulo = f'Permisos especiales de {filtro.nombre_corto()}'
+                    template = get_template("autenticacion/usuario/form_permisos_especiales.html")
+                    return JsonResponse({"result": True, 'data': template.render(data), 'titulo': titulo})
+                except Exception as ex:
+                    return JsonResponse({"result": False, 'message': str(ex)})
             elif action == 'changegroup':
                 try:
                     data['id'] = id = int(request.GET['pk'])
@@ -330,8 +420,29 @@ def usuarioView(request):
                     return JsonResponse({"result": True, 'data': template.render(data)})
                 except Exception as ex:
                     return JsonResponse({"result": False, "message": f"Error: {ex}."})
+            elif action == 'exportar_excel':
+                from django.http import HttpResponse
+                from .funciones_usuario import filtros_listado_usuarios, exportar_usuarios_excel
+                filtros_x = filtros_listado_usuarios(request.GET)
+                listado_x = (
+                    model.objects.filter(filtros_x)
+                    .filter(perfiladministrativo__isnull=False)
+                    .prefetch_related('groups')
+                    .order_by('last_name')
+                    .distinct()
+                )
+                wb = exportar_usuarios_excel(listado_x)
+                response = HttpResponse(
+                    content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
+                response['Content-Disposition'] = f'attachment; filename="usuarios_{date.today()}.xlsx"'
+                wb.save(response)
+                log(f"Exporto listado de usuarios a Excel ({listado_x.count()} filas)", request, "view")
+                return response
 
-        grupoid, status_perfil, criterio, filtros, url_vars = request.GET.getlist('grupoid', ''), request.GET.get('status_perfil', ''), request.GET.get('criterio', ''), Q(id__gt=0), ''
+        from .funciones_usuario import filtros_listado_usuarios
+
+        grupoid, status_perfil, criterio, url_vars = request.GET.getlist('grupoid', ''), request.GET.get('status_perfil', ''), request.GET.get('criterio', ''), ''
         id, documento = request.GET.get('id', ''), request.GET.get('documento', '')
         orderby = request.GET.get('orderby', '')
 
@@ -351,68 +462,29 @@ def usuarioView(request):
         if id:
             data['id'] = id
             url_vars += f'&id={id}'
-            filtros = filtros & Q(id=id)
 
         if documento:
             data['documento'] = documento
             url_vars += f'&documento={documento}'
-            filtros = filtros & Q(documento=documento)
 
         if status_perfil:
             data['status_perfil'] = status_perfil
             url_vars += f'&status_perfil={status_perfil}'
-            if status_perfil == '1':
-                filtros = filtros & Q(status=True)
-            elif status_perfil == '0':
-                filtros = filtros & Q(status=False)
-            elif status_perfil == '2':
-                filtros = filtros & Q(is_superuser=True)
-            elif status_perfil == '3':
-                filtros = filtros & Q(is_staff=True)
 
         if grupoid:
             data["grupoid"] = grupoid = list(map(lambda x: int(x), grupoid))
             for scl in grupoid:
                 url_vars += "&grupoid={}".format(scl)
-            filtros = filtros & Q(groups__in=grupoid)
 
-        # Filtro por criterio (nombre, apellido, username)
         if criterio:
             data['criterio'] = criterio
             url_vars += f'&criterio={criterio}'
-            palabras = criterio.strip().split()
-            q_obj = Q()
 
-            if len(palabras) == 1:
-                palabra = palabras[0]
-                q_obj |= Q(first_name__icontains=palabra)
-                q_obj |= Q(last_name__icontains=palabra)
-                q_obj |= Q(username__icontains=palabra)
+        # El Q de filtros vive en funciones_usuario.filtros_listado_usuarios —
+        # misma fuente que exportar_excel y change_password_masivo.
+        filtros = filtros_listado_usuarios(request.GET)
 
-            elif 2 <= len(palabras) <= 4:
-                # Generar todas las combinaciones posibles de los términos
-                from itertools import permutations
-
-                for combo in permutations(palabras, len(palabras)):
-                    # Vamos alternando los campos entre first_name y last_name
-                    sub_q = Q()
-                    for i, palabra in enumerate(combo):
-                        if i % 2 == 0:
-                            sub_q &= Q(first_name__icontains=palabra)
-                        else:
-                            sub_q &= Q(last_name__icontains=palabra)
-                    q_obj |= sub_q
-
-            else:
-                # Fallback: solo usar las 3 primeras para evitar combinaciones excesivas
-                q_obj &= (Q(first_name__icontains=palabras[0]) &
-                          Q(last_name__icontains=palabras[1]) &
-                          Q(last_name__icontains=palabras[2]))
-
-            filtros &= q_obj
-
-
-        listado = model.objects.filter(filtros).filter(perfiladministrativo__isnull=False).order_by(order)
+        listado = model.objects.filter(filtros).filter(perfiladministrativo__isnull=False).order_by(order).distinct()
         data["url_vars"] = url_vars
         data["list_count"] = listado.count()
         data['gruposrol'] = Group.objects.all()

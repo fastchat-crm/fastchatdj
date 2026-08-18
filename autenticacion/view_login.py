@@ -26,7 +26,8 @@ def login_session(request):
                     if user.is_active:
                         if user.is_superuser or user.is_staff:
                             login(request, user)
-                            request.session['empresa_selected'] = Empresa.objects.filter(status=True).order_by('-id').first()
+                            empresa_selected = Empresa.objects.filter(status=True).order_by('-id').first()
+                            request.session['empresa_selected'] = empresa_selected.id if empresa_selected else None
                             SessionUser.nuevo(request)
                             url = request.POST.get('next_url', '/panel/')
                             datos = {"resp": True, "to": url}

@@ -178,7 +178,7 @@
 <script>
 var TARIFAS_VIGENTES = {
     {% for code, t in tarifas_vigentes.items %}
-        "{{ code }}": { precio: parseFloat("{{ t.precio }}"), moneda: "{{ t.moneda }}" }{% if not forloop.last %},{% endif %}
+        "{{ code }}": { precio: parseFloat("{{ t.precio|stringformat:'f' }}"), moneda: "{{ t.moneda }}" }{% if not forloop.last %},{% endif %}
     {% endfor %}
 };
 
@@ -234,6 +234,8 @@ function simular() {
         cant_authentication: $('input[name=cant_authentication]').val() || 0,
     };
     $.post(window.location.pathname, datos, function(r) {
+        console.log('[simulador] respuesta', r);
+        if (Array.isArray(r)) r = r[0] || {};
         if (r && r.error === false) {
             if (r.tarifas_pais) {
                 ['MARKETING', 'UTILITY', 'AUTHENTICATION'].forEach(function(cat) {
@@ -261,9 +263,13 @@ function simular() {
             });
             calcularLocal();
         } else {
+            console.error('[simulador] error', r);
             if (typeof alertaError === 'function') alertaError((r && r.message) || 'Error');
             else alert((r && r.message) || 'Error al simular');
         }
+    }).fail(function(xhr) {
+        console.error('[simulador] fail', { status: xhr.status, responseText: xhr.responseText });
+        alert('Error de servidor al calcular (HTTP ' + xhr.status + '). Revisa la consola.');
     });
 }
 

@@ -1,3 +1,4 @@
+import json
 import mimetypes
 import os
 
@@ -5,6 +6,7 @@ from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.cache import cache_control
+from django.views.decorators.http import require_POST
 
 
 def _get_configuracion():
@@ -104,3 +106,26 @@ def service_worker(request):
 
 def offline(request):
     return render(request, 'pwa/offline.html')
+
+
+@require_POST
+def push_subscription_status(request):
+    if not getattr(request.user, 'is_authenticated', False):
+        return JsonResponse({'registered': False, 'authenticated': False})
+    endpoint = ''
+    try:
+        body = json.loads((request.body or b'').decode('utf-8') or '{}')
+        endpoint = (body.get('endpoint') or '').strip()
+    except Exception:
+        endpoint = ''
+    if not endpoint:
+        return JsonResponse({'registered': False})
+    try:
+        from webpush.models import PushInformation
+        registered = PushInformation.objects.filter(
+            user=request.user,
+            subscription__endpoint=endpoint,
+        ).exists()
+    except Exception:
+        registered = True
+    return JsonResponse({'registered': registered})

@@ -189,10 +189,6 @@ class DepartamentoChatBotForm(ModelFormBase):
         return instance
 
 
-class AddPerfilDepartamentoChatBotForm(FormModeloBase):
-    usuarios = forms.ModelMultipleChoiceField(label='Personas', queryset=Usuario.objects.filter(status=True))
-
-
 _CFG_RANGES = {
     'cfg_faiss_k':            (1, 20),
     'cfg_faiss_fetch_k':      (5, 80),
@@ -218,7 +214,7 @@ _CFG_RANGES_FLOAT = {
     'humaniz_escritura_max_seg':   (2.0,  15.0, 0.5),
 }
 
-_SWITCH_FIELDS = ('anotar_listas', 'humanizar_timing')
+_SWITCH_FIELDS = ('anotar_listas', 'humanizar_timing', 'memoria_rag_activa')
 
 
 class AgentesIAForm(ModelFormBase):
@@ -230,7 +226,7 @@ class AgentesIAForm(ModelFormBase):
             'nombre', 'apikey', 'prompt_template', 'anotar_listas',
             'cfg_faiss_k', 'cfg_faiss_fetch_k', 'cfg_max_context_chars', 'cfg_max_static_chars',
             'cfg_history_turns', 'cfg_user_snippet', 'cfg_ai_snippet',
-            'cfg_max_output_tokens', 'cfg_topic_anchor_chars',
+            'cfg_max_output_tokens', 'cfg_topic_anchor_chars', 'memoria_rag_activa',
             # Humanizacion (preset + persona + estilo + timing)
             'personalidad_preset',
             'nombre_bot', 'mensaje_bienvenida', 'personalidad', 'tono', 'estilo_escritura', 'temperature',
@@ -270,9 +266,34 @@ class AgentesIAForm(ModelFormBase):
                             default = None
                     if default is not None:
                         f.initial = default
+        # Parámetros heredados del Centro de IA: se muestran como placeholder en
+        # los campos vacíos, para que el usuario vea qué valor va a regir si no
+        # escribe nada. Dejar el campo en blanco = heredar.
+        from crm.ia_config import CAMPOS_HEREDABLES, parametros_efectivos
+        try:
+            _heredados = parametros_efectivos(
+                agente=self.instance if (self.instance and self.instance.pk) else None,
+                perfil_id=getattr(self.instance, 'perfil_id', None),
+            )
+        except Exception:
+            _heredados = {}
+
+        # memoria_rag_activa es nullable en el modelo (NULL = heredar), pero el
+        # switch de la UI es binario. Se le da el valor efectivo como initial:
+        # guardar desde este form fija un valor explícito para ese agente.
+        if 'memoria_rag_activa' in self.fields and _heredados.get('memoria_rag_activa') is not None:
+            self.fields['memoria_rag_activa'].required = False
+            if self.fields['memoria_rag_activa'].initial is None:
+                self.fields['memoria_rag_activa'].initial = _heredados['memoria_rag_activa']
+
         for k, v in self.fields.items():
             self.fields[k].widget.attrs['class'] = 'form-control'
             self.fields[k].widget.attrs['col'] = '12'
+            if k in CAMPOS_HEREDABLES and k not in _SWITCH_FIELDS:
+                self.fields[k].required = False
+                heredado = _heredados.get(k)
+                if heredado is not None:
+                    self.fields[k].widget.attrs['placeholder'] = f'Hereda: {heredado}'
             if k in ('apikey', 'tono'):
                 self.fields[k].widget.attrs['class'] = 'select2'
             if k in _SWITCH_FIELDS:
@@ -369,17 +390,15 @@ class FaqAgenteForm(ModelFormBase):
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
 
 
-_PREFIJO_MODELO_POR_PROVEEDOR = {2: 'gemini-', 3: 'gpt-', 4: 'claude-'}
-_NOMBRE_PROVEEDOR = {2: 'Gemini', 3: 'OpenAI', 4: 'Claude'}
+_PREFIJO_MODELO_POR_PROVEEDOR = {2: 'gemini-', 3: 'gpt-', 4: 'claude-', 6: 'deepseek-'}
+_NOMBRE_PROVEEDOR = {2: 'Gemini', 3: 'OpenAI', 4: 'Claude', 5: 'Ollama', 6: 'DeepSeek', 7: 'Huawei MaaS', 8: 'Ollama Local'}
+_PROVEEDORES_REQUIEREN_BASE_URL = (7,)
 
 
 class ApiKeyIAForm(ModelFormBase):
     class Meta:
         model = ApiKeyIA
-        # El MODELO ya NO se configura aquí: la API Key solo guarda la credencial.
-        # El modelo LLM se elige desde la Configuración del agente (dropdown con
-        # lista viva del proveedor) y se persiste en ApiKeyIA.modelo desde ahí.
-        fields = ('alias', 'proveedor', 'descripcion', 'usuario', 'contrasena', 'estado')
+        fields = ('alias', 'proveedor', 'modelo', 'descripcion', 'base_url', 'usuario', 'contrasena', 'estado')
 
     def __init__(self, *args, **kwargs):
         ver = kwargs.pop('ver') if 'ver' in kwargs else False
@@ -394,11 +413,32 @@ class ApiKeyIAForm(ModelFormBase):
                 self.fields[k].widget.attrs['col'] = '3'
             if k in ('descripcion',):
                 self.fields[k].widget.attrs['col'] = '12'
+            if k in ('base_url',):
+                self.fields[k].required = False
+                self.fields[k].widget.attrs['col'] = '12'
+                self.fields[k].widget.attrs['placeholder'] = 'http://localhost:11434 (Ollama) · URL del despliegue (Huawei MaaS) · vacío = default'
             if k in ('proveedor',):
                 self.fields[k].widget.attrs['class'] = "form-control jselect"
                 self.fields[k].widget.attrs['col'] = '6'
             if ver:
                 self.fields[k].widget.attrs['readonly'] = 'readonly'
+
+    def clean(self):
+        cleaned = super().clean()
+        proveedor = cleaned.get('proveedor')
+        modelo = (cleaned.get('modelo') or '').strip()
+        base_url = (cleaned.get('base_url') or '').strip()
+        if proveedor and modelo:
+            prefijo = _PREFIJO_MODELO_POR_PROVEEDOR.get(proveedor)
+            if prefijo and not modelo.startswith(prefijo):
+                nombre = _NOMBRE_PROVEEDOR.get(proveedor, 'el proveedor seleccionado')
+                self.add_error('modelo', f'El modelo seleccionado no es compatible con {nombre}. Elige un modelo que empiece con "{prefijo}" o déjalo vacío para usar el default.')
+        if proveedor in _PROVEEDORES_REQUIEREN_BASE_URL and not base_url:
+            nombre = _NOMBRE_PROVEEDOR.get(proveedor, 'este proveedor')
+            self.add_error('base_url', f'{nombre} requiere la Base URL del despliegue.')
+        if proveedor in (2, 3, 4, 5) and base_url:
+            cleaned['base_url'] = ''
+        return cleaned
 
 
 class CredencialApiChatbotForm(ModelFormBase):
@@ -469,7 +509,7 @@ class ClienteForm(ModelFormBase):
     class Meta:
         model = Cliente
         fields = (
-            'cedula', 'nombres', 'apellidos', 'email', 'telefono',
+            'cedula', 'nombres', 'apellidos', 'email', 'telefono', 'ciudad',
             'edad', 'fecha_nacimiento', 'sexo', 'canal_origen',
             'contacto_origen', 'conversacion_origen', 'sesion_origen',
             'departamento_origen', 'notas',

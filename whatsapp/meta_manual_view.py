@@ -111,43 +111,6 @@ def _validar_con_graph(waba_id: str, phone_number_id: str, access_token: str,
 
 
 @login_required
-def meta_webhook_info(request, sesion_id):
-    """Devuelve datos para configurar el webhook en Meta para esta sesión.
-
-    GET /whatsapp/meta/webhook-info/<sesion_id>/
-    → {
-        ok: bool,
-        webhook_url: 'https://dominio/whatsapp/meta_webhook/',
-        verify_token: '<random>',
-        app_id: '...',
-        waba_id: '...',
-        phone_number_id: '...',
-        meta_webhook_url: 'https://developers.facebook.com/apps/<app_id>/webhooks/',
-      }
-    """
-    from django.conf import settings
-    from .common_meta import get_meta_app_credentials
-    sesion = SesionWhatsApp.objects.filter(id=sesion_id, proveedor='meta').first()
-    if not sesion:
-        return JsonResponse({'ok': False, 'error': 'Sesión no encontrada o no es Meta.'})
-    config = getattr(sesion, 'config_meta', None)
-    if not config:
-        return JsonResponse({'ok': False, 'error': 'La sesión no tiene ConfigMeta cargada.'})
-    app_id, _ = get_meta_app_credentials()
-    return JsonResponse({
-        'ok': True,
-        'webhook_url': getattr(settings, 'URL_GENERAL', '') + '/whatsapp/meta_webhook/',
-        'verify_token': config.webhook_verify_token,
-        'app_id': app_id,
-        'waba_id': config.waba_id,
-        'phone_number_id': config.phone_number_id,
-        'display_phone_number': config.display_phone_number or '',
-        'meta_webhooks_url': f'https://developers.facebook.com/apps/{app_id}/webhooks/' if app_id else '',
-        'webhook_verificado_en': config.webhook_verificado_en.isoformat() if config.webhook_verificado_en else None,
-    })
-
-
-@login_required
 @require_POST
 @csrf_protect
 def meta_manual_validar(request):
@@ -237,12 +200,32 @@ def meta_manual_conectar(request):
     except Exception as ex:
         logger.warning("sincronizar_meta_desde_graph fallo en alta manual: %s", ex)
 
-    # Auto-suscribir la WABA a la app: sin esto, el webhook a nivel app no
-    # recibe eventos de esta WABA específica. Si falla, devolvemos hint para
-    # que el operador corra el curl manualmente desde el modal de webhook.
-    sub_res = _suscribir_waba_a_app(waba_id, access_token)
+    # Auto-corregir el waba_id: si el número NO pertenece a la WABA que cargó el
+    # operador (típico copy-paste de la WABA de otro número), detectamos la WABA
+    # real y la guardamos. Sin esto, los entrantes nunca llegan al webhook.
+    waba_efectiva = config.waba_id
+    waba_corregida = False
+    try:
+        from .meta_diagnostico_view import _numero_en_su_waba, _descubrir_waba_real
+        pertenece = _numero_en_su_waba(config)
+        if pertenece.get('ok') and not pertenece.get('pertenece'):
+            real = _descubrir_waba_real(config)
+            if real.get('ok') and real.get('waba_id'):
+                logger.info("Alta manual: waba_id corregido %s → %s (sesión %s)",
+                            config.waba_id, real['waba_id'], sesion.id)
+                config.waba_id = real['waba_id']
+                config.save()
+                waba_efectiva = real['waba_id']
+                waba_corregida = True
+    except Exception as ex:
+        logger.warning("Auto-corrección de waba_id falló en alta manual: %s", ex)
+
+    # Auto-suscribir la WABA (ya corregida si hizo falta) a la app: sin esto, el
+    # webhook a nivel app no recibe eventos de esta WABA específica. Si falla,
+    # devolvemos hint para que el operador corra el curl manual desde el modal.
+    sub_res = _suscribir_waba_a_app(waba_efectiva, access_token)
     if sub_res.get('ok'):
-        logger.info("WABA %s auto-suscrita a la Meta App.", waba_id)
+        logger.info("WABA %s auto-suscrita a la Meta App.", waba_efectiva)
 
     return JsonResponse({
         'ok': True,
@@ -253,6 +236,176 @@ def meta_manual_conectar(request):
         'webhook_verify_token': config.webhook_verify_token,
         'waba_suscrita': sub_res.get('ok'),
         'waba_suscrita_error': sub_res.get('error') if not sub_res.get('ok') else None,
+        'waba_corregida': waba_corregida,
+        'waba_id': waba_efectiva,
+    })
+
+
+@login_required
+@require_POST
+@csrf_protect
+def meta_registrar_numero(request, sesion_id):
+    """Registra el número en Cloud API (POST /{phone_number_id}/register).
+
+    Un número recién cargado en Cloud API queda en estado PENDING y todo envío
+    falla con (#133010) Account not registered. Este endpoint lo registra con
+    el PIN de verificación en dos pasos (6 dígitos). Tras un registro OK, Meta
+    pasa el número a CONNECTED y los envíos funcionan.
+
+    POST /whatsapp/sesiones/<sesion_id>/registrar-numero/
+    Body: pin=<6 dígitos>
+    """
+    sesion = SesionWhatsApp.objects.filter(id=sesion_id, proveedor='meta').first()
+    if not sesion:
+        return JsonResponse({'ok': False, 'error': 'Sesión no encontrada o no es Meta.'})
+
+    config = getattr(sesion, 'config_meta', None)
+    if not config:
+        return JsonResponse({'ok': False, 'error': 'La sesión no tiene ConfigMeta.'})
+    if not (config.access_token and config.phone_number_id):
+        return JsonResponse({'ok': False, 'error': 'Falta access_token o phone_number_id en la sesión.'})
+
+    pin = (request.POST.get('pin') or '').strip()
+    if not (pin.isdigit() and len(pin) == 6):
+        return JsonResponse({'ok': False, 'error': 'El PIN debe ser de 6 dígitos.'})
+
+    try:
+        r = requests.post(
+            build_graph_url(f'/{config.phone_number_id}/register'),
+            headers={'Authorization': f'Bearer {config.access_token}'},
+            json={'messaging_product': 'whatsapp', 'pin': pin},
+            timeout=15,
+        )
+    except Exception as ex:
+        return JsonResponse({'ok': False, 'error': f'No pude llamar a Graph: {ex}'})
+
+    if r.status_code != 200:
+        try:
+            err = r.json().get('error', {}).get('message', r.text[:300])
+        except Exception:
+            err = r.text[:300]
+        return JsonResponse({'ok': False, 'error': f'Meta rechazó el registro: {err}'})
+
+    # Best-effort: refrescar metadata (status pasa a CONNECTED) desde Graph.
+    try:
+        sincronizar_meta_desde_graph(sesion, config)
+    except Exception as ex:
+        logger.warning("sincronizar_meta_desde_graph falló tras registro: %s", ex)
+
+    logger.info("Número registrado en Cloud API: phone_number_id=%s (sesión %s)",
+                config.phone_number_id, sesion.id)
+    return JsonResponse({'ok': True, 'message': 'Número registrado en Cloud API. Ya podés enviar mensajes.'})
+
+
+@login_required
+@require_POST
+@csrf_protect
+def meta_request_code(request, sesion_id):
+    """Solicita el código de verificación del número (POST /{phone_number_id}/request_code).
+
+    Un número en estado PENDING necesita verificar la propiedad antes de poder
+    registrarse. Este endpoint le pide a Meta que envíe un código de 6 dígitos
+    por SMS o voz al número. Luego se confirma con meta_verify_code.
+
+    POST /whatsapp/sesiones/<sesion_id>/request-code/
+    Body: metodo=SMS|VOICE (default SMS), idioma=<locale> (default es_ES)
+    """
+    sesion = SesionWhatsApp.objects.filter(id=sesion_id, proveedor='meta').first()
+    if not sesion:
+        return JsonResponse({'ok': False, 'error': 'Sesión no encontrada o no es Meta.'})
+
+    config = getattr(sesion, 'config_meta', None)
+    if not config:
+        return JsonResponse({'ok': False, 'error': 'La sesión no tiene ConfigMeta.'})
+    if not (config.access_token and config.phone_number_id):
+        return JsonResponse({'ok': False, 'error': 'Falta access_token o phone_number_id en la sesión.'})
+
+    metodo = (request.POST.get('metodo') or 'SMS').strip().upper()
+    if metodo not in ('SMS', 'VOICE'):
+        metodo = 'SMS'
+    idioma = (request.POST.get('idioma') or 'es_ES').strip()
+
+    try:
+        r = requests.post(
+            build_graph_url(f'/{config.phone_number_id}/request_code'),
+            headers={'Authorization': f'Bearer {config.access_token}'},
+            json={'code_method': metodo, 'language': idioma},
+            timeout=15,
+        )
+    except Exception as ex:
+        return JsonResponse({'ok': False, 'error': f'No pude llamar a Graph: {ex}'})
+
+    if r.status_code != 200:
+        try:
+            err = r.json().get('error', {}).get('message', r.text[:300])
+        except Exception:
+            err = r.text[:300]
+        return JsonResponse({'ok': False, 'error': f'Meta rechazó la solicitud: {err}'})
+
+    logger.info("Código de verificación solicitado vía %s: phone_number_id=%s (sesión %s)",
+                metodo, config.phone_number_id, sesion.id)
+    via = 'SMS' if metodo == 'SMS' else 'llamada de voz'
+    return JsonResponse({
+        'ok': True,
+        'message': f'Código enviado por {via}. Ingresalo abajo para verificar el número.',
+    })
+
+
+@login_required
+@require_POST
+@csrf_protect
+def meta_verify_code(request, sesion_id):
+    """Confirma el código de verificación del número (POST /{phone_number_id}/verify_code).
+
+    Recibe el código de 6 dígitos que Meta envió por SMS/voz en meta_request_code
+    y verifica la propiedad del número. Tras un verify OK, el número queda listo
+    para registrarse con meta_registrar_numero.
+
+    POST /whatsapp/sesiones/<sesion_id>/verify-code/
+    Body: code=<6 dígitos>
+    """
+    sesion = SesionWhatsApp.objects.filter(id=sesion_id, proveedor='meta').first()
+    if not sesion:
+        return JsonResponse({'ok': False, 'error': 'Sesión no encontrada o no es Meta.'})
+
+    config = getattr(sesion, 'config_meta', None)
+    if not config:
+        return JsonResponse({'ok': False, 'error': 'La sesión no tiene ConfigMeta.'})
+    if not (config.access_token and config.phone_number_id):
+        return JsonResponse({'ok': False, 'error': 'Falta access_token o phone_number_id en la sesión.'})
+
+    code = (request.POST.get('code') or '').strip()
+    if not (code.isdigit() and len(code) == 6):
+        return JsonResponse({'ok': False, 'error': 'El código debe ser de 6 dígitos.'})
+
+    try:
+        r = requests.post(
+            build_graph_url(f'/{config.phone_number_id}/verify_code'),
+            headers={'Authorization': f'Bearer {config.access_token}'},
+            json={'code': code},
+            timeout=15,
+        )
+    except Exception as ex:
+        return JsonResponse({'ok': False, 'error': f'No pude llamar a Graph: {ex}'})
+
+    if r.status_code != 200:
+        try:
+            err = r.json().get('error', {}).get('message', r.text[:300])
+        except Exception:
+            err = r.text[:300]
+        return JsonResponse({'ok': False, 'error': f'Meta rechazó el código: {err}'})
+
+    # Best-effort: refrescar metadata desde Graph (status puede avanzar).
+    try:
+        sincronizar_meta_desde_graph(sesion, config)
+    except Exception as ex:
+        logger.warning("sincronizar_meta_desde_graph falló tras verify_code: %s", ex)
+
+    logger.info("Número verificado: phone_number_id=%s (sesión %s)",
+                config.phone_number_id, sesion.id)
+    return JsonResponse({
+        'ok': True,
+        'message': 'Número verificado. Ahora registralo con un PIN de 6 dígitos.',
     })
 
 

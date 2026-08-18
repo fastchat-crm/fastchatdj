@@ -55,9 +55,12 @@ class Command(BaseCommand):
         if opts.get('gemini_key_id'):
             gem = ApiKeyIA.objects.filter(id=opts['gemini_key_id']).first()
         else:
-            gem = ApiKeyIA.objects.filter(perfil=empresa, proveedor=2, estado=True).order_by('-id').first()
+            from crm.ia_config import resolver_key_embeddings
+            gem = resolver_key_embeddings(empresa.id)
         if not gem:
-            raise CommandError('No hay ApiKeyIA Gemini para embeddings.')
+            raise CommandError(
+                'No hay una API key para embeddings en este perfil. Marcá una en el Centro de IA '
+                'o pasá --gemini-key-id.')
 
         wb = openpyxl.load_workbook(opts['archivo'], data_only=True)
         ws = wb[opts['hoja']]

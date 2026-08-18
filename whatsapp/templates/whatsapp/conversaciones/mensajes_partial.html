@@ -25,7 +25,7 @@
 
                         {% if mensaje.get_archivo_url %}
                             {% if mensaje.tipo == 'imagen' %}
-                                <a href="{{ mensaje.get_archivo_url }}" data-fancybox="gallery" target="_blank">
+                                <a href="{{ mensaje.get_archivo_url }}" data-fancybox="chat">
                                     <img src="{{ mensaje.get_archivo_url }}" alt="imagen" class="msg-img">
                                 </a>
                             {% elif mensaje.tipo == 'sticker' %}
@@ -85,6 +85,27 @@
                                 <i class="fa fa-check-double text-muted"></i>
                             {% endif %}
                         </span>
+                        {% if mensaje.estado_envio == 'fallido' %}
+                            <button type="button" class="btn btn-link btn-sm p-0 text-danger btn-reenviar"
+                                    data-msg-id="{{ mensaje.id }}" title="Reenviar mensaje">
+                                <i class="fa fa-rotate-right"></i> Reenviar
+                            </button>
+                            <div class="msg-error-detalle text-danger w-100" style="font-size:.68rem;">
+                                <i class="fa fa-exclamation-triangle me-1"></i>No entregado: {{ mensaje.error_envio|default:'Fallo de envío' }}
+                            </div>
+                        {% endif %}
+                        {% if conversacion.sesion.es_baileys and not mensaje.eliminado %}
+                            {% if mensaje.tipo == 'texto' %}
+                                <button type="button" class="btn btn-link btn-sm p-0 text-muted btn-editar-mensaje"
+                                        data-msg-id="{{ mensaje.id }}" data-texto="{{ mensaje.mensaje }}" title="Editar (Baileys)">
+                                    <i class="fa fa-pen"></i>
+                                </button>
+                            {% endif %}
+                            <button type="button" class="btn btn-link btn-sm p-0 text-muted btn-eliminar-mensaje"
+                                    data-msg-id="{{ mensaje.id }}" title="Eliminar para todos (Baileys)">
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        {% endif %}
                     </div>
                 </div>
 
@@ -130,7 +151,7 @@
 
                         {% if mensaje.get_archivo_url %}
                             {% if mensaje.tipo == 'imagen' %}
-                                <a href="{{ mensaje.get_archivo_url }}" data-fancybox="gallery" target="_blank">
+                                <a href="{{ mensaje.get_archivo_url }}" data-fancybox="chat">
                                     <img src="{{ mensaje.get_archivo_url }}" alt="imagen" class="msg-img">
                                 </a>
                             {% elif mensaje.tipo == 'sticker' %}

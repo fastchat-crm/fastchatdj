@@ -1,3 +1,5 @@
+import json
+
 from django.db import transaction
 from django.http import JsonResponse
 
@@ -123,6 +125,177 @@ def _generar_departamento_con_ia(request):
     log(
         f"Generó departamento '{resultado['nombre']}' con IA ({resultado['opciones_count']} opciones)",
         request, "add", obj=resultado['departamento_id'],
+    )
+    return JsonResponse({
+        'error': False,
+        'nombre': resultado['nombre'],
+        'departamento_id': resultado['departamento_id'],
+        'opciones_count': resultado['opciones_count'],
+    })
+
+
+def _generar_departamento_wizard(request):
+    """Action: generar_con_ia_wizard. Asistente Q&A: toma las respuestas del
+    cuestionario guiado y arma un proceso pregunta->respuesta completo."""
+    from seguridad.models import Configuracion
+    from agents_ai.ai_actions import IAActionError
+    from agents_ai.ai_actions import dpchatbots_crm
+
+    confi = Configuracion.get_instancia()
+    if not confi or not getattr(confi, 'ia_features_activas', False) or not confi.token_ia_id:
+        return JsonResponse({
+            'error': True,
+            'message': 'Features de IA del sistema deshabilitadas. Configurá un token IA en Configuración.',
+        })
+
+    try:
+        resultado = dpchatbots_crm.generar_wizard(
+            descripcion=request.POST.get('descripcion'),
+            tipo_negocio=request.POST.get('tipo_negocio'),
+            tono=request.POST.get('tono') or 'amable',
+            objetivo=request.POST.get('objetivo'),
+            datos_cliente=request.POST.get('datos_cliente'),
+            opciones_menu=request.POST.get('opciones_menu'),
+            handoff_cuando=request.POST.get('handoff_cuando'),
+            apikey_obj=confi.token_ia,
+            usuario=request.user,
+        )
+    except IAActionError as ex:
+        return JsonResponse({'error': True, 'message': str(ex)})
+    except Exception as ex:
+        return JsonResponse({'error': True, 'message': f'Error generando proceso: {ex}'})
+
+    log(
+        f"Generó proceso Q&A '{resultado['nombre']}' con IA ({resultado['opciones_count']} nodos)",
+        request, "add", obj=resultado['departamento_id'],
+    )
+    return JsonResponse({
+        'error': False,
+        'nombre': resultado['nombre'],
+        'departamento_id': resultado['departamento_id'],
+        'opciones_count': resultado['opciones_count'],
+    })
+
+
+def _wizard_chat(request):
+    """Action: wizard_chat. Un turno del asistente conversacional. El frontend
+    mantiene el historial y el borrador y los reenvía en cada turno."""
+    from seguridad.models import Configuracion
+    from agents_ai.ai_actions import IAActionError
+    from agents_ai.ai_actions import dpchatbots_crm
+
+    confi = Configuracion.get_instancia()
+    if not confi or not getattr(confi, 'ia_features_activas', False) or not confi.token_ia_id:
+        return JsonResponse({
+            'error': True,
+            'message': 'Features de IA del sistema deshabilitadas. Configurá un token IA en Configuración.',
+        })
+
+    try:
+        historial = json.loads(request.POST.get('historial') or '[]')
+    except (ValueError, TypeError):
+        historial = []
+    borrador_raw = (request.POST.get('borrador') or '').strip()
+    try:
+        borrador = json.loads(borrador_raw) if borrador_raw else None
+    except (ValueError, TypeError):
+        borrador = None
+
+    try:
+        resultado = dpchatbots_crm.conversar(
+            historial=historial,
+            mensaje=request.POST.get('mensaje'),
+            borrador=borrador,
+            apikey_obj=confi.token_ia,
+            usuario=request.user,
+        )
+    except IAActionError as ex:
+        return JsonResponse({'error': True, 'message': str(ex)})
+    except Exception as ex:
+        return JsonResponse({'error': True, 'message': f'Error en el asistente: {ex}'})
+
+    return JsonResponse({
+        'error': False,
+        'respuesta': resultado['respuesta'],
+        'flujo': resultado['flujo'],
+        'listo': resultado['listo'],
+    })
+
+
+def _wizard_crear(request):
+    """Action: wizard_crear. Persiste el flujo acordado en el chat."""
+    from agents_ai.ai_actions import IAActionError
+    from agents_ai.ai_actions import dpchatbots_crm
+
+    try:
+        flujo = json.loads(request.POST.get('flujo') or '{}')
+    except (ValueError, TypeError):
+        return JsonResponse({'error': True, 'message': 'Borrador inválido.'})
+
+    try:
+        resultado = dpchatbots_crm.crear_desde_borrador(flujo=flujo, usuario=request.user)
+    except IAActionError as ex:
+        return JsonResponse({'error': True, 'message': str(ex)})
+    except Exception as ex:
+        return JsonResponse({'error': True, 'message': f'Error creando el departamento: {ex}'})
+
+    log(
+        f"Creó departamento '{resultado['nombre']}' desde chat IA ({resultado['opciones_count']} nodos)",
+        request, "add", obj=resultado['departamento_id'],
+    )
+    return JsonResponse({
+        'error': False,
+        'nombre': resultado['nombre'],
+        'departamento_id': resultado['departamento_id'],
+        'opciones_count': resultado['opciones_count'],
+    })
+
+
+def _wizard_cargar_borrador(request):
+    """Action GET: wizard_cargar_borrador. Serializa el flujo de un depto
+    existente al esquema de borrador, para precargarlo en el chat de edición."""
+    from agents_ai.ai_actions import dpchatbots_crm
+    try:
+        pk = int(request.GET.get('id') or 0)
+    except (ValueError, TypeError):
+        return JsonResponse({'error': True, 'message': 'ID inválido.'})
+    filtro = DepartamentoChatBot.objects.filter(pk=pk, status=True).first()
+    if not filtro:
+        return JsonResponse({'error': True, 'message': 'Departamento no encontrado.'})
+    try:
+        borrador = dpchatbots_crm.serializar_a_borrador(filtro)
+    except Exception as ex:
+        return JsonResponse({'error': True, 'message': f'No se pudo cargar el flujo: {ex}'})
+    return JsonResponse({'error': False, 'flujo': borrador, 'nombre': filtro.nombre})
+
+
+def _wizard_actualizar(request):
+    """Action POST: wizard_actualizar. Reemplaza el flujo del depto con el
+    borrador acordado en el chat de edición."""
+    from agents_ai.ai_actions import IAActionError
+    from agents_ai.ai_actions import dpchatbots_crm
+
+    try:
+        flujo = json.loads(request.POST.get('flujo') or '{}')
+    except (ValueError, TypeError):
+        return JsonResponse({'error': True, 'message': 'Borrador inválido.'})
+    try:
+        pk = int(request.POST.get('departamento_id') or 0)
+    except (ValueError, TypeError):
+        return JsonResponse({'error': True, 'message': 'ID inválido.'})
+
+    try:
+        resultado = dpchatbots_crm.actualizar_desde_borrador(
+            departamento_id=pk, flujo=flujo, usuario=request.user,
+        )
+    except IAActionError as ex:
+        return JsonResponse({'error': True, 'message': str(ex)})
+    except Exception as ex:
+        return JsonResponse({'error': True, 'message': f'Error actualizando el departamento: {ex}'})
+
+    log(
+        f"Editó por chat el departamento '{resultado['nombre']}' ({resultado['opciones_count']} nodos)",
+        request, "edit", obj=resultado['departamento_id'],
     )
     return JsonResponse({
         'error': False,
@@ -290,9 +463,6 @@ def _duplicar_info(request):
     count_opciones = OpcionDepartamentoChatBot.objects.filter(
         departamento=dpto, status=True,
     ).count()
-    count_usuarios = PerfilDepartamentoChatBot.objects.filter(
-        departamento=dpto, status=True,
-    ).count()
     count_conexiones = ConexionNodoChatbot.objects.filter(
         nodo_origen__departamento=dpto, status=True,
     ).count()
@@ -313,7 +483,6 @@ def _duplicar_info(request):
             'count_opciones': count_opciones,
             'count_conexiones': count_conexiones,
             'count_endpoints': count_endpoints,
-            'count_usuarios': count_usuarios,
             'nombre_sugerido': f"{dpto.nombre} - COPIA",
         },
     })
@@ -323,8 +492,7 @@ def _duplicar_departamento(request):
     """Action: duplicar. Clona DepartamentoChatBot completo:
       1. Nuevo Departamento con los mismos campos (es_default forzado a False).
       2. Clona OpcionDepartamentoChatBot manteniendo árbol (opcion_padre).
-      3. Clona ConexionNodoChatbot remapeando origen/destino.
-      4. Clona PerfilDepartamentoChatBot (asignaciones de usuarios)."""
+      3. Clona ConexionNodoChatbot remapeando origen/destino."""
     try:
         dpto_id = int(request.POST.get('id') or 0)
     except (TypeError, ValueError):
@@ -408,22 +576,9 @@ def _duplicar_departamento(request):
             ).save(request)
             count_conex_clonadas += 1
 
-        # Pase 4 — clonar usuarios asignados
-        perfiles = PerfilDepartamentoChatBot.objects.filter(
-            departamento=dpto, status=True,
-        )
-        count_usuarios_clonados = 0
-        for p in perfiles:
-            PerfilDepartamentoChatBot(
-                departamento=nuevo,
-                usuario=p.usuario,
-            ).save(request)
-            count_usuarios_clonados += 1
-
     log(
         f"Duplicó departamento '{dpto.nombre}' → '{nuevo.nombre}' "
-        f"({len(mapeo_nodos)} nodos, {count_conex_clonadas} conexiones, "
-        f"{count_usuarios_clonados} usuarios)",
+        f"({len(mapeo_nodos)} nodos, {count_conex_clonadas} conexiones)",
         request, "add", obj=nuevo.id,
     )
     return JsonResponse({
@@ -432,7 +587,6 @@ def _duplicar_departamento(request):
         'departamento_nombre': nuevo.nombre,
         'nodos': len(mapeo_nodos),
         'conexiones': count_conex_clonadas,
-        'usuarios': count_usuarios_clonados,
         'mensaje': f"Departamento duplicado como '{nuevo.nombre}'.",
     })
 
@@ -975,6 +1129,152 @@ def _serializar_para_preview(departamento):
         },
         'nodos': nodos,
         'inicio_id': inicio.id if inicio else None,
+    }
+
+
+def _resumen_accion_nodo(n):
+    """Resumen corto de QUÉ ejecuta el nodo, para el subtítulo en el diagrama.
+    Se calcula desde `tipo_nodo` + `config` para que el editor visual muestre
+    la acción real sin tener que abrir cada nodo."""
+    cfg = n.config or {}
+    t = n.tipo_nodo
+    if t == 'http':
+        base = f"{cfg.get('metodo') or 'GET'} {cfg.get('path') or ''}".strip()
+        if n.endpoint_id and getattr(n, 'endpoint', None):
+            base = f"{base} · {n.endpoint.nombre}".strip(' ·')
+        return base or 'Llamada HTTP'
+    if t == 'funcion':
+        return 'fn: ' + (cfg.get('funcion_codigo') or '—')
+    if t == 'condicional':
+        conds = cfg.get('condiciones') or []
+        return f"{len(conds)} condición(es) · {(cfg.get('operador') or 'and').upper()}"
+    if t == 'set_variable':
+        return f"{len(cfg.get('asignaciones') or [])} asignación(es)"
+    if t == 'menu':
+        fuente = cfg.get('opciones_fuente') or {}
+        if fuente.get('variable'):
+            return 'opciones desde ' + fuente['variable']
+        n_inline = len(cfg.get('opciones') or [])
+        if n_inline:
+            return f"{n_inline} opción(es) inline"
+        return 'botones desde hijos'
+    if t == 'cta_url':
+        return (cfg.get('display_text') or 'Botón') + ' → URL externa'
+    if t == 'ubicacion':
+        return cfg.get('name') or 'Ubicación / mapa'
+    if t == 'handoff':
+        return 'Deriva a asesor humano'
+    if t == 'agenda_turno':
+        sub = {'reservar': 'Reservar', 'cancelar': 'Cancelar', 'reagendar': 'Reagendar'}
+        return 'Agenda: ' + sub.get((cfg.get('sub_action') or 'reservar'), 'Reservar')
+    if t == 'loop':
+        return 'Itera ' + str(cfg.get('iterations_expr') or '?')
+    if t == 'pregunta':
+        return ('Guarda → ' + n.variable_destino) if n.variable_destino else 'Pregunta al usuario'
+    if t == 'fin':
+        return 'Cierra la conversación'
+    if t == 'respuesta':
+        return 'Texto + botón URL' if cfg.get('cta_url') else 'Envía texto'
+    return ''
+
+
+# Funciones (funcion_codigo) que persisten un Cliente en el CRM. Si agregás
+# otra función que guarde cliente, sumá su código acá para que el diagrama la
+# identifique con el badge "👤 Cliente".
+FUNCIONES_REGISTRAN_CLIENTE = {'cliente_upsert', 'registrar_inscripcion_buceo'}
+
+
+def _flags_nodo(n):
+    """Banderas/badges cortos para el subtítulo (efectos colaterales)."""
+    cfg = n.config or {}
+    flags = []
+    if n.tipo_nodo == 'funcion' and (cfg.get('funcion_codigo') or '') in FUNCIONES_REGISTRAN_CLIENTE:
+        flags.append('👤 Cliente')
+    if cfg.get('envia_correo'):
+        flags.append('correo')
+    if cfg.get('notificar_asesor'):
+        flags.append('asesor')
+    if n.variable_destino and n.tipo_nodo not in ('pregunta',):
+        flags.append('→' + n.variable_destino)
+    if n.validacion_tipo and n.validacion_tipo != 'none':
+        flags.append(n.validacion_tipo)
+    return flags
+
+
+def _serializar_para_canvas(departamento):
+    """Grafo para el editor visual (Drawflow). A diferencia del preview, expone
+    `x`/`y` por nodo y un `conexion_id` por salida para edición directa.
+
+    Las aristas combinan el grafo moderno (`ConexionNodoChatbot`) con el árbol
+    legacy (`opcion_padre`) para que flujos viejos también se vean conectados.
+    """
+    from .models import ConexionNodoChatbot
+
+    TIPOS_NODO = OpcionDepartamentoChatBot.TIPOS_NODO
+
+    nodos_qs = list(OpcionDepartamentoChatBot.objects.filter(
+        departamento=departamento, status=True,
+    ).select_related('endpoint'))
+    by_id = {n.id: n for n in nodos_qs}
+
+    conex_qs = ConexionNodoChatbot.objects.filter(
+        nodo_origen__departamento=departamento, status=True,
+    ).order_by('nodo_origen', 'orden', 'id')
+
+    edges = {}
+    for c in conex_qs:
+        edges[(c.nodo_origen_id, c.nodo_destino_id)] = {
+            'conexion_id': c.id,
+            'etiqueta': c.etiqueta or '',
+            'destino_id': c.nodo_destino_id,
+        }
+    for n in sorted(nodos_qs, key=lambda x: (x.orden, x.id)):
+        if n.opcion_padre_id and (n.opcion_padre_id, n.id) not in edges:
+            padre = by_id.get(n.opcion_padre_id)
+            etiqueta = n.nombre if (padre and padre.tipo_nodo == 'menu') else ''
+            edges[(n.opcion_padre_id, n.id)] = {
+                'conexion_id': None,
+                'etiqueta': etiqueta,
+                'destino_id': n.id,
+            }
+
+    salidas_by_origen = {}
+    for (origen, _destino), e in edges.items():
+        salidas_by_origen.setdefault(origen, []).append(e)
+
+    tipo_labels = dict(TIPOS_NODO)
+    nodos = []
+    for n in nodos_qs:
+        nodos.append({
+            'id': n.id,
+            'nombre': n.nombre or '',
+            'tipo': n.tipo_nodo,
+            'tipo_label': tipo_labels.get(n.tipo_nodo, n.tipo_nodo),
+            'respuesta': (n.respuesta or '')[:140],
+            'accion': _resumen_accion_nodo(n),
+            'flags': _flags_nodo(n),
+            'es_inicio': bool(n.es_inicio),
+            'x': float(n.posicion_x or 0),
+            'y': float(n.posicion_y or 0),
+            'salidas': salidas_by_origen.get(n.id, []),
+        })
+
+    inicio = next((n for n in nodos_qs if n.es_inicio), None)
+    if not inicio:
+        sin_padre = [n for n in nodos_qs if not n.opcion_padre_id]
+        sin_padre.sort(key=lambda x: (x.orden, x.id))
+        inicio = sin_padre[0] if sin_padre else None
+
+    return {
+        'departamento': {
+            'id': departamento.id,
+            'nombre': departamento.nombre,
+            'color': departamento.color or '#16a34a',
+            'activo_tradicional': bool(departamento.activo_tradicional),
+        },
+        'nodos': nodos,
+        'inicio_id': inicio.id if inicio else None,
+        'tipos': [{'value': v, 'label': l} for v, l in TIPOS_NODO],
     }
 
 
@@ -1651,6 +1951,30 @@ def _guardar_opcion(request):
                 opcion.endpoint = None
         else:
             opcion.endpoint = None
+    elif opcion.tipo_nodo == 'agenda_turno':
+        # Nodo de agenda: solo elige la sub-acción. La agenda concreta
+        # (servicios/recursos/horarios) se configura a nivel de sesión vía
+        # `grupo_agenda`. Salidas típicas: vacío (ok), `cancelado`.
+        sub = (request.POST.get('agenda_sub_action') or 'reservar').strip().lower()
+        if sub not in ('reservar', 'cancelar', 'reagendar'):
+            sub = 'reservar'
+        opcion.config = {'sub_action': sub}
+        opcion.endpoint = None
+    elif opcion.tipo_nodo == 'loop':
+        # Bucle: itera N veces. Salidas: `body` (cada iteración) y `done`
+        # (al terminar). `index_var` expone el contador a los nodos del cuerpo.
+        cfg = {}
+        iter_expr = (request.POST.get('loop_iterations_expr') or '').strip()
+        cfg['iterations_expr'] = iter_expr
+        cfg['index_var'] = (request.POST.get('loop_index_var') or 'i').strip() or 'i'
+        try:
+            cfg['base_index'] = int(request.POST.get('loop_base_index') or 1)
+        except (TypeError, ValueError):
+            cfg['base_index'] = 1
+        cfg['body_label'] = (request.POST.get('loop_body_label') or 'body').strip() or 'body'
+        cfg['done_label'] = (request.POST.get('loop_done_label') or 'done').strip() or 'done'
+        opcion.config = cfg
+        opcion.endpoint = None
     else:
         # Tipos sin form específico (respuesta, pregunta, fin, handoff) →
         # el textarea "Mensaje al cliente" se guarda en `opcion.respuesta`
@@ -1994,4 +2318,82 @@ def _probar_http(request):
         'duracion_ms': duracion_ms,
         'body': body_resp,
         'error': err,
+    })
+
+
+def _probar_funcion(request):
+    """action=probar_funcion. Ejecuta una función registrada real (sin guardar)
+    con la config provista y devuelve etiqueta/status/body/duración. Permite
+    que el simulador en modo real ejecute nodos `funcion` de verdad en lugar de
+    mockearlos.
+
+    POST params:
+      funcion_codigo: código registrado en crm.funciones_chatbot
+      endpoint_id: pk del EndpointApiChatbot (opcional, override de URL)
+      body_json: body del nodo (soporta {{variables.x}})
+      timeout_seg: timeout opcional
+      variables_test_json: JSON {x: valor} para sustituir {{variables.x}}
+    """
+    import time
+    from .funciones_chatbot import obtener_funcion
+
+    codigo = (request.POST.get('funcion_codigo') or '').strip()
+    if not codigo:
+        return JsonResponse({'ok': False, 'error': 'funcion_codigo requerido'})
+    fn = obtener_funcion(codigo)
+    if not fn:
+        return JsonResponse({'ok': False, 'error': f'Función "{codigo}" no registrada.'})
+
+    ep = None
+    try:
+        ep_id = int(request.POST.get('endpoint_id') or 0)
+    except (TypeError, ValueError):
+        ep_id = 0
+    if ep_id:
+        ep = (EndpointApiChatbot.objects
+              .filter(pk=ep_id, status=True).select_related('credencial').first())
+
+    def _parse(name, default):
+        raw = (request.POST.get(name) or '').strip()
+        if not raw:
+            return default
+        try:
+            return json.loads(raw)
+        except (TypeError, ValueError) as ex:
+            raise ValueError(f'{name} no es JSON válido: {str(ex)[:120]}')
+
+    try:
+        body = _parse('body_json', {})
+        variables_test = _parse('variables_test_json', {})
+    except ValueError as ex:
+        return JsonResponse({'ok': False, 'error': str(ex)})
+
+    try:
+        timeout_seg = int(request.POST.get('timeout_seg') or 0) or None
+    except (TypeError, ValueError):
+        timeout_seg = None
+
+    cfg = {'funcion_codigo': codigo, 'body': body if isinstance(body, dict) else {}}
+    if timeout_seg:
+        cfg['timeout_seg'] = timeout_seg
+    variables = variables_test if isinstance(variables_test, dict) else {}
+
+    inicio = time.time()
+    try:
+        resultado = fn(None, variables, cfg, endpoint=ep) or {}
+    except Exception as ex:
+        return JsonResponse({
+            'ok': False,
+            'error': f'Excepción al ejecutar: {ex.__class__.__name__}: {str(ex)[:200]}',
+        })
+    duracion_ms = int((time.time() - inicio) * 1000)
+
+    return JsonResponse({
+        'ok': True,
+        'funcion_codigo': codigo,
+        'etiqueta': resultado.get('etiqueta') or 'error',
+        'status': resultado.get('status'),
+        'duracion_ms': duracion_ms,
+        'body': resultado.get('body') or {},
+        'error': resultado.get('error') or '',
     })

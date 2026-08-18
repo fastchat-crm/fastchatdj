@@ -67,6 +67,22 @@ def notificacionesView(request):
             res_json = {"error": False}
             return JsonResponse(res_json, safe=False)
 
+    # Click en la campanita: marca la notificación como leída y redirige a su
+    # URL de enlace directo (ej. la conversación). Si no tiene URL, vuelve al
+    # origen o al panel.
+    if request.GET.get('action') == 'abrirUrl':
+        idn = request.GET.get('id') or 0
+        notificacion = Notificacion.objects.filter(pk=idn, destinatario=persona).first()
+        if notificacion:
+            if not notificacion.leido:
+                notificacion.leido = True
+                notificacion.fecha_hora_leido = datetime.now()
+                notificacion.save(request)
+            destino = (notificacion.url or '').strip()
+            if destino:
+                return redirect(destino)
+        return redirect(request.GET.get('urlOrigen') or '/panel/')
+
     filtros, url_vars = Q(destinatario=persona), ''
     prioridad, leido = request.GET.get('prioridad',''), request.GET.get('leido','')
     tipo = request.GET.get('tipo','')

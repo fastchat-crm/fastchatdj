@@ -1,0 +1,97 @@
+.pane-hero-ig {
+    background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+}
+
+.pane-hero-tk {
+    background: #000;
+}
+
+.pane-hero-fb {
+    background: linear-gradient(135deg, #1877f2, #0a5dc2);
+}
+
+.canal-badge.canal-facebook {
+    background: linear-gradient(135deg, #1877f2, #0a5dc2);
+    color: #fff;
+}
+
+.avatar-fallback.avatar-fb {
+    background: linear-gradient(135deg, #1877f2, #0a5dc2);
+    color: #fff;
+}
+
+.canal-badge.canal-instagram {
+    background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+    color: #fff;
+}
+
+.canal-badge.canal-tiktok {
+    background: #000;
+    color: #fff;
+}
+
+.avatar-fallback.avatar-ig {
+    background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+    color: #fff;
+}
+
+.avatar-fallback.avatar-tk {
+    background: #000;
+    color: #fff;
+}
+
+.guia-steps {
+    display: flex;
+    flex-direction: column;
+    gap: .9rem;
+    margin: 1rem 0 1.25rem;
+}
+
+.guia-step {
+    display: flex;
+    align-items: flex-start;
+    gap: .75rem;
+    position: relative;
+}
+
+.guia-step:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    left: 13px;
+    top: 28px;
+    bottom: -14px;
+    width: 2px;
+    background: #e5e7eb;
+}
+
+.guia-step-num {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    border-radius: 50%;
+    background: #eef2ff;
+    color: #4f46e5;
+    font-weight: 700;
+    font-size: .8rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+}
+
+.guia-step-body {
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+}
+
+.guia-step-body b {
+    font-size: .85rem;
+    color: #111827;
+}
+
+.guia-step-body span {
+    font-size: .78rem;
+    color: #6b7280;
+    line-height: 1.4;
+}

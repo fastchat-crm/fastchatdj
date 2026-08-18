@@ -24,13 +24,40 @@ import logging
 _logger = logging.getLogger(__name__)
 
 
-def _costo_usd_seguro(modelo, tokens_in, tokens_out):
-    """Costo estimado en USD (nunca relanza; 0.0 si falla)."""
+def _consumo_acumulado(agente):
+    """Consumo histórico del agente: hoy y total, con costo estimado.
+
+    El costo se agrega **por modelo**, no sobre el total: cada modelo tiene su
+    tarifa y sumar todos los tokens y multiplicar por un precio único daría un
+    número inventado.
+    """
+    from django.db.models import Sum
+    from django.utils import timezone
+
+    from agents_ai.consumo import costo_usd
+
+    def _resumir(qs):
+        filas = (qs.values('modelo')
+                   .annotate(entrada=Sum('tokens_entrada'), salida=Sum('tokens_salida'),
+                             total=Sum('tokens_total'))
+                   .order_by())
+        tokens = costo = 0
+        for f in filas:
+            tokens += f['total'] or 0
+            costo += costo_usd(f['modelo'] or '', f['entrada'] or 0, f['salida'] or 0)
+        return {'tokens': tokens, 'costo_usd': round(costo, 6)}
+
     try:
-        from crm.costos_ia import costo_usd
-        return round(costo_usd(modelo, tokens_in, tokens_out), 6)
+        base = ConsumoTokenIA.objects.filter(agente=agente)
+        # `timezone.now().date()`, no `localdate()`: el proyecto corre con
+        # datetimes naive y `localdate()` levanta ValueError. Es el mismo patrón
+        # que usa `crm/alertas_consumo.py`.
+        hoy = base.filter(fecha__date=timezone.now().date())
+        return {'hoy': _resumir(hoy), 'total': _resumir(base)}
     except Exception:
-        return 0.0
+        _logger.exception('No se pudo calcular el consumo acumulado del agente %s',
+                          getattr(agente, 'id', None))
+        return {'hoy': {'tokens': 0, 'costo_usd': 0}, 'total': {'tokens': 0, 'costo_usd': 0}}
 
 
 def _registrar_consumo_tokens(respuesta_llm, apikey_obj, agente=None, modelo='',
@@ -94,7 +121,7 @@ def chat_agente_view(request, agente_enc_id):
             if not pregunta:
                 return JsonResponse({'error': True, 'message': 'Escribe un mensaje antes de enviar.'})
 
-            apikey_obj = agente.apikey.filter(estado=True).first()
+            apikey_obj = agente.apikey_activa()
             if not apikey_obj:
                 return JsonResponse({
                     'error': True,
@@ -152,6 +179,7 @@ def chat_agente_view(request, agente_enc_id):
                     detectar_fin=detectar_fin_llm,
                     perfil=agente.perfil,
                     agente=agente,
+                    base_url=(getattr(apikey_obj, 'base_url', '') or None),
                 )
                 traza_etapas.append({
                     'etapa': 'consultor_listo',
@@ -246,18 +274,35 @@ def chat_agente_view(request, agente_enc_id):
                 except Exception:
                     pass
 
+            # Costo del mensaje y acumulado histórico del agente, para que el
+            # contador en vivo no arranque de cero en cada recarga: lo que se
+            # gastó ya está gastado y el usuario necesita verlo.
+            from agents_ai.consumo import costo_usd as _costo_usd
+            _modelo = consultor.model_name or ''
+            _costo_msg = _costo_usd(_modelo, resultado.tokens_entrada, resultado.tokens_salida)
+            _acumulado = _consumo_acumulado(agente)
+
             return JsonResponse({
                 'error': False,
                 'respuesta': resultado.respuesta,
                 'fin_detectado': fin_detectado,
                 'sin_datos': resultado.sin_datos,
+                'consumo': {
+                    'mensaje': {
+                        'tokens_in': resultado.tokens_entrada,
+                        'tokens_out': resultado.tokens_salida,
+                        'tokens_total': resultado.tokens_total,
+                        'costo_usd': _costo_msg,
+                    },
+                    'acumulado': _acumulado,
+                },
                 'traza': {
                     'latencia_total_ms': int((time.time() - _t0) * 1000),
                     'latencia_llm_ms': _lat_llm,
                     'tokens_in': resultado.tokens_entrada,
                     'tokens_out': resultado.tokens_salida,
                     'tokens_total': resultado.tokens_total,
-                    'costo_usd': _costo_usd_seguro(consultor.model_name, resultado.tokens_entrada, resultado.tokens_salida),
+                    'costo_usd': _costo_msg,
                     'modelo': consultor.model_name,
                     'proveedor': {2: 'Gemini', 3: 'OpenAI', 4: 'Claude', 5: 'Ollama'}.get(apikey_obj.proveedor, 'LLM'),
                     'caracteres_respuesta': len(resultado.respuesta or ''),
@@ -288,6 +333,10 @@ def chat_agente_view(request, agente_enc_id):
     data['agente'] = agente
     data['agente_enc_id'] = agente_enc_id
     data['mensajes_previos'] = mensajes_previos
+    # Semilla del contador en vivo: lo ya consumido por este agente. Sin esto
+    # el contador arrancaría en cero en cada recarga y daría la impresión
+    # equivocada de cuánto se lleva gastado.
+    data['consumo_inicial'] = _consumo_acumulado(agente)
 
     return render(request, 'crm/entrenamiento/chat.html', data)
 
@@ -315,6 +364,30 @@ def _billing_info_por_proveedor(proveedor):
             'proveedor': 'Anthropic Claude',
             'billing_url': 'https://console.anthropic.com/settings/billing',
             'docs_url': 'https://docs.anthropic.com/claude/reference/rate-limits',
+        }
+    if proveedor == 5:
+        return {
+            'proveedor': 'Ollama Cloud',
+            'billing_url': 'https://ollama.com/settings/billing',
+            'docs_url': 'https://docs.ollama.com',
+        }
+    if proveedor == 8:
+        return {
+            'proveedor': 'Ollama (local)',
+            'billing_url': '',
+            'docs_url': 'https://docs.ollama.com',
+        }
+    if proveedor == 6:
+        return {
+            'proveedor': 'DeepSeek',
+            'billing_url': 'https://platform.deepseek.com/usage',
+            'docs_url': 'https://api-docs.deepseek.com/quick_start/rate_limit',
+        }
+    if proveedor == 7:
+        return {
+            'proveedor': 'Huawei Cloud MaaS',
+            'billing_url': 'https://console.huaweicloud.com/modelarts',
+            'docs_url': 'https://support.huaweicloud.com/intl/en-us/modelarts/index.html',
         }
     return {'proveedor': 'LLM', 'billing_url': '', 'docs_url': ''}
 
@@ -383,6 +456,30 @@ def _clasificar_error_llm(ex, apikey_obj=None, modelo_str=''):
             except Exception:
                 pass
         return f"⚠️ El modelo '{modelo_lbl}' no está disponible para esta API Key. Edita la key y cambia el Modelo LLM.", True, flags
+    # Transitorio: el proveedor tardó demasiado o está saturado. NO es culpa de
+    # la key y por eso no se desactiva — hacerlo dejaría al agente mudo por una
+    # caída pasajera del proveedor.
+    is_transitorio = (
+        '504' in err_str
+        or '503' in err_str
+        or 'deadline_exceeded' in err_lower
+        or 'deadline expired' in err_lower
+        or 'unavailable' in err_lower
+        or 'overloaded' in err_lower
+        or 'timeout' in err_lower
+        or 'timed out' in err_lower
+        or 'try again later' in err_lower
+    )
+    if is_transitorio:
+        flags['transitorio'] = True
+        modelo_lbl = modelo_str or 'el modelo'
+        return (
+            f"⏱️ {modelo_lbl} no respondió a tiempo (el proveedor está saturado o la consulta "
+            f"es muy pesada). No es un problema de tu API Key. Probá de nuevo en unos segundos; "
+            f"si se repite seguido, reducí el contexto del agente o usá un modelo más rápido.",
+            None, flags,
+        )
+
     # Otro: no tocamos la key, solo mostramos mensaje corto
     return f"❌ Error del proveedor LLM: {err_str[:300]}", None, flags
 
@@ -396,11 +493,11 @@ def _handle_media(request, agente, session_id):
     if not archivo:
         return JsonResponse({'error': True, 'message': 'No se recibió ningún archivo.'})
 
-    apikey_obj = agente.apikey.filter(estado=True).first()
+    apikey_obj = agente.apikey_activa()
     if not apikey_obj:
         return JsonResponse({'error': True, 'message': 'Este agente no tiene una API Key activa.'})
 
-    _provider_map = {2: 'gemini', 3: 'openai', 4: 'claude', 5: 'ollama'}
+    _provider_map = {2: 'gemini', 3: 'openai', 4: 'claude', 5: 'ollama', 8: 'ollama_local'}
     provider = _provider_map.get(apikey_obj.proveedor, 'openai')
     ext = os.path.splitext(archivo.name)[1].lower()
 
@@ -438,8 +535,8 @@ def _leer_base64(path: str) -> str:
 
 def _analizar_imagen(tmp_path, filename, texto_adicional, apikey_obj, provider, agente):
     """Llama al LLM con la imagen (multimodal) y devuelve la respuesta."""
-    if provider == 'ollama':
-        # Ollama Cloud no soporta multimodal; evitar misroutear la key a OpenAI.
+    if provider in ('ollama', 'ollama_local'):
+        # Ollama (Cloud/local) no soporta multimodal aquí; evitar misroutear la key a OpenAI.
         return JsonResponse({
             'error': False,
             'respuesta': 'Este agente (Ollama) no procesa imágenes por ahora.',
@@ -544,6 +641,7 @@ def _procesar_audio(tmp_path, filename, texto_adicional, apikey_obj, provider, a
         contexto_estatico=agente.contexto_estatico or None,
         perfil=agente.perfil,
         agente=agente,
+        base_url=(getattr(apikey_obj, 'base_url', '') or None),
     )
     resultado = consultor.consultar(pregunta, agente.descripcion)
 

@@ -20,8 +20,6 @@ renderizamos una pagina HTML informativa — util para el dev que prueba la URL.
 
 URL: /whatsapp/meta_webhook/
 """
-import hashlib
-import hmac
 import json
 import logging
 
@@ -31,6 +29,8 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
 from channels.layers import get_channel_layer
+
+from meta.webhook import validar_firma_hmac
 
 from .models import ConfigMeta, EventoMetaRecibido, MetaWebhookHit, SesionWhatsApp
 from .procesar_mensaje import process_incoming_message
@@ -129,10 +129,20 @@ def _verificar_webhook(request):
                        (token or '')[:8])
         return HttpResponse('forbidden', content_type='text/plain', status=403)
 
-    config.webhook_verificado_en = timezone.now()
+    # El webhook de Meta es a nivel APP (un solo endpoint + app_secret org-level
+    # compartido por todas las WABAs). Por eso Meta solo expone un verify token
+    # en el panel, pero cada ConfigMeta guarda el suyo. Un handshake exitoso
+    # verifica el endpoint para TODAS las sesiones, no solo la que casó el token
+    # — así el diagnóstico no deja números en "Pendiente" para siempre.
+    ahora = timezone.now()
+    ConfigMeta.objects.filter(
+        webhook_verificado_en__isnull=True,
+    ).exclude(pk=config.pk).update(webhook_verificado_en=ahora)
+    config.webhook_verificado_en = ahora
     config.save(update_fields=['webhook_verificado_en'])
 
-    logger.info("Meta webhook verificado para ConfigMeta id=%s (WABA %s)",
+    logger.info("Meta webhook verificado (handshake casó ConfigMeta id=%s, WABA %s); "
+                "marcadas todas las sesiones pendientes como verificadas.",
                 config.id, config.waba_id)
     return HttpResponse(challenge, content_type='text/plain', status=200)
 
@@ -203,9 +213,8 @@ def _procesar_evento(request):
     phone_number_id = _extraer_phone_number_id(payload)
     config = ConfigMeta.objects.filter(phone_number_id=phone_number_id).first() if phone_number_id else None
 
-    from .common_meta import get_meta_app_secret
-    app_secret_org = get_meta_app_secret()
-    firma_valida = _validar_firma_hmac(raw_body, signature, app_secret_org)
+    from meta.credenciales import get_meta_app_secrets
+    firma_valida = _validar_firma_hmac(raw_body, signature, get_meta_app_secrets())
 
     evento = EventoMetaRecibido.objects.create(
         config_meta=config,
@@ -215,7 +224,10 @@ def _procesar_evento(request):
         procesado=False,
     )
 
-    if not firma_valida and app_secret_org:
+    # `_validar_firma_hmac` ya devuelve True en modo permisivo sin secret, así que
+    # `not firma_valida` cubre: firma inválida con secret, o secret ausente en
+    # modo estricto. En ambos casos rechazamos.
+    if not firma_valida:
         evento.error_procesamiento = 'firma_hmac_invalida'
         evento.save(update_fields=['error_procesamiento'])
         logger.warning("Meta webhook: firma HMAC invalida para phone_number_id=%s", phone_number_id)
@@ -245,23 +257,13 @@ def _procesar_evento(request):
 # Validacion HMAC
 # ---------------------------------------------------------------------------
 
-def _validar_firma_hmac(raw_body: bytes, signature_header: str, app_secret: str) -> bool:
-    """Compara X-Hub-Signature-256 contra HMAC(app_secret_org, body).
-    Si no hay app_secret devuelve True (modo permisivo para setup inicial)."""
-    if not app_secret:
-        return True  # sin app_secret no podemos validar, dejamos pasar con warning
-    if not signature_header:
-        return False
-    try:
-        expected = 'sha256=' + hmac.new(
-            app_secret.encode('utf-8'),
-            raw_body,
-            hashlib.sha256,
-        ).hexdigest()
-        return hmac.compare_digest(expected, signature_header)
-    except Exception:
-        logger.exception("Error computando HMAC")
-        return False
+def _validar_firma_hmac(raw_body: bytes, signature_header: str, app_secret) -> bool:
+    """Delegación al helper compartido `meta.webhook.validar_firma_hmac`.
+
+    `app_secret` acepta un str o una lista de secrets (`get_meta_app_secrets`):
+    la copia local anterior solo aceptaba str, así que al recibir la lista
+    lanzaba AttributeError y marcaba TODA firma como inválida."""
+    return validar_firma_hmac(raw_body, signature_header, app_secret)
 
 
 # ---------------------------------------------------------------------------
@@ -537,7 +539,6 @@ def _procesar_status_meta(status: dict, sesion: SesionWhatsApp, evento: EventoMe
 
     mid = status.get('id')
     estado = (status.get('status') or '').lower()
-    logger.info("Meta status: msg=%s estado=%s sesion=%s", mid, estado, sesion.id)
 
     mensaje = None
     if mid:
@@ -571,6 +572,19 @@ def _procesar_status_meta(status: dict, sesion: SesionWhatsApp, evento: EventoMe
                 or str(errors)[:500]
             )
             codigo_meta = err0.get('code')
+
+    # El log se emite recién acá, con el código y el detalle de Meta ya extraídos:
+    # un "estado=failed" pelado obligaba a ir a buscar `error_envio` a la base
+    # para saber si era un problema de facturación, de ventana de 24h o de
+    # plantilla. Los fallos van a WARNING para que no se pierdan entre los ACK.
+    if estado == 'failed':
+        logger.warning(
+            "Meta status: msg=%s estado=failed sesion=%s codigo=%s detalle=%s%s",
+            mid, sesion.id, codigo_meta, detalle_error or 'sin detalle',
+            '' if mensaje else ' (el mensaje no existe en la base: status huérfano)',
+        )
+    else:
+        logger.info("Meta status: msg=%s estado=%s sesion=%s", mid, estado, sesion.id)
 
     # Actualizar MensajeWhatsApp con el nuevo estado_envio.
     # Preservamos el orden monotonico: no bajamos de 'leido' a 'entregado' si
@@ -609,6 +623,28 @@ def _procesar_status_meta(status: dict, sesion: SesionWhatsApp, evento: EventoMe
             except Exception:
                 logger.exception("Broadcast ACK Meta fallo msg=%s", mensaje.id)
 
+    # Acciones automáticas según el código de error de Meta (no reintentar,
+    # proteger la calidad del número):
+    #   131030 → el número no existe en WhatsApp → marcar contacto inválido
+    #   131050 → el usuario bloqueó marketing → baja automática (opt-out)
+    #   131047 → ventana 24h vencida → requiere plantilla (se anota en la traza)
+    accion_codigo = ''
+    if estado == 'failed' and codigo_meta and mensaje and mensaje.conversacion_id:
+        try:
+            contacto = mensaje.conversacion.contacto
+            if contacto is not None:
+                from .opt_out import marcar_numero_invalido, marcar_opt_out
+                if int(codigo_meta) == 131030:
+                    marcar_numero_invalido(contacto)
+                    accion_codigo = 'contacto_marcado_invalido'
+                elif int(codigo_meta) == 131050:
+                    marcar_opt_out(contacto, motivo='meta_131050')
+                    accion_codigo = 'contacto_opt_out_automatico'
+                elif int(codigo_meta) == 131047:
+                    accion_codigo = 'requiere_plantilla_reenganche'
+        except Exception:
+            logger.exception("Accion automatica por codigo Meta %s fallo", codigo_meta)
+
     # Traza — etapa y nivel segun estado
     if estado == 'sent':
         etapa, nivel = 'mensaje_enviado', 'info'
@@ -622,6 +658,8 @@ def _procesar_status_meta(status: dict, sesion: SesionWhatsApp, evento: EventoMe
         detalle['error'] = detalle_error
         if codigo_meta:
             detalle['codigo_meta'] = codigo_meta
+        if accion_codigo:
+            detalle['accion_automatica'] = accion_codigo
 
     _traza(
         etapa=etapa, sesion=sesion,

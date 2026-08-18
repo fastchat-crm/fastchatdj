@@ -458,3 +458,128 @@
     width: 18px;
     text-align: center;
 }
+
+
+.clasificacion-inline-select {
+    width: auto;
+    min-width: 130px;
+    max-width: 180px;
+    font-size: .78rem;
+    padding-top: .15rem;
+    padding-bottom: .15rem;
+}
+
+.ci-calendar-icon {
+    font-size: .68rem;
+}
+
+.ci-ended-at {
+    font-weight: 500;
+}
+
+
+
+.finalizada-cerrada-label {
+    font-size: .8rem;
+    color: var(--chat-text-secondary);
+}
+
+.finalizada-meta-pill {
+    padding: .15rem .55rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    background: #f8fafc;
+}
+
+
+
+.ci-badges .meta-countdown {
+    font-size: .62rem;
+    font-weight: 600;
+    padding: .12rem .4rem;
+    line-height: 1.1;
+}
+
+.ci-badges .meta-countdown i.fa {
+    font-size: .6rem;
+}
+
+.cm-header-right .meta-countdown {
+    font-size: .72rem;
+    font-weight: 600;
+    padding: .2rem .5rem;
+    line-height: 1.1;
+    display: inline-flex;
+    align-items: center;
+}
+
+.cm-header-right .meta-countdown.bg-danger {
+    color: #fff;
+}
+
+.cs-acciones-offcanvas {
+    width: 340px;
+    max-width: 88vw;
+}
+
+.cs-acciones-offcanvas .offcanvas-body {
+    padding: .5rem .25rem 1rem;
+}
+
+.cs-acciones-offcanvas .dropdown-item {
+    border-radius: 8px;
+    padding: .55rem .75rem;
+    white-space: normal;
+}
+
+.cs-acciones-offcanvas .dropdown-item:active {
+    color: inherit;
+    background-color: #f1f5f9;
+}
+
+.cs-oc-section {
+    font-size: .68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #94a3b8;
+    padding: .85rem .75rem .25rem;
+}
+
+.cs-oc-section:first-child {
+    padding-top: .25rem;
+}
+
+.cs-oc-section-danger {
+    color: #dc2626;
+}
+
+.cs-oc-badge {
+    font-size: .62rem;
+}
+
+.wa-offline-banner {
+    background: #fff7ed;
+    color: #b45309;
+    border: 1px solid #fdba74;
+    border-radius: 8px;
+    padding: .35rem .6rem;
+    margin-bottom: .5rem;
+    font-size: .78rem;
+    font-weight: 600;
+}
+
+.wa-pendiente {
+    opacity: .8;
+}
+
+.wa-pendiente .msg-bubble-out {
+    border: 1px dashed #94a3b8;
+}
+
+.wa-pendiente-tag {
+    font-size: .66rem;
+    color: #64748b;
+    font-style: italic;
+}
+

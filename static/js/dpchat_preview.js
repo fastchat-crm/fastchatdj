@@ -342,20 +342,79 @@
             return;
         }
         if (node.tipo === 'funcion') {
-            // Preview: no ejecuta la función Python real; muestra info y avanza
-            // por la rama `ok` por convención (en runtime puede ramificar a
-            // `error` según resultado, pero el simulador asume happy-path).
             var fnCodigo = cfg.funcion_codigo || '(sin código)';
             systemBubble('⚡ [Función interna · ' + fnCodigo + ']', 'http');
-            logEvt('info', 'Función "' + fnCodigo + '" ejecutada (preview)',
-                   { endpoint_id: node.endpoint_id || null });
-            // Si tiene plantilla de respuesta, simulamos que devuelve ok.
-            if (cfg.plantilla_respuesta) {
-                botBubble(resolverExpr(cfg.plantilla_respuesta));
+
+            if (STATE.mode !== 'real') {
+                logEvt('info', 'Función "' + fnCodigo + '" (mock, no ejecuta)',
+                       { endpoint_id: node.endpoint_id || null });
+                if (cfg.plantilla_respuesta) {
+                    botBubble(resolverExpr(cfg.plantilla_respuesta));
+                }
+                avanzarA(buscarSalida(node, 'ok') || siguienteDefault(node));
+                return;
             }
-            var destOk = buscarSalida(node, 'ok') || siguienteDefault(node);
-            if (destOk) avanzarA(destOk);
-            else systemBubble('— Sin destino "ok" para función —', 'warn');
+
+            if (!cfg.funcion_codigo) {
+                systemBubble('⚠️ Nodo función sin funcion_codigo', 'warn');
+                logEvt('error', 'Sin funcion_codigo', { nodo: node.id });
+                avanzarA(buscarSalida(node, 'error') || siguienteDefault(node));
+                return;
+            }
+
+            var fdFn = new FormData();
+            fdFn.append('action', 'probar_funcion');
+            fdFn.append('csrfmiddlewaretoken', getCsrf());
+            fdFn.append('funcion_codigo', cfg.funcion_codigo);
+            if (node.endpoint_id) fdFn.append('endpoint_id', node.endpoint_id);
+            fdFn.append('body_json', cfg.body == null ? '' : JSON.stringify(cfg.body));
+            if (cfg.timeout_seg) fdFn.append('timeout_seg', cfg.timeout_seg);
+            fdFn.append('variables_test_json', JSON.stringify(STATE.vars));
+
+            fetch(window.DPPREV_PROBAR_URL || '/crm/departamentos_chatbots/', {
+                method: 'POST', body: fdFn, credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            }).then(function (r) { return r.json(); }).then(function (resp) {
+                if (!resp.ok) {
+                    systemBubble('⚠️ Error: ' + (resp.error || 'desconocido'), 'warn');
+                    logEvt('error', 'probar_funcion rechazó', resp);
+                    avanzarA(buscarSalida(node, 'error') || siguienteDefault(node));
+                    return;
+                }
+                logEvt(resp.etiqueta === 'ok' ? 'info' : 'error',
+                       'Función ' + fnCodigo + ' → ' + resp.etiqueta + ' · ' + resp.duracion_ms + 'ms',
+                       { status: resp.status, body: resp.body, error: resp.error });
+                mostrarResponseEnChat(resp, cfg);
+
+                var extrajoFn = {};
+                (cfg.extraer || []).forEach(function (ex) {
+                    if (resp.etiqueta === 'ok' && ex.variable) {
+                        var rawPath = (ex.jsonpath || '').replace(/^\$/, '').replace(/^\./, '');
+                        var val = getPath(resp.body, rawPath);
+                        STATE.vars[ex.variable] = val;
+                        extrajoFn[ex.variable] = { jsonpath: ex.jsonpath, valor: val };
+                    }
+                });
+                refreshVars();
+                if (Object.keys(extrajoFn).length) {
+                    mostrarExtraccionEnChat(extrajoFn);
+                    logEvt('info', 'Variables extraídas del response', extrajoFn);
+                }
+
+                if (resp.etiqueta === 'ok' && cfg.plantilla_respuesta) {
+                    botBubble(resolverExpr(cfg.plantilla_respuesta));
+                } else if (resp.etiqueta === 'error') {
+                    systemBubble('❌ Función retornó error: ' + (resp.error || ''), 'warn');
+                }
+                if (resp.etiqueta === 'ok' && cfg.envia_correo) {
+                    systemBubble('📧 [Simulación] En real: notificaría por correo a los asesores del depto.', 'info');
+                }
+                avanzarA(buscarSalida(node, resp.etiqueta) || siguienteDefault(node));
+            }).catch(function (err) {
+                systemBubble('⚠️ Error de red: ' + err.message, 'warn');
+                logEvt('error', 'fetch falló', { error: err.message });
+                avanzarA(buscarSalida(node, 'error') || siguienteDefault(node));
+            });
             return;
         }
         if (node.tipo === 'handoff') {

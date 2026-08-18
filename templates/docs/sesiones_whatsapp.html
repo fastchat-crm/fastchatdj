@@ -1,0 +1,235 @@
+{% extends 'base.html' %}
+
+{% block head %}
+    <link rel="stylesheet" href="/static/stylenew/docs.css">
+{% endblock %}
+
+{% block content %}
+<div class="docs-page">
+
+    <aside class="docs-sidebar">
+        <div class="docs-sidebar-search">
+            <i class="fa fa-search"></i>
+            <input type="text" placeholder="Buscar en la documentación...">
+        </div>
+        {% for seccion in sidebar %}
+            <div class="docs-sb-group">
+                <h6 class="docs-sb-title">{{ seccion.titulo }}</h6>
+                {% if seccion.items %}
+                    <ul class="docs-sb-list">
+                        {% for item in seccion.items %}
+                            <li>
+                                <a href="/seguridad/documentacion/?pagina={{ item.slug }}"
+                                   class="docs-sb-item {% if item.slug == slug_actual %}active{% endif %}">
+                                    {{ item.nombre }}
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <span class="docs-sb-empty">Próximamente</span>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </aside>
+
+    <main class="docs-main">
+
+        <nav class="docs-breadcrumb" aria-label="breadcrumb">
+            {% for crumb in breadcrumb %}
+                {% if crumb.url %}
+                    <a href="{{ crumb.url }}">{{ crumb.nombre }}</a>
+                {% else %}
+                    <span>{{ crumb.nombre }}</span>
+                {% endif %}
+                {% if not forloop.last %}<i class="fa fa-chevron-right docs-bc-sep"></i>{% endif %}
+            {% endfor %}
+        </nav>
+
+        <article class="docs-article">
+
+            <header class="docs-hero">
+                <h1><i class="fa fa-phone me-2 text-success"></i> Sesiones WhatsApp — guía del número</h1>
+                <p class="docs-hero-lead">
+                    Todo lo que un número conectado puede hacer en la plataforma: para qué sirve cada
+                    función de la sesión (plantillas, horarios, agente IA, campañas, trazas) y cómo dar
+                    de alta un número nuevo desde cero, paso a paso.
+                </p>
+            </header>
+
+            <section class="docs-section">
+                <h2>¿Qué es una sesión?</h2>
+                <p>Una <b>sesión</b> es un número de WhatsApp conectado a la plataforma. Cada sesión es
+                    independiente: tiene su propio agente IA, sus flujos, sus horarios, sus asesores y su
+                    propio historial de conversaciones. Hay dos formas de conectar un número:</p>
+                <table class="table table-sm small mb-3">
+                    <thead><tr><th style="width:220px;">Tipo</th><th>Cómo funciona</th><th>Cuándo usarlo</th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td><b>QR Code (Baileys)</b></td>
+                            <td>Vincula el número escaneando un QR, igual que WhatsApp Web. No requiere trámites con Meta.</td>
+                            <td>Arranque rápido, números personales o de prueba. No soporta plantillas ni botones oficiales.</td>
+                        </tr>
+                        <tr>
+                            <td><b>WhatsApp Business API (Meta)</b></td>
+                            <td>Conexión oficial vía Meta Cloud API con credenciales de una App de Meta.</td>
+                            <td>Operación seria y a escala: plantillas aprobadas, botones interactivos, métricas de calidad, sin riesgo de baneo por automatización.</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="alert alert-info small">
+                    <i class="fa fa-info-circle me-1"></i>
+                    Los canales disponibles al crear una conexión (QR, API, Instagram, Messenger, TikTok)
+                    se activan o desactivan desde <b>Configuración del Sistema</b>.
+                </div>
+            </section>
+
+            <section class="docs-section">
+                <h2><i class="fa fa-rocket text-success me-1"></i> Poner un número nuevo desde cero</h2>
+                <h5 class="mt-3">Ruta A — QR Code (5 minutos)</h5>
+                <ol>
+                    <li><b>Sesiones → Nueva conexión → QR Code</b>: poné un alias reconocible (ej. "Ventas Quito").</li>
+                    <li><b>Escaneá el QR</b> desde el teléfono: WhatsApp → Dispositivos vinculados → Vincular dispositivo.</li>
+                    <li>La sesión pasa a estado <span class="badge bg-success">conectada</span>. Los mensajes entrantes ya llegan a Conversaciones.</li>
+                </ol>
+                <h5 class="mt-3">Ruta B — WhatsApp Business API (oficial)</h5>
+                <ol>
+                    <li><b>Requisitos previos</b>: una App en Meta for Developers con WhatsApp habilitado y las credenciales cargadas en <b>Configuración → Credencial Meta App</b> (App ID, App Secret). Ver la guía <a href="/seguridad/documentacion/?pagina=conectar-whatsapp-business">Conectar WhatsApp Business API</a>.</li>
+                    <li><b>Sesiones → Nueva conexión → WhatsApp Business API</b>: seguí el flujo de conexión guiada (Embedded Signup) o cargá manualmente WABA ID, Phone Number ID y Access Token.</li>
+                    <li><b>Webhook</b>: la plataforma registra el webhook para recibir mensajes y estados. Verificá que el estado del webhook aparezca OK en la sesión.</li>
+                    <li><b>Crear la primera plantilla</b> (sección Plantillas) y enviarla a aprobación — sin al menos una plantilla aprobada no podés iniciar conversaciones con clientes nuevos.</li>
+                </ol>
+                <h5 class="mt-3">Después de conectar (ambas rutas)</h5>
+                <ol>
+                    <li><b>Elegí el modo del bot</b> (ver tabla de modos abajo).</li>
+                    <li><b>Asigná el agente IA</b> entrenado para ese negocio, o el departamento de Mensajería Instantánea si usás flujo tradicional.</li>
+                    <li><b>Configurá horarios de atención</b> y el mensaje fuera de horario.</li>
+                    <li><b>Asigná asesores</b> a la sesión (quiénes atienden cuando el bot deriva a humano).</li>
+                    <li><b>Mensaje de bienvenida</b> y reglas de cierre de conversación.</li>
+                    <li><b>Probá</b>: escribí desde otro número y verificá la respuesta en Conversaciones y la traza en Trazas IA.</li>
+                </ol>
+            </section>
+
+            <section class="docs-section">
+                <h2><i class="fa fa-toggles text-primary me-1"></i> Modos del bot (por sesión)</h2>
+                <table class="table table-sm small mb-3">
+                    <thead><tr><th style="width:160px;">Modo</th><th>Qué hace</th></tr></thead>
+                    <tbody>
+                        <tr><td><b>Tradicional</b></td><td>Solo el flujo de Mensajería Instantánea (menús y pasos definidos). Predecible, cero tokens IA.</td></tr>
+                        <tr><td><b>IA</b></td><td>Todo mensaje lo responde el agente IA entrenado con el conocimiento del negocio.</td></tr>
+                        <tr><td><b>Híbrido</b></td><td>Primero intenta el flujo tradicional; si el mensaje no coincide con ninguna opción, responde la IA.</td></tr>
+                        <tr><td><b>Ninguno</b></td><td>Sin bot: solo atención humana por asesores.</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <section class="docs-section">
+                <h2><i class="fa fa-list-check text-warning me-1"></i> Funciones de la sesión — para qué sirve cada una</h2>
+                <table class="table table-sm small mb-3">
+                    <thead><tr><th style="width:200px;">Función</th><th>Para qué sirve</th><th style="width:150px;">Aplica a</th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td><b>Plantillas</b></td>
+                            <td>Mensajes pre-aprobados por Meta. Son la <u>única</u> forma de escribirle a un cliente
+                                que no te habló en las últimas 24 horas (regla de Meta) o de iniciar conversación con
+                                un número nuevo. Se crean aquí, se envían a aprobación y su estado (Aprobada, Rechazada,
+                                Pausada) se sincroniza automáticamente. Categorías: Utilidad (confirmaciones, avisos),
+                                Marketing (promos) y Autenticación (códigos). Cada envío tiene costo según categoría.</td>
+                            <td><span class="badge bg-primary">Meta API</span></td>
+                        </tr>
+                        <tr>
+                            <td><b>Horarios de atención</b></td>
+                            <td>Franja por día de la semana en la que el negocio atiende. Fuera de horario el bot puede
+                                avisarlo al cliente, y el agente IA recibe la variable para responder acorde.</td>
+                            <td><span class="badge bg-secondary">Ambos</span></td>
+                        </tr>
+                        <tr>
+                            <td><b>Agente IA</b></td>
+                            <td>El cerebro de la sesión: cada número tiene su agente con su propio RAG (conocimiento del
+                                negocio subido en Entrenamiento), personalidad, FAQs, herramientas y memoria de
+                                conversaciones previas.</td>
+                            <td><span class="badge bg-secondary">Ambos</span></td>
+                        </tr>
+                        <tr>
+                            <td><b>Mensajería Instantánea</b></td>
+                            <td>Flujo de chatbot tradicional por menús (departamentos, nodos, validaciones). Ver la guía
+                                <a href="/seguridad/documentacion/?pagina=mensajeria-instantanea">Crear y operar un flujo</a>.</td>
+                            <td><span class="badge bg-secondary">Ambos</span></td>
+                        </tr>
+                        <tr>
+                            <td><b>Asesores</b></td>
+                            <td>Usuarios humanos asignados a la sesión. Cuando el bot deriva (o el modo es "Ninguno"),
+                                la conversación se asigna al asesor disponible con menos carga.</td>
+                            <td><span class="badge bg-secondary">Ambos</span></td>
+                        </tr>
+                        <tr>
+                            <td><b>Campañas</b></td>
+                            <td>Envíos masivos a contactos filtrados por etiquetas, con ritmo por minuto y ventana
+                                horaria. En Meta se envían con plantilla aprobada; en QR como texto simple.</td>
+                            <td><span class="badge bg-secondary">Ambos</span></td>
+                        </tr>
+                        <tr>
+                            <td><b>Mensajes programados</b></td>
+                            <td>Mensajes individuales agendados a fecha/hora (recordatorios, seguimientos).</td>
+                            <td><span class="badge bg-success">QR</span></td>
+                        </tr>
+                        <tr>
+                            <td><b>Bienvenida y cierre</b></td>
+                            <td>Mensaje de bienvenida al primer contacto y reglas de fin de conversación (frases de
+                                cierre, acciones al cerrar, resumen automático y análisis de sentimiento).</td>
+                            <td><span class="badge bg-secondary">Ambos</span></td>
+                        </tr>
+                        <tr>
+                            <td><b>Trazas IA</b></td>
+                            <td>Diagnóstico en tiempo real, por número: cada mensaje muestra su pipeline completo
+                                (recibido → bot → LLM → enviado) con errores, latencia y tokens. Es el primer lugar
+                                donde mirar cuando "un número no responde".</td>
+                            <td><span class="badge bg-secondary">Ambos</span></td>
+                        </tr>
+                        <tr>
+                            <td><b>Consumo de tokens</b></td>
+                            <td>Dashboard por API Key: llamadas, tokens por día/origen/agente/modelo y costo estimado
+                                en USD. Con alertas de umbral diario/mensual.</td>
+                            <td><span class="badge bg-secondary">Ambos</span></td>
+                        </tr>
+                        <tr>
+                            <td><b>Calidad y límite Meta</b></td>
+                            <td>Meta califica el número (Verde/Amarillo/Rojo) según bloqueos y reportes de usuarios, y
+                                asigna un límite de conversaciones diarias (tier). En Rojo la plataforma bloquea envíos
+                                para proteger el número. Cuidá la calidad: mensajes relevantes, respetar bajas, no spamear.</td>
+                            <td><span class="badge bg-primary">Meta API</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <section class="docs-section">
+                <h2><i class="fa fa-clock text-danger me-1"></i> Las dos ventanas de tiempo que hay que conocer</h2>
+                <ul>
+                    <li><b>Ventana de 24 horas (regla de Meta)</b>: desde el último mensaje del cliente tenés 24 h para
+                        responder libremente (texto, imágenes, botones). Pasadas las 24 h, solo se puede enviar una
+                        <b>plantilla aprobada</b> — la plataforma bloquea automáticamente los envíos libres vencidos y
+                        te lo indica en el chat.</li>
+                    <li><b>Ventana de 6 horas (regla de la plataforma)</b>: una conversación finalizada solo puede
+                        reactivarse dentro de las 6 horas siguientes; después queda cerrada para mantener el historial
+                        ordenado (el cliente siempre puede escribir de nuevo y se abre una conversación nueva).</li>
+                </ul>
+            </section>
+
+            <section class="docs-section">
+                <h2><i class="fa fa-clipboard-check text-success me-1"></i> Checklist del número nuevo</h2>
+                <ol>
+                    <li>Sesión conectada (QR escaneado o credenciales Meta OK).</li>
+                    <li>Modo del bot elegido y agente IA / flujo asignado.</li>
+                    <li>Conocimiento del negocio cargado y procesado en Entrenamiento.</li>
+                    <li>Horarios de atención configurados.</li>
+                    <li>Asesores asignados a la sesión.</li>
+                    <li>Solo Meta: al menos una plantilla Aprobada y webhook verificado.</li>
+                    <li>Prueba end-to-end hecha y traza revisada en Trazas IA.</li>
+                </ol>
+            </section>
+
+        </article>
+    </main>
+</div>
+{% endblock %}

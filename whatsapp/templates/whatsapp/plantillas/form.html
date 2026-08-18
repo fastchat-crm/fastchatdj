@@ -139,6 +139,9 @@
                             <div class="col-12 col-md-8 mt-2">
                                 <label class="form-label small fw-semibold">Contenido del encabezado</label>
                                 {{ form.header_contenido }}
+                                <div class="form-text small d-none" id="hint-header-media">
+                                    <i class="fa fa-circle-info me-1"></i>Pega la <strong>URL pública (https)</strong> de un archivo de <strong>ejemplo</strong> — el revisor de Meta lo verá al aprobar la plantilla. Al enviar la plantilla real podrás usar otra imagen distinta en cada envío.
+                                </div>
                             </div>
 
                             <div class="col-12 mt-2">
@@ -318,7 +321,20 @@
             $cuerpo.on('input keyup change', actualizarPreview);
             $header.on('input keyup change', actualizarPreview);
             $footer.on('input keyup change', actualizarPreview);
-            $(document).on('change input', '[name="header_tipo"]', actualizarPreview);
+            function actualizarHintHeader() {
+                var t = $tipo.val() || 'NONE';
+                var esMedia = ['IMAGE', 'VIDEO', 'DOCUMENT'].indexOf(t) !== -1;
+                $('#hint-header-media').toggleClass('d-none', !esMedia);
+                if (esMedia) {
+                    $header.attr('placeholder', 'https://... URL pública del archivo de ejemplo');
+                } else if (t === 'TEXT') {
+                    $header.attr('placeholder', 'Texto del encabezado');
+                } else {
+                    $header.attr('placeholder', '');
+                }
+            }
+            actualizarHintHeader();
+            $(document).on('change input', '[name="header_tipo"]', function() { actualizarPreview(); actualizarHintHeader(); });
 
             $(document).on('change', '[name="categoria"]', actualizarInfoCategoria);
             actualizarInfoCategoria();

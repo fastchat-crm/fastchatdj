@@ -12,10 +12,15 @@ from autenticacion.models import Usuario
 from core.custom_models import FormError
 from core.funciones import addData, paginador, salva_auditoria, secure_module, redirectAfterPostGet, log
 from core.funciones_adicionales import salva_logs, customgetattr
-from .forms import IndustriaForm, ActividadEconomicaForm, DepartamentoChatBotForm, AddPerfilDepartamentoChatBotForm
+from .forms import IndustriaForm, ActividadEconomicaForm, DepartamentoChatBotForm
 from .funciones_departamento_chatbot import (
     sincronizar_opciones,
     _generar_departamento_con_ia,
+    _generar_departamento_wizard,
+    _wizard_chat,
+    _wizard_crear,
+    _wizard_cargar_borrador,
+    _wizard_actualizar,
     _duplicar_info,
     _duplicar_departamento,
     _guardar_meta,
@@ -23,14 +28,16 @@ from .funciones_departamento_chatbot import (
     _eliminar_opcion,
     _mover_opcion,
     _probar_http,
+    _probar_funcion,
     _serializar_arbol_opciones,
     _serializar_arbol_anidado,
     _serializar_para_preview,
+    _serializar_para_canvas,
     _build_meta_payload,
     _exportar_flujo_completo,
 )
 from .models import Industria, ActividadEconomica, DepartamentoChatBot, OpcionDepartamentoChatBot, \
-    PerfilDepartamentoChatBot, EndpointApiChatbot, EstadoFlujoChatbot, ConexionNodoChatbot
+    EndpointApiChatbot, EstadoFlujoChatbot, ConexionNodoChatbot
 from django.contrib import messages
 
 @login_required
@@ -103,10 +110,6 @@ def departamentoChatbotsView(request):
                     with transaction.atomic():
                         filtro.status = False
                         filtro.save(request)
-                        # Asesores asignados al depto.
-                        PerfilDepartamentoChatBot.objects.filter(
-                            status=True, departamento=filtro
-                        ).update(status=False)
                         # Nodos del flujo del depto.
                         OpcionDepartamentoChatBot.objects.filter(
                             status=True, departamento=filtro
@@ -126,39 +129,16 @@ def departamentoChatbotsView(request):
                     log(f"Elimino un departamento {filtro.__str__()}", request, "del", obj=filtro.id)
                     messages.success(request, f"Registro Eliminado")
                     res_json={"error":False}
-                elif action == 'guardar_usuarios':
-                    try:
-                        pk = int(request.POST['pk'])
-                        filtro = model.objects.get(pk=pk)
-                        ids_usuarios = json.loads(request.POST.get('usuarios', '[]'))
-                        usuarios_creados = []
-                        for uid in ids_usuarios:
-                            usuario = Usuario.objects.get(pk=uid)
-                            ya_existe = PerfilDepartamentoChatBot.objects.filter(departamento=filtro, usuario=usuario,status=True).exists()
-
-                            if not ya_existe:
-                                relacion = PerfilDepartamentoChatBot.objects.create(departamento=filtro,usuario=usuario)
-
-                                usuarios_creados.append({
-                                    "id": usuario.id,
-                                    "id_relacion": relacion.id,
-                                    "nombre": usuario.full_name(),
-                                    "documento": usuario.documento,
-                                    "email": usuario.email,
-                                    "telcelular": usuario.telcelular,
-                                    "foto": usuario.foto.url if usuario.foto else ""
-                                })
-                        return JsonResponse({'result': True, 'usuarios': usuarios_creados})
-                    except Exception as ex:
-                        return JsonResponse({'result': False, 'message': str(ex)})
-                elif action == 'eliminar_usuario':
-                    filtro = PerfilDepartamentoChatBot.objects.get(pk=int(request.POST['id']))
-                    filtro.status = False
-                    filtro.save(request)
-                    log(f"Elimino un usuario del departamento {filtro.__str__()}", request, "del", obj=filtro.id)
-                    res_json={"error":False}
                 elif action == 'generar_con_ia':
                     return _generar_departamento_con_ia(request)
+                elif action == 'generar_con_ia_wizard':
+                    return _generar_departamento_wizard(request)
+                elif action == 'wizard_chat':
+                    return _wizard_chat(request)
+                elif action == 'wizard_crear':
+                    return _wizard_crear(request)
+                elif action == 'wizard_actualizar':
+                    return _wizard_actualizar(request)
                 elif action == 'crear_agente_desde_dpto':
                     from agents_ai.ai_actions.agentes_crm import crear_desde_depto
                     return crear_desde_depto(request)
@@ -267,6 +247,8 @@ def departamentoChatbotsView(request):
                     return _mover_opcion(request)
                 elif action == 'probar_http':
                     return _probar_http(request)
+                elif action == 'probar_funcion':
+                    return _probar_funcion(request)
         except ValueError as ex:
             res_json.append({'error': True, "message": str(ex)})
         except FormError as ex:
@@ -339,6 +321,7 @@ def departamentoChatbotsView(request):
                             cod: {k: v for k, v in meta.items() if k != 'callable'}
                             for cod, meta in FUNCIONES_REGISTRADAS.items()
                         }
+                        funciones_en_uso = {}
                         for item in arbol_plano:
                             opc = item['opcion']
                             opc.predecesores_grafo = preds_por_nodo.get(opc.id, [])
@@ -346,7 +329,15 @@ def departamentoChatbotsView(request):
                             if opc.tipo_nodo == 'funcion':
                                 cod = (opc.config or {}).get('funcion_codigo') or ''
                                 opc.funcion_meta = funciones_metadata.get(cod)
+                                if cod:
+                                    meta_fn = funciones_metadata.get(cod) or {}
+                                    funciones_en_uso[cod] = meta_fn.get('descripcion') or cod
+                        funciones_en_uso = [
+                            {'codigo': cod, 'descripcion': desc}
+                            for cod, desc in sorted(funciones_en_uso.items())
+                        ]
                         data.update({
+                            'funciones_en_uso': funciones_en_uso,
                             'pagina_completa': True,
                             'titulo_pagina': f'Editar {filtro}',
                             'ruta_post': request.path,
@@ -365,14 +356,22 @@ def departamentoChatbotsView(request):
                 except Exception as ex:
                     return JsonResponse({"result": False, 'message': str(ex)})
 
-            elif action == 'diagrama':
-                # Diagrama del árbol de decisiones, full-page (no modal).
+            elif action == 'editor':
+                # Editor visual de flujo (canvas Drawflow), full-page.
                 try:
                     pk = int(request.GET['id'])
                     filtro = model.objects.get(pk=pk)
                     data["filtro"] = filtro
-                    data["arbol_anidado"] = _serializar_arbol_anidado(filtro)
-                    return render(request, 'crm/departamento_chatbots/diagrama.html', data)
+                    data["canvas_data"] = _serializar_para_canvas(filtro)
+                    return render(request, 'crm/departamento_chatbots/editor_canvas.html', data)
+                except Exception as ex:
+                    return JsonResponse({'result': False, 'message': str(ex)})
+
+            elif action == 'diagrama':
+                # Vista legacy de solo-lectura: redirige al nuevo editor visual.
+                try:
+                    pk = int(request.GET['id'])
+                    return redirect(f'{request.path}?action=editor&id={pk}')
                 except Exception as ex:
                     return JsonResponse({'result': False, 'message': str(ex)})
 
@@ -580,12 +579,20 @@ def departamentoChatbotsView(request):
                         .select_related('nodo_origen')
                         .order_by('orden', 'id')
                     )
+                    funcion_meta = None
+                    if opcion.tipo_nodo == 'funcion':
+                        from .funciones_chatbot import FUNCIONES_REGISTRADAS
+                        cod = (cfg.get('funcion_codigo') or '').strip()
+                        meta = FUNCIONES_REGISTRADAS.get(cod)
+                        if meta:
+                            funcion_meta = {k: v for k, v in meta.items() if k != 'callable'}
                     contexto = {
                         'opcion': opcion,
                         'cfg': cfg,
                         'config_json_str': json.dumps(cfg, indent=2, ensure_ascii=False),
                         'salidas': salidas,
                         'entradas': entradas,
+                        'funcion_meta': funcion_meta,
                     }
                     template = get_template('crm/departamento_chatbots/_ficha_opcion.html')
                     return JsonResponse({'result': True, 'data': template.render(contexto)})
@@ -599,53 +606,8 @@ def departamentoChatbotsView(request):
                 data["form"] = Formulario(instance=filtro, ver=True)
                 return render(request, 'crm/departamento_chatbots/form.html', data)
 
-            elif action == 'addUsers':
-                try:
-                    pk = int(request.GET['id'])
-                    filtro = model.objects.get(pk=pk)
-                    data["filtro"] = filtro
-                    data["form"] = form = AddPerfilDepartamentoChatBotForm()
-                    form.fields['usuarios'].queryset = Usuario.objects.none()
-                    template = get_template("crm/departamento_chatbots/form_usuarios.html")
-                    return JsonResponse({"result": True, 'data': template.render(data)})
-                except Exception as ex:
-                    return JsonResponse({"result": False, 'message': str(ex)})
-            
-            elif action == 'buscarpersonas':
-                try:
-                    q = request.GET['q'].upper().strip()
-                    qspersona = Usuario.objects.filter(status=True).order_by('last_name')
-                    s = q.split(" ")
-                    if len(s) == 1:
-                        qspersona = qspersona.filter((Q(first_name__icontains=q) | Q(last_name__icontains=q) | Q(documento__icontains=q)), Q(status=True)).distinct()[:15]
-                    elif len(s) == 2:
-                        qspersona = qspersona.filter((Q(last_name__contains=s[0])) |
-                                                     (Q(first_name__icontains=s[0]) & Q(
-                                                         first_name__icontains=s[1])) |
-                                                     (Q(first_name__icontains=s[0]) & Q(
-                                                         last_name__contains=s[1]))).filter(
-                            status=True).distinct()[:15]
-                    else:
-                        qspersona = qspersona.filter(
-                            (Q(first_name__contains=s[0]) & Q(last_name__contains=s[1])) |
-                            (Q(first_name__contains=s[0]) & Q(first_name__contains=s[1]))).filter(
-                            status=True).distinct()[:15]
-                    data = {
-                        "result": "ok",
-                        "results": [
-                            {
-                                "id": x.pk,
-                                "documento": f"{x.documento if x.documento else 'Sin documento'}",
-                                "text": x.full_name(),
-                                "foto": x.get_foto_gris()
-                            } for x in qspersona
-                        ]
-                    }
-                    return JsonResponse(data)
-                except Exception as ex:
-                    data = {"result": "ok", "results": []}
-                    return JsonResponse(data)
-
+            elif action == 'wizard_cargar_borrador':
+                return _wizard_cargar_borrador(request)
 
         criterio, filtros, url_vars = request.GET.get('criterio', '').strip(), Q(status=True), ''
         if criterio:
@@ -660,11 +622,6 @@ def departamentoChatbotsView(request):
             count_nodos=Count(
                 'opciondepartamentochatbot',
                 filter=Q(opciondepartamentochatbot__status=True),
-                distinct=True,
-            ),
-            count_usuarios=Count(
-                'perfildepartamentochatbot',
-                filter=Q(perfildepartamentochatbot__status=True),
                 distinct=True,
             ),
             count_conexiones=Count(

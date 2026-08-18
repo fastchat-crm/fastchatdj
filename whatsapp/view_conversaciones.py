@@ -1,3 +1,5 @@
+import logging
+
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.db import models, transaction
@@ -13,33 +15,399 @@ from seguridad.templatetags.templatefunctions import encrypt
 from .forms import CambiarClasificacionForm, CambiarNombreContactoForm, AsignarAgenteForm
 from .funcionesWhatsappConversacion import (
     cambiar_clasificacion_get,
+    asignacion_automatica_masiva_post,
+    reasignacion_masiva_asesor_post,
     cambiar_clasificacion_post,
     cambiar_nombre_contacto_get,
     cambiar_nombre_contacto_post,
     historial_cliente_list,
     historial_cliente_mensajes,
+    persistir_y_difundir_automatico as _persistir_y_difundir_automatico,
     _bloqueo_reactivar,
     _control_respuestas,
     _estadisticas_conversacion,
     _tokens_conversacion,
     HORAS_VENTANA_REACTIVAR,
+    HORAS_VENTANA_META_CUSTOMER_SERVICE,
+    horas_aviso_de_sesion,
 )
-from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp, SENTIMIENTO_CHOICES
+from .models import ConversacionWhatsApp, MensajeWhatsApp, SesionWhatsApp, SENTIMIENTO_CHOICES, RespuestaRapidaGlobal
 from .services import WhatsAppService, get_whatsapp_service
+from .permisos_sesion import (
+    sesiones_visibles,
+    sesiones_vista_completa,
+    rol_en_sesion,
+    filtro_conversaciones_por_rol,
+    puede_ver_conversacion,
+    es_vista_completa,
+)
+
+
+def _clientes_de_conversacion(conv):
+    """Devuelve los Clientes (CRM) registrados desde ESTA conversación.
+
+    Estricto por conversación: solo matchea conversacion_origen /
+    origenes.conversacion = esta conversación. Una conversación puede registrar
+    varios clientes (el titular inscribe a otras personas), pero clientes del
+    mismo contacto registrados en conversaciones anteriores NO se muestran acá
+    — para eso está la ficha completa del CRM.
+    """
+    from crm.models import Cliente
+
+    cond = Q(conversacion_origen=conv) | Q(origenes__conversacion=conv)
+
+    return list(
+        Cliente.objects.filter(cond, status=True)
+        .distinct()
+        .prefetch_related('origenes__sesion', 'origenes__departamento')
+    )
+
+
+def _prefill_ficha_cliente(conv):
+    """Sugiere valores para el alta manual de Cliente a partir de las variables
+    capturadas por el flujo del chatbot tradicional + datos del contacto.
+
+    Devuelve (prefill, variables_flujo). Cubre el caso de un cliente que NO
+    terminó el flujo: el operador completa la ficha con lo que el bot alcanzó a
+    capturar ya precargado.
+    """
+    from datetime import datetime
+    import re
+
+    estado = getattr(conv, 'estado_flujo', None)
+    variables_flujo = (getattr(estado, 'variables', None) or {}) if estado else {}
+
+    norm = {}
+    for k, v in variables_flujo.items():
+        if v in (None, ''):
+            continue
+        norm[str(k).strip().lower()] = str(v).strip()
+
+    def primero(*claves):
+        for c in claves:
+            if norm.get(c):
+                return norm[c]
+        return ''
+
+    def _fecha_iso(valor):
+        valor = (valor or '').strip()
+        if not valor:
+            return ''
+        for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y'):
+            try:
+                return datetime.strptime(valor, fmt).date().isoformat()
+            except ValueError:
+                continue
+        return ''
+
+    contacto = getattr(conv, 'contacto', None)
+    nombre_contacto = ''
+    telefono_contacto = ''
+    if contacto:
+        nombre_contacto = (getattr(contacto, 'contacto_nombre', '') or '').strip()
+        telefono_contacto = (
+            (getattr(contacto, 'numero_telefono', '') or '')
+            or (getattr(contacto, 'contacto_numero', '') or '')
+        ).strip()
+
+    edad_raw = primero('edad', 'driver_age', 'age')
+    edad_digitos = ''.join(re.findall(r'\d', edad_raw))[:3]
+
+    prefill = {
+        'cedula':           primero('cedula', 'identificacion', 'documento', 'dni', 'ci'),
+        'nombres':          primero('nombres', 'nombre', 'nombre_cliente', 'first_name') or nombre_contacto,
+        'apellidos':        primero('apellidos', 'apellido', 'last_name'),
+        'email':            primero('email', 'correo', 'correo_electronico'),
+        'telefono':         primero('telefono', 'celular', 'whatsapp', 'phone') or telefono_contacto,
+        'ciudad':           primero('ciudad', 'city'),
+        'edad':             edad_digitos,
+        'fecha_nacimiento': _fecha_iso(primero('fecha_nacimiento', 'fecha_nac', 'nacimiento')),
+        'sexo':             (primero('sexo', 'genero', 'gender')[:1] or '').upper(),
+    }
+    if prefill['sexo'] not in ('M', 'F'):
+        prefill['sexo'] = ''
+    return prefill, variables_flujo
+
+
+def _reenviar_mensaje(request):
+    """Reenvía un mensaje saliente que quedó en estado 'fallido'.
+    Provider-agnostic: reusa el servicio de la sesión (Baileys o Meta)."""
+    try:
+        msg_id = int(request.POST.get('id') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'error': True, 'message': 'ID inválido'})
+
+    mensaje = (
+        MensajeWhatsApp.objects
+        .select_related('conversacion__sesion', 'conversacion__contacto')
+        .filter(pk=msg_id).first()
+    )
+    if not mensaje:
+        return JsonResponse({'error': True, 'message': 'Mensaje no encontrado'})
+
+    conversacion = mensaje.conversacion
+    sesion = conversacion.sesion
+    if not puede_ver_conversacion(request.user, conversacion):
+        return JsonResponse({'error': True, 'message': 'No autorizado.'})
+    if mensaje.remitente != (sesion.numero or '') or mensaje.estado_envio != 'fallido':
+        return JsonResponse({'error': True, 'message': 'Solo se reenvían mensajes salientes fallidos.'})
+
+    from .funcionesWhatsappConversacion import _bloqueo_ventana_meta
+    meta_bloqueada, _vence = _bloqueo_ventana_meta(conversacion)
+    if meta_bloqueada:
+        return JsonResponse({
+            'error': True, 'requiere_plantilla': True,
+            'message': 'La ventana de 24h de Meta venció. Usa una plantilla aprobada.',
+        })
+
+    service = get_whatsapp_service(sesion)
+    media_map = {'imagen': 'image', 'audio': 'audio', 'video': 'video', 'documento': 'document'}
+    try:
+        if mensaje.tipo in media_map and mensaje.archivo:
+            mensaje.archivo.open('rb')
+            file_bytes = mensaje.archivo.read()
+            mensaje.archivo.close()
+            response = service.send_media_message(
+                sesion.session_id, conversacion.from_number, caption=mensaje.mensaje,
+                file_content=file_bytes, filename=mensaje.archivo.name.split('/')[-1],
+                media_type=media_map[mensaje.tipo], conversacion_id=conversacion.id,
+            )
+        else:
+            response = service.send_text_message(
+                sesion.session_id, conversacion.from_number, mensaje.mensaje,
+                conversacion_id=conversacion.id,
+            )
+    except Exception as ex:
+        return JsonResponse({'error': True, 'message': f'Error al reenviar: {ex}'})
+
+    if not response.get('success', False):
+        return JsonResponse({
+            'error': True,
+            'message': f"No se pudo reenviar: {response.get('error', 'Error desconocido')}",
+            'requiere_plantilla': bool(response.get('requiere_plantilla')),
+            'cuenta_degradada': bool(response.get('cuenta_degradada')),
+        })
+
+    mensaje.mensaje_id_externo = response.get('message_id') or mensaje.mensaje_id_externo
+    mensaje.estado_envio = 'enviado'
+    mensaje.error_envio = ''
+    mensaje.save(update_fields=['mensaje_id_externo', 'estado_envio', 'error_envio'])
+    return JsonResponse({
+        'error': False,
+        'mensaje_html': render_to_string(
+            'whatsapp/conversaciones/mensaje_enviado_partial.html',
+            {'mensaje': mensaje}, request=request),
+    })
+
+
+def _editar_eliminar_mensaje(request, action):
+    """Edita o elimina (revoke) un mensaje saliente. Solo sesiones Baileys —
+    Meta Cloud API no expone editar/eliminar."""
+    try:
+        msg_id = int(request.POST.get('id') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'error': True, 'message': 'ID inválido'})
+    mensaje = (
+        MensajeWhatsApp.objects
+        .select_related('conversacion__sesion', 'conversacion__contacto')
+        .filter(pk=msg_id).first()
+    )
+    if not mensaje:
+        return JsonResponse({'error': True, 'message': 'Mensaje no encontrado'})
+    conversacion = mensaje.conversacion
+    sesion = conversacion.sesion
+    if not puede_ver_conversacion(request.user, conversacion):
+        return JsonResponse({'error': True, 'message': 'No autorizado.'})
+    if not getattr(sesion, 'es_baileys', False):
+        return JsonResponse({'error': True, 'message': 'Editar/eliminar solo está disponible en sesiones Baileys. Meta no lo permite.'})
+    if mensaje.remitente != (sesion.numero or ''):
+        return JsonResponse({'error': True, 'message': 'Solo se editan/eliminan mensajes propios (salientes).'})
+    if mensaje.eliminado:
+        return JsonResponse({'error': True, 'message': 'El mensaje ya fue eliminado.'})
+    if not mensaje.mensaje_id_externo:
+        return JsonResponse({'error': True, 'message': 'El mensaje no tiene id externo de WhatsApp — no se puede modificar.'})
+
+    service = get_whatsapp_service(sesion)
+    if action == 'editar_mensaje':
+        nuevo = (request.POST.get('texto') or '').strip()
+        if not nuevo:
+            return JsonResponse({'error': True, 'message': 'El nuevo texto no puede estar vacío.'})
+        resp = service.edit_message(sesion.session_id, conversacion.from_number, mensaje.mensaje_id_externo, nuevo)
+        if not resp.get('success'):
+            return JsonResponse({'error': True, 'message': resp.get('error', 'No se pudo editar.')})
+        mensaje.mensaje = nuevo
+        mensaje.editado = True
+        mensaje.save(update_fields=['mensaje', 'editado'])
+    else:
+        resp = service.delete_message(sesion.session_id, conversacion.from_number, mensaje.mensaje_id_externo)
+        if not resp.get('success'):
+            return JsonResponse({'error': True, 'message': resp.get('error', 'No se pudo eliminar.')})
+        mensaje.eliminado = True
+        mensaje.save(update_fields=['eliminado'])
+
+    return JsonResponse({
+        'error': False,
+        'mensaje_html': render_to_string(
+            'whatsapp/conversaciones/mensaje_enviado_partial.html',
+            {'mensaje': mensaje}, request=request),
+    })
+
+
+def _gestionar_atencion(request, action):
+    """Estados de inbox (abierta/pendiente/resuelta) y snooze (posponer)."""
+    from .models import ESTADOS_ATENCION
+    try:
+        pk = int(request.POST.get('pk') or 0)
+    except (TypeError, ValueError):
+        return JsonResponse({'error': True, 'message': 'ID inválido'})
+    conversacion = ConversacionWhatsApp.objects.filter(pk=pk).select_related('contacto__sesion').first()
+    if not conversacion:
+        return JsonResponse({'error': True, 'message': 'Conversación no encontrada'})
+    if not puede_ver_conversacion(request.user, conversacion):
+        return JsonResponse({'error': True, 'message': 'No autorizado.'})
+
+    if action == 'cambiar_estado_atencion':
+        estado = (request.POST.get('estado') or '').strip()
+        validos = {v for v, _ in ESTADOS_ATENCION}
+        if estado not in validos:
+            return JsonResponse({'error': True, 'message': 'Estado inválido'})
+        conversacion.estado_atencion = estado
+        conversacion.save(update_fields=['estado_atencion'])
+        etiqueta = dict(ESTADOS_ATENCION).get(estado, estado)
+        return JsonResponse({
+            'error': False, 'estado_atencion': estado,
+            'message': f'Estado de la conversación: {etiqueta}.',
+        })
+
+    if action == 'posponer_conversacion':
+        try:
+            minutos = int(request.POST.get('minutos') or 60)
+        except (TypeError, ValueError):
+            minutos = 60
+        minutos = max(1, min(minutos, 60 * 24 * 14))
+        conversacion.snooze_hasta = timezone.now() + timezone.timedelta(minutes=minutos)
+        conversacion.estado_atencion = 'pendiente'
+        conversacion.save(update_fields=['snooze_hasta', 'estado_atencion'])
+        return JsonResponse({
+            'error': False, 'snooze_hasta': conversacion.snooze_hasta.isoformat(),
+            'message': f'Conversación pospuesta {minutos} minuto(s). Volverá a Pendientes cuando venza.',
+        })
+
+    # reabrir_conversacion — solo cambia el estado de bandeja a "abierta" y quita
+    # el snooze. NO reabre la ventana Meta ni reactiva el bot ni envía nada al
+    # cliente; el copy lo deja explícito para no confundir con esas acciones.
+    conversacion.snooze_hasta = None
+    conversacion.estado_atencion = 'abierta'
+    conversacion.save(update_fields=['snooze_hasta', 'estado_atencion'])
+    return JsonResponse({
+        'error': False, 'estado_atencion': 'abierta',
+        'message': 'Conversación marcada como Abierta en la bandeja.',
+    })
+
+
+BRANDING_INBOX_CANAL = {
+    None: {
+        'titulo': 'Conversaciones WhatsApp',
+        'nombre': 'WhatsApp',
+        'icono': 'fab fa-whatsapp',
+        'url_sesiones': '/whatsapp/sesiones/',
+        'url_conversaciones': '/whatsapp/conversaciones/',
+        'url_finalizadas': '/whatsapp/conversaciones-finalizadas/',
+        'url_pendientes': '/whatsapp/conversaciones-pendiente-reconexion/',
+        'url_caducadas': '/whatsapp/conversaciones-caducadas/',
+        'tiene_pendientes': True,
+        'tiene_caducadas': True,
+        'vacio_titulo': 'Aún no hay sesiones de WhatsApp',
+        'vacio_texto': 'Para ver conversaciones primero necesitás conectar al menos una sesión de WhatsApp.',
+        'vacio_boton': 'Crear o conectar una sesión',
+    },
+    'instagram': {
+        'titulo': 'Conversaciones Instagram',
+        'nombre': 'Instagram',
+        'icono': 'fab fa-instagram',
+        'url_sesiones': '/instagram/sesiones/',
+        'url_conversaciones': '/instagram/conversaciones/',
+        'url_finalizadas': '/instagram/conversaciones-finalizadas/',
+        'url_pendientes': '/instagram/conversaciones-pendiente-reconexion/',
+        'tiene_pendientes': True,
+        'vacio_titulo': 'Aún no hay sesiones de Instagram',
+        'vacio_texto': 'Para ver conversaciones primero necesitás conectar al menos una cuenta de Instagram.',
+        'vacio_boton': 'Conectar cuenta de Instagram',
+    },
+    'messenger': {
+        'titulo': 'Conversaciones Messenger',
+        'nombre': 'Facebook',
+        'icono': 'fab fa-facebook',
+        'url_sesiones': '/facebook/sesiones/',
+        'url_conversaciones': '/facebook/conversaciones/',
+        'url_finalizadas': '/facebook/conversaciones-finalizadas/',
+        'url_pendientes': '',
+        'tiene_pendientes': False,
+        'vacio_titulo': 'Aún no hay páginas de Facebook',
+        'vacio_texto': 'Para ver conversaciones primero necesitás conectar al menos una página de Facebook.',
+        'vacio_boton': 'Conectar página de Facebook',
+    },
+    'tiktok': {
+        'titulo': 'Conversaciones TikTok',
+        'nombre': 'TikTok',
+        'icono': 'fab fa-tiktok',
+        'url_sesiones': '/tiktok/sesiones/',
+        'url_conversaciones': '/tiktok/conversaciones/',
+        'url_finalizadas': '/tiktok/conversaciones-finalizadas/',
+        'url_pendientes': '',
+        'tiene_pendientes': False,
+        'vacio_titulo': 'Aún no hay sesiones de TikTok',
+        'vacio_texto': 'Para ver conversaciones primero necesitás registrar al menos una cuenta de TikTok.',
+        'vacio_boton': 'Registrar cuenta de TikTok',
+    },
+}
+
+
+PROVEEDORES_WHATSAPP = ('baileys', 'meta')
+
+
+def canal_conversacion_permitido(sesion, canal_fijo):
+    """True si la sesión pertenece al canal del inbox actual. Sin canal_fijo
+    (inbox WhatsApp) solo se aceptan proveedores WhatsApp — evita que
+    conversaciones de Messenger/Instagram/TikTok se abran en el inbox de
+    WhatsApp y viceversa (localStorage/contactoId compartidos entre canales)."""
+    proveedor = getattr(sesion, 'proveedor', '') or ''
+    if canal_fijo:
+        return proveedor == canal_fijo
+    return proveedor in PROVEEDORES_WHATSAPP
+
+
+def conversacionesCaducadasView(request):
+    """Vista dedicada /whatsapp/conversaciones-caducadas/: mismas conversaciones
+    activas del inbox pero acotadas a la ventana Meta de 24h ya vencida
+    (`caducada=1` forzado). Comparte layout y template con `conversacionesView`
+    (`base_chat.html` + `listado.html`), con la pestaña Caducadas activa."""
+    return conversacionesView(request, forzar_caducada=True)
 
 
 @login_required
 @secure_module
-def conversacionesView(request):
+def conversacionesView(request, canal_fijo=None, template='whatsapp/conversaciones/listado.html', forzar_caducada=False):
+    branding = BRANDING_INBOX_CANAL.get(canal_fijo, BRANDING_INBOX_CANAL[None])
+    titulo = 'Conversaciones caducadas' if forzar_caducada else branding['titulo']
     data = {
-        'titulo': 'Conversaciones WhatsApp',
-        'modulo': 'Conversaciones WhatsApp',
-        'ruta': request.path
+        'titulo': titulo,
+        'modulo': titulo,
+        'ruta': request.path,
+        'canal_fijo': canal_fijo or '',
+        'canal_branding': branding,
+        'vista_actual': 'caducadas' if forzar_caducada else 'abiertas',
     }
     addData(request, data)
 
-    # Todas las sesiones del usuario (incluye desconectadas para ver historial).
-    sesiones = SesionWhatsApp.objects.filter(usuario_id=request.user.id, status=True).order_by('-ultima_conexion')
+    # Todas las sesiones visibles para el usuario (dueño, participante o superuser).
+    # Con canal_fijo (wrappers /instagram/ y /tiktok/) el inbox queda acotado a
+    # las sesiones de ese proveedor — mismo layout y acciones que WhatsApp.
+    sesiones = sesiones_visibles(request.user).order_by('-ultima_conexion')
+    if canal_fijo:
+        sesiones = sesiones.filter(proveedor=canal_fijo)
+    else:
+        sesiones = sesiones.filter(proveedor__in=PROVEEDORES_WHATSAPP)
     data['sesiones'] = sesiones
 
     # Sesión seleccionada (por defecto la primera)
@@ -49,7 +417,10 @@ def conversacionesView(request):
     if contactoId:
         try:
             conversacion_selected = ConversacionWhatsApp.objects.get(pk=int(encrypt(contactoId)))
-            sesion_id = conversacion_selected.sesion.id
+            if canal_conversacion_permitido(conversacion_selected.sesion, canal_fijo):
+                sesion_id = conversacion_selected.sesion.id
+            else:
+                conversacion_selected = None
         except Exception as ex:
             raise NameError(f'No se encontró la conversación: {ex}')
 
@@ -65,14 +436,16 @@ def conversacionesView(request):
             conv_obj = ConversacionWhatsApp.objects.filter(pk=conv_id_pedido).select_related(
                 'contacto', 'contacto__sesion'
             ).first()
-            if conv_obj:
+            if conv_obj and canal_conversacion_permitido(conv_obj.sesion, canal_fijo):
                 if conv_obj.conversacion_finalizada:
-                    return redirect(f'/whatsapp/conversaciones-finalizadas/?conv={conv_token}')
+                    return redirect(f"{branding['url_finalizadas']}?conv={conv_token}")
                 auto_open_conv_id = conv_obj.id
                 if conv_obj.contacto and conv_obj.contacto.sesion:
                     sesion_id = conv_obj.contacto.sesion.id
     if sesion_id:
-        sesion_seleccionada = get_object_or_404(SesionWhatsApp, id=sesion_id)
+        sesion_seleccionada = sesiones.filter(id=sesion_id).first()
+        if not sesion_seleccionada and sesiones.exists():
+            sesion_seleccionada = sesiones.first()
     elif sesiones.exists():
         sesion_seleccionada = sesiones.first()
     else:
@@ -80,13 +453,24 @@ def conversacionesView(request):
 
     data['sesion_seleccionada'] = sesion_seleccionada
     data['auto_open_conv_id'] = auto_open_conv_id
+    rol_sesion = rol_en_sesion(request.user, sesion_seleccionada)
+    data['rol_sesion'] = rol_sesion
+    data['es_vista_completa'] = es_vista_completa(request.user, sesion_seleccionada)
 
     # ====================== VER MENSAJES =========================
     if request.method == 'GET' and 'action' in request.GET:
         data['action'] = action = request.GET['action']
         if action == 'ver_mensajes':
-            pk = int(request.GET['pk'])
+            try:
+                pk = int(request.GET['pk'])
+            except (KeyError, ValueError):
+                return JsonResponse({'error': True, 'message': 'Parámetro pk inválido.'})
             conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
+            if not puede_ver_conversacion(request.user, conversacion):
+                return JsonResponse({'error': True, 'message': 'Not authorized.'})
+            if not canal_conversacion_permitido(conversacion.sesion, canal_fijo):
+                return JsonResponse({'error': True, 'canal_invalido': True,
+                                     'message': 'La conversación no pertenece a este canal.'})
             mensajes = MensajeWhatsApp.objects.filter(conversacion=conversacion).order_by('fecha')
             data['conversacion'] = conversacion
             data['mensajes'] = mensajes
@@ -105,7 +489,23 @@ def conversacionesView(request):
                     'adset_id':    conversacion.adset_id or '',
                     'campaign_id': conversacion.campaign_id or '',
                     'ctwa_clid':   conversacion.ctwa_clid or '',
+                    'ad_name':       '',
+                    'campaign_name': '',
+                    'adset_name':    '',
                 }
+                # Resolver nombres legibles vía Marketing API (cache-first).
+                # Best-effort: cualquier fallo no rompe la apertura del chat.
+                if conversacion.ad_id:
+                    try:
+                        from .services_ads import resolver_anuncio
+                        _cfg = getattr(conversacion.sesion, 'config_meta', None)
+                        _cache = resolver_anuncio(_cfg, conversacion.ad_id)
+                        if _cache:
+                            referral_data['ad_name'] = _cache.ad_name or ''
+                            referral_data['campaign_name'] = _cache.campaign_name or ''
+                            referral_data['adset_name'] = _cache.adset_name or ''
+                    except Exception:
+                        logging.getLogger(__name__).exception('Error resolviendo anuncio CTWA')
             return JsonResponse({
                 'html': render_to_string('whatsapp/conversaciones/mensajes_partial.html', data, request=request),
                 'conversacion_id': conversacion.id,
@@ -126,13 +526,20 @@ def conversacionesView(request):
                 'fecha_inicio': conversacion.fecha_registro.strftime('%d/%m/%Y %H:%M') if conversacion.fecha_registro else '',
                 'bloquear_cierre': conversacion.bloquear_cierre,
                 'es_meta': bool(getattr(conversacion.sesion, 'es_meta', False)),
+                'vence_meta': conversacion.vence_meta_en.isoformat() if conversacion.vence_meta_en else None,
+                'meta_bloqueada': conversacion.vence_meta_expirada,
                 'es_tradicional': (conversacion.sesion.modo_bot or '') == 'tradicional',
                 'referral': referral_data,
+                'clasificacion_id': conversacion.clasificacion,
+                'clasificacion_label': conversacion.get_clasificacion_display(),
+                'clasificacion_color': conversacion.get_estado_color_clasificacion(),
                 **_estadisticas_conversacion(conversacion),
             })
         elif action == 'ver_estadisticas':
             try:
                 conversacion = get_object_or_404(ConversacionWhatsApp, pk=int(request.GET['pk']))
+                if not puede_ver_conversacion(request.user, conversacion):
+                    return JsonResponse({'error': True, 'message': 'No autorizado.'})
                 return JsonResponse({'error': False, **_estadisticas_conversacion(conversacion)})
             except Exception as ex:
                 return JsonResponse({'error': True, 'message': str(ex)})
@@ -143,6 +550,8 @@ def conversacionesView(request):
         elif action == 'asignar-conversacion':
             try:
                 filtro = ConversacionWhatsApp.objects.get(pk=int(request.GET['id']))
+                if not puede_ver_conversacion(request.user, filtro):
+                    return JsonResponse({"result": False, 'message': 'No autorizado.'})
                 form = AsignarAgenteForm(instance=filtro)
                 data.update({'form': form, 'filtro': filtro})
                 template = get_template("whatsapp/conversaciones/form.html")
@@ -152,21 +561,69 @@ def conversacionesView(request):
         elif action == 'historial_cliente':
             try:
                 conv = get_object_or_404(ConversacionWhatsApp, pk=int(request.GET['pk']))
+                if not puede_ver_conversacion(request.user, conv):
+                    return JsonResponse({'error': True, 'message': 'No autorizado.'})
                 return historial_cliente_list(request, conv)
+            except Exception as ex:
+                return JsonResponse({'error': True, 'message': str(ex)})
+        elif action == 'ficha_cliente':
+            try:
+                from crm.models import CLIENTE_SEXO_CHOICES
+                conv = get_object_or_404(ConversacionWhatsApp, pk=int(request.GET['id']))
+                if not puede_ver_conversacion(request.user, conv):
+                    return JsonResponse({'result': False, 'message': 'No autorizado.'})
+                clientes = _clientes_de_conversacion(conv)
+                prefill, variables_flujo = _prefill_ficha_cliente(conv)
+                ctx = {
+                    'clientes': clientes,
+                    'conv': conv,
+                    'prefill': prefill,
+                    'variables_flujo': variables_flujo,
+                    'sexo_choices': CLIENTE_SEXO_CHOICES,
+                    'permitir_registro_manual': True,
+                }
+                template = get_template('whatsapp/conversaciones/_modal_ficha_cliente.html')
+                return JsonResponse({'result': True, 'data': template.render(ctx, request)})
+            except Exception as ex:
+                return JsonResponse({'result': False, 'message': str(ex)})
+        elif action == 'logs-notificaciones':
+            try:
+                conv = get_object_or_404(ConversacionWhatsApp, pk=int(request.GET['id']))
+                if not puede_ver_conversacion(request.user, conv):
+                    return JsonResponse({'error': True, 'message': 'No autorizado.'})
+                from crm.models import LogNotificacionAsignacion
+                logs = (
+                    LogNotificacionAsignacion.objects
+                    .filter(conversacion=conv, status=True)
+                    .select_related('agente')[:50]
+                )
+                template = get_template('whatsapp/conversaciones/_modal_logs_notif.html')
+                return JsonResponse({'result': True, 'data': template.render({
+                    'logs': logs,
+                    'titulo_scope': f'Avisos de asignación de la conversación #{conv.id}',
+                    'mostrar_conversacion': False,
+                })})
             except Exception as ex:
                 return JsonResponse({'error': True, 'message': str(ex)})
         elif action == 'historial_mensajes':
             try:
                 conv = get_object_or_404(ConversacionWhatsApp, pk=int(request.GET['pk']))
+                if not puede_ver_conversacion(request.user, conv):
+                    return JsonResponse({'error': True, 'message': 'No autorizado.'})
                 return historial_cliente_mensajes(request, conv)
             except Exception as ex:
                 return JsonResponse({'error': True, 'message': str(ex)})
+        elif action == 'consultar_datos_red':
+            from .funcionesWhatsappConversacion import consultar_datos_red
+            return consultar_datos_red(request, canal_fijo=canal_fijo)
         elif action == 'listar_plantillas_meta':
             # Devuelve plantillas APPROVED de la sesion Meta de la conversacion.
             # Se usa para poblar el panel en el composer cuando sesion.es_meta.
             try:
                 pk = int(request.GET['pk'])
                 conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
+                if not puede_ver_conversacion(request.user, conversacion):
+                    return JsonResponse({'error': True, 'message': 'No autorizado.'})
                 sesion = conversacion.sesion
                 if not getattr(sesion, 'es_meta', False):
                     return JsonResponse({'error': False, 'plantillas': [], 'motivo': 'sesion_no_meta'})
@@ -199,16 +656,55 @@ def conversacionesView(request):
                 return JsonResponse({'error': True, 'message': str(ex)})
 
     # ====================== ENVIAR MENSAJE =========================
+    # Fuera del `transaction.atomic()` de abajo: el reparto masivo hace envíos
+    # de WhatsApp, emails y notificaciones por cada conversación, y encerrarlos
+    # en una sola transacción larga mantendría bloqueadas las filas todo el rato.
+    if request.method == 'POST' and request.POST.get('action') == 'asignacion-automatica-masiva':
+        return asignacion_automatica_masiva_post(request, sesiones, sesion_seleccionada)
+
+    if request.method == 'POST' and request.POST.get('action') == 'reasignacion-masiva-asesor':
+        return reasignacion_masiva_asesor_post(request, sesiones, sesion_seleccionada)
+
     if request.method == 'POST':
         try:
             with transaction.atomic():
                 action = request.POST['action']
                 res_json= []
+
+                # Guard IDOR: las acciones que operan sobre una conversación por
+                # pk/id deben verificar que el usuario puede verla. Sin esto, un
+                # usuario de otro tenant pasaba un pk ajeno y cerraba/reasignaba/
+                # renombraba/pausaba conversaciones de otra empresa.
+                ACCIONES_CONV = {
+                    'asignar-conversacion', 'toggle-bot', 'toggle-bloquear-cierre',
+                    'reiniciar-flujo', 'marcar-resuelto', 'terminar-sin-despedida',
+                    'enviar_plantilla_meta',
+                }
+                if action in ACCIONES_CONV:
+                    _pk_conv = request.POST.get('pk') or request.POST.get('id')
+                    try:
+                        _conv_guard = ConversacionWhatsApp.objects.get(pk=int(_pk_conv))
+                    except (TypeError, ValueError, ConversacionWhatsApp.DoesNotExist):
+                        return JsonResponse({'error': True, 'message': 'Conversación no encontrada.'})
+                    if not puede_ver_conversacion(request.user, _conv_guard):
+                        return JsonResponse({'error': True, 'message': 'No autorizado.'})
+
                 if action == 'send':
                     pk = int(request.POST['pk'])
                     texto = request.POST.get('mensaje')
                     archivo = request.FILES.get('archivo')  # Obtener archivo si existe
                     conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
+                    if not puede_ver_conversacion(request.user, conversacion):
+                        return JsonResponse({'error': True, 'message': 'Not authorized.'})
+
+                    from .funcionesWhatsappConversacion import _bloqueo_ventana_meta
+                    meta_bloqueada, _vence_meta = _bloqueo_ventana_meta(conversacion)
+                    if meta_bloqueada:
+                        return JsonResponse({
+                            'error': True,
+                            'requiere_plantilla': True,
+                            'message': 'La ventana de 24 horas de Meta venció. Para retomar la conversación debes enviar una plantilla aprobada.',
+                        })
 
                     # Crear instancia del servicio segun proveedor de la sesion
                     service = get_whatsapp_service(conversacion.sesion)
@@ -229,6 +725,8 @@ def conversacionesView(request):
                         else:
                             tipo_mensaje, media_type = 'documento', 'document'
 
+                    import time as _time
+                    _t0_envio = _time.monotonic()
                     if archivo:
                         file_bytes = archivo.read()
                         response = service.send_media_message(
@@ -241,13 +739,67 @@ def conversacionesView(request):
                             conversacion.sesion.session_id, conversacion.from_number, texto,
                             conversacion_id=conversacion.id,
                         )
+                    _dur_envio_ms = int((_time.monotonic() - _t0_envio) * 1000)
+
+                    # Trazabilidad de envíos desde el panel: fallo o lentitud
+                    # (>5s) quedan en /whatsapp/trazas/ con proveedor, duración
+                    # y error crudo del servicio — sin esto "no se envió" o
+                    # "demoró" no es diagnosticable en producción.
+                    if not response.get('success', False) or _dur_envio_ms > 5000:
+                        from .trazas import registrar as _traza_envio
+                        _traza_envio(
+                            etapa='error_general',
+                            sesion=conversacion.sesion, conversacion=conversacion,
+                            numero=conversacion.contacto_numero,
+                            nivel='error' if not response.get('success', False) else 'warning',
+                            latencia_ms=_dur_envio_ms,
+                            detalle={
+                                'accion': 'send_panel',
+                                'proveedor': getattr(conversacion.sesion, 'proveedor', ''),
+                                'tipo': tipo_mensaje,
+                                'duracion_ms': _dur_envio_ms,
+                                'error': response.get('error') or '',
+                                'status': response.get('status') or '',
+                            },
+                        )
 
                     if not response.get('success', False):
+                        # Precondiciones (ventana 24h / cuenta degradada): no se
+                        # persiste, el frontend abre el panel de plantillas.
+                        if response.get('requiere_plantilla') or response.get('cuenta_degradada'):
+                            return JsonResponse({
+                                'error': True,
+                                'message': f"Error al enviar mensaje: {response.get('error', 'Error desconocido')}",
+                                'requiere_plantilla': bool(response.get('requiere_plantilla')),
+                                'cuenta_degradada': bool(response.get('cuenta_degradada')),
+                            })
+                        # Falla genérica (red caída, timeout del proveedor, etc.):
+                        # guardamos el mensaje como 'fallido' para que el agente
+                        # pueda reenviarlo de un click desde el chat.
+                        mensaje = MensajeWhatsApp(
+                            conversacion=conversacion,
+                            remitente=conversacion.sesion.numero,
+                            mensaje=texto,
+                            tipo=tipo_mensaje,
+                            fecha=timezone.now(),
+                            leido=True,
+                            fecha_leido=timezone.now(),
+                            agente=request.user,
+                            ia_generado=False,
+                            estado_envio='fallido',
+                            error_envio=str(response.get('error', 'Fallo de envío'))[:500],
+                        )
+                        if archivo:
+                            from django.core.files.base import ContentFile
+                            mensaje.archivo.save(archivo.name, ContentFile(file_bytes), save=False)
+                        mensaje.save()
                         return JsonResponse({
-                            'error': True,
-                            'message': f"Error al enviar mensaje: {response.get('error', 'Error desconocido')}",
-                            'requiere_plantilla': bool(response.get('requiere_plantilla')),
-                            'cuenta_degradada': bool(response.get('cuenta_degradada')),
+                            'error': False,
+                            'fallido': True,
+                            'message': f"No se pudo enviar: {response.get('error', 'Error')}. Quedó como fallido — puedes reenviarlo.",
+                            'mensaje_html': render_to_string(
+                                'whatsapp/conversaciones/mensaje_enviado_partial.html',
+                                {'mensaje': mensaje}, request=request),
                         })
 
                     # Guardamos en BD
@@ -270,10 +822,19 @@ def conversacionesView(request):
                         mensaje.archivo.save(archivo.name, ContentFile(file_bytes), save=False)
                     mensaje.save()
 
-                    # Registrar primer agente humano en responder
+                    # Registrar primer agente y pausar bot/flujo: si un humano
+                    # responde desde plataforma, ni la IA ni el chatbot
+                    # tradicional deben volver a contestar (ai_activo gatea
+                    # ambos en procesar_mensaje).
+                    campos = []
                     if not conversacion.primer_agente:
                         conversacion.primer_agente = request.user
-                        conversacion.save(update_fields=['primer_agente'])
+                        campos.append('primer_agente')
+                    if conversacion.ai_activo:
+                        conversacion.ai_activo = False
+                        campos.append('ai_activo')
+                    if campos:
+                        conversacion.save(update_fields=campos)
 
                     log(f"Mensaje enviado a {conversacion.contacto_numero}", request, "add", obj=conversacion.id)
 
@@ -284,6 +845,81 @@ def conversacionesView(request):
                                                         {'mensaje': mensaje},
                                                         request=request)
                     })
+                elif action == 'reenviar_mensaje':
+                    return _reenviar_mensaje(request)
+                elif action == 'tomar-conversacion':
+                    # El primer asesor que toca "Tomar" se queda con la
+                    # conversación. UPDATE condicional = atómico: ante dos
+                    # clicks simultáneos solo uno gana.
+                    pk = int(request.POST['pk'])
+                    conversacion = get_object_or_404(ConversacionWhatsApp, pk=pk)
+                    if rol_en_sesion(request.user, conversacion.sesion) not in ('superuser', 'supervisor', 'asesor'):
+                        return JsonResponse({'error': True, 'message': 'No autorizado.'})
+                    actualizadas = ConversacionWhatsApp.objects.filter(
+                        pk=pk, asignado_a__isnull=True, estado_conversacion=0,
+                    ).update(
+                        asignado_a=request.user,
+                        fecha_asignacion=timezone.now(),
+                        ai_activo=False,
+                    )
+                    conversacion.refresh_from_db()
+                    if not actualizadas:
+                        nombre = (conversacion.asignado_a.get_full_name() or conversacion.asignado_a.username) if conversacion.asignado_a else ''
+                        return JsonResponse({
+                            'error': True,
+                            'tomada_por': nombre,
+                            'message': f'Ya la tomó {nombre}.' if nombre else 'La conversación ya no está disponible.',
+                        })
+                    if not conversacion.primer_agente_id:
+                        conversacion.primer_agente = request.user
+                        conversacion.save(update_fields=['primer_agente'])
+                    from .models import HistorialAsignacion
+                    HistorialAsignacion.objects.create(
+                        conversacion=conversacion,
+                        asignado_a=request.user,
+                        asignado_por=request.user,
+                        nota='Tomada por el asesor desde el panel.',
+                    )
+                    from crm.helpers_asignacion import _marcar_ultima_asignacion
+                    _marcar_ultima_asignacion(request.user)
+                    log(f"Conversación {conversacion.id} tomada por el asesor", request, "change", obj=conversacion.id)
+                    # Presentación automática al cliente (mismo patrón que el
+                    # mensaje de handoff de asignar-conversacion).
+                    try:
+                        nombre_asesor = request.user.get_full_name() or request.user.username
+                        texto_presentacion = f'Hola 👋 Soy {nombre_asesor}, tu asesor y te guiaré en este proceso.'
+                        service_tomar = get_whatsapp_service(conversacion.sesion)
+                        respuesta_pres = service_tomar.send_text_message(
+                            conversacion.sesion.session_id,
+                            conversacion.contacto.from_number,
+                            texto_presentacion,
+                            conversacion_id=conversacion.id,
+                            simularEscritura=True,
+                        )
+                        if respuesta_pres.get('success'):
+                            _persistir_y_difundir_automatico(conversacion, texto_presentacion)
+                    except Exception:
+                        logging.getLogger(__name__).exception(
+                            'No pude enviar la presentación del asesor conv#%s', conversacion.id)
+                    try:
+                        from asgiref.sync import async_to_sync
+                        from channels.layers import get_channel_layer
+                        async_to_sync(get_channel_layer().group_send)(
+                            f"whatsapp_sessionroom_{conversacion.sesion.id}",
+                            {'type': 'whatsapp_event', 'conversation_id': conversacion.id, 'from_me': True},
+                        )
+                    except Exception:
+                        logging.getLogger(__name__).exception(
+                            'No pude difundir la toma de la conv#%s', conversacion.id)
+                    return JsonResponse({
+                        'error': False,
+                        'message': 'Conversación asignada a ti.',
+                        'asignado_nombre': request.user.get_full_name() or request.user.username,
+                    })
+                elif action in ('cambiar_estado_atencion', 'posponer_conversacion', 'reabrir_conversacion'):
+                    return _gestionar_atencion(request, action)
+                elif action in ('editar_mensaje', 'eliminar_mensaje'):
+                    return _editar_eliminar_mensaje(request, action)
                 elif action == 'enviar_plantilla_meta':
                     # Envia una plantilla Meta pre-aprobada. Util cuando la
                     # ventana 24h expiro o para reenganchar conversaciones.
@@ -350,9 +986,32 @@ def conversacionesView(request):
 
                     # El contador veces_enviada + ultimo_envio lo actualiza
                     # MetaWhatsAppService.send_template via F('veces_enviada')+1.
+                    campos_plantilla = []
                     if not conversacion.primer_agente:
                         conversacion.primer_agente = request.user
-                        conversacion.save(update_fields=['primer_agente'])
+                        campos_plantilla.append('primer_agente')
+                    if conversacion.ai_activo:
+                        conversacion.ai_activo = False
+                        campos_plantilla.append('ai_activo')
+                    # Reconexión de una conversación CADUCADA en sesión con bot
+                    # tradicional/híbrido: dejamos marcado que, cuando el cliente
+                    # responda a esta plantilla, el webhook debe REINICIAR el flujo
+                    # desde el inicio (no dejar el bot pausado en silencio). Se
+                    # marca solo si la ventana Meta estaba vencida (escenario real
+                    # de reconexión), no en envíos proactivos dentro de las 24h.
+                    if (sesion.modo_bot or '') in ('tradicional', 'hibrido'):
+                        from .funcionesWhatsappConversacion import _bloqueo_ventana_meta
+                        _caducada_al_enviar, _ = _bloqueo_ventana_meta(conversacion)
+                        if _caducada_al_enviar and not conversacion.reiniciar_flujo_al_responder:
+                            conversacion.reiniciar_flujo_al_responder = True
+                            campos_plantilla.append('reiniciar_flujo_al_responder')
+                    if campos_plantilla:
+                        conversacion.save(update_fields=campos_plantilla)
+
+                    from .funcionesWhatsappConversacion import _registrar_envio_plantilla
+                    _registrar_envio_plantilla(
+                        request, sesion, conversacion, plantilla, mensaje, origen='chat',
+                    )
 
                     log(f"Plantilla Meta '{plantilla.nombre}' enviada a {conversacion.contacto_numero}",
                         request, "add", obj=conversacion.id)
@@ -366,6 +1025,9 @@ def conversacionesView(request):
                     })
                 elif action == 'cambiar-clasificacion':
                     return cambiar_clasificacion_post(request)
+                elif action == 'aplicar_datos_red':
+                    from .funcionesWhatsappConversacion import aplicar_datos_red
+                    return aplicar_datos_red(request, canal_fijo=canal_fijo)
                 elif action == 'cambiar-nombre-contacto':
                     return cambiar_nombre_contacto_post(request)
                 elif action == 'asignar-conversacion':
@@ -393,21 +1055,19 @@ def conversacionesView(request):
                             )
                         except Exception:
                             pass
-                        # Notificar al agente asignado vía Notificacion
                         if asignado:
                             try:
-                                from seguridad.models import Notificacion
-                                contacto_nombre = filtro.contacto.contacto_nombre or filtro.contacto.from_number
-                                Notificacion.objects.create(
-                                    usuario=asignado,
-                                    titulo='Conversación asignada',
-                                    mensaje=f'Se te asignó la conversación con {contacto_nombre}.',
-                                    url='/whatsapp/conversaciones/',
-                                    prioridad=2,
-                                    tipo=1,
+                                from crm.helpers_asignacion import notificar_agente_asignado
+                                notificar_agente_asignado(
+                                    filtro, asignado,
+                                    motivo='manual',
+                                    asignador=request.user,
                                 )
                             except Exception:
-                                pass
+                                import logging as _lg
+                                _lg.getLogger(__name__).exception(
+                                    'No se pudo notificar al agente asignado conv=%s', filtro.id,
+                                )
                         nombre_asignado = asignado.get_full_name() if asignado else ''
                         # Mensaje de handoff al cliente (si la sesión tiene mensaje configurado)
                         if asignado:
@@ -417,15 +1077,18 @@ def conversacionesView(request):
                                 if not handoff_msg:
                                     handoff_msg = f'Hola, te atenderá {nombre_asignado}. En breve te contactamos.'
                                 service = get_whatsapp_service(sesion)
-                                service.send_text_message(
+                                respuesta_handoff = service.send_text_message(
                                     sesion.session_id,
                                     filtro.contacto.from_number,
                                     handoff_msg,
                                     conversacion_id=filtro.id,
                                     simularEscritura=True,
                                 )
+                                if respuesta_handoff.get('success'):
+                                    _persistir_y_difundir_automatico(filtro, handoff_msg)
                             except Exception:
-                                pass
+                                logging.getLogger(__name__).exception(
+                                    'Fallo el mensaje de handoff conv#%s', filtro.id)
                         # JS para actualizar header sin recargar
                         if nombre_asignado:
                             js = (
@@ -464,6 +1127,42 @@ def conversacionesView(request):
                     estado = 'bloqueado' if filtro.bloquear_cierre else 'desbloqueado'
                     log(f"Cierre automático {estado} para conversación {filtro.id}", request, "change", obj=filtro.id)
                     return JsonResponse({'error': False, 'bloquear_cierre': filtro.bloquear_cierre})
+                elif action == 'guardar-contacto':
+                    # Red de seguridad multi-canal: si el contacto de la
+                    # conversación quedó soft-deleted o con datos mínimos
+                    # incompletos (por eso no sale en Contactos), lo repara.
+                    # Idempotente: si ya está bien, solo lo confirma.
+                    filtro = ConversacionWhatsApp.objects.select_related(
+                        'contacto', 'contacto__sesion'
+                    ).get(pk=int(request.POST['id']))
+                    if not puede_ver_conversacion(request.user, filtro):
+                        return JsonResponse({'error': True, 'message': 'No autorizado.'})
+                    contacto_obj = filtro.contacto
+                    cambios = []
+                    if not contacto_obj.status:
+                        contacto_obj.status = True
+                        cambios.append('reactivado')
+                    if not contacto_obj.contacto_numero and contacto_obj.from_number:
+                        contacto_obj.contacto_numero = contacto_obj.from_number
+                        cambios.append('número completado')
+                    if not (contacto_obj.contacto_nombre or '').strip():
+                        contacto_obj.contacto_nombre = (
+                            contacto_obj.contacto_numero or contacto_obj.from_number or 'Contacto'
+                        )
+                        cambios.append('nombre completado')
+                    if cambios:
+                        contacto_obj.save(request)
+                        log(f"Contacto {contacto_obj.id} guardado desde conversación "
+                            f"{filtro.id} ({', '.join(cambios)})",
+                            request, "change", obj=contacto_obj.id)
+                        return JsonResponse({
+                            'error': False,
+                            'message': f'Contacto guardado en Contactos ({", ".join(cambios)}).',
+                        })
+                    return JsonResponse({
+                        'error': False,
+                        'message': 'El contacto ya estaba registrado en Contactos.',
+                    })
                 elif action == 'reiniciar-flujo':
                     # Solo aplica a sesiones con chatbot tradicional. Limpia el
                     # estado del flujo, vuelve al nodo_inicio del depto y dispara
@@ -472,10 +1171,21 @@ def conversacionesView(request):
                     filtro = ConversacionWhatsApp.objects.select_related(
                         'sesion', 'contacto'
                     ).get(pk=int(request.POST['id']))
-                    if (filtro.sesion.modo_bot or '') != 'tradicional':
+                    if (filtro.sesion.modo_bot or '') not in ('tradicional', 'hibrido'):
                         return JsonResponse({
                             'error': True,
-                            'message': 'Esta acción solo aplica a sesiones con chatbot tradicional.',
+                            'message': 'Esta acción solo aplica a sesiones con flujo de chatbot (tradicional o híbrido).',
+                        })
+                    # Ventana Meta 24h vencida (caducada): Meta rechaza todo texto
+                    # libre, así que el flujo no podría enviar el saludo. Avisamos
+                    # con la causa real en vez de dejar que reviente en el transporte.
+                    from .funcionesWhatsappConversacion import _bloqueo_ventana_meta
+                    meta_bloqueada, _vence_meta = _bloqueo_ventana_meta(filtro)
+                    if meta_bloqueada:
+                        return JsonResponse({
+                            'error': True,
+                            'requiere_plantilla': True,
+                            'message': 'La ventana de 24 horas de Meta venció. Para reiniciar el flujo primero envía una plantilla aprobada y espera la respuesta del cliente.',
                         })
                     resultado = reiniciar_flujo_tradicional(filtro)
                     if resultado.error:
@@ -504,7 +1214,7 @@ def conversacionesView(request):
                         ' Despedida no enviada — revisá /whatsapp/trazas/ filtrando fin_conversacion.'
                     res_json.append({
                         'error': False,
-                        'url': '/whatsapp/conversaciones-finalizadas/',
+                        'url': branding['url_finalizadas'],
                         'message': f'Conversación cerrada.{msg_extra}',
                         'despedida_enviada': filtro.despedida_enviado,
                     })
@@ -517,7 +1227,7 @@ def conversacionesView(request):
                     except Exception as ex:
                         raise NameError(f'No se encontró la conversación: {ex}')
                     filtro.cerrar(enviar_despedida=False)
-                    res_json.append({'error': False, 'url': '/whatsapp/conversaciones-finalizadas/'})
+                    res_json.append({'error': False, 'url': branding['url_finalizadas']})
                     request.session['contactoId'] = encrypt(filtro.id)
                     log(f"Conversación marcada como resuelta {filtro.id}", request, "change", obj=filtro.id)
                     return JsonResponse(res_json, safe=False)
@@ -526,8 +1236,20 @@ def conversacionesView(request):
                     # con whisper, no habla con Node ni Meta. Usar WhatsAppService directo
                     # esta OK aqui (el dispatcher no aplica porque MetaWhatsAppService
                     # delega esta misma funcion a WhatsAppService internamente).
+                    # Candado anti-doble-click: los re-render del chat por WS
+                    # pierden el spinner y el usuario volvia a pulsar, encolando
+                    # transcripciones duplicadas del mismo audio.
+                    from django.core.cache import cache as _cache
+                    msg_id_tr = int(request.POST['id'])
+                    lock_tr = f'transcribiendo_{msg_id_tr}'
+                    if _cache.get(lock_tr):
+                        return JsonResponse({'error': True, 'en_proceso': True,
+                                             'message': 'La transcripción ya está en proceso. Aparecerá sola al terminar.'})
+                    _cache.set(lock_tr, True, 300)
                     service = WhatsAppService()
-                    msg = MensajeWhatsApp.objects.select_related('conversacion__contacto__sesion').get(id=request.POST['id'])
+                    msg = MensajeWhatsApp.objects.select_related('conversacion__contacto__sesion').get(id=msg_id_tr)
+                    if not puede_ver_conversacion(request.user, msg.conversacion):
+                        return JsonResponse({'error': True, 'message': 'No autorizado.'})
                     service.transcribe_audio(msg, 'small', msg.conversacion.contacto.sesion.language.split('-')[0])
                     return JsonResponse({})
 
@@ -541,6 +1263,9 @@ def conversacionesView(request):
                     msg = MensajeWhatsApp.objects.select_related(
                         'conversacion__contacto__sesion__agente_ia'
                     ).get(pk=msg_id)
+
+                    if not puede_ver_conversacion(request.user, msg.conversacion):
+                        return JsonResponse({'error': True, 'message': 'No autorizado.'})
 
                     # Crear o actualizar feedback
                     feedback, _ = FeedbackMensajeBot.objects.update_or_create(
@@ -590,25 +1315,28 @@ def conversacionesView(request):
                                 log(f"Error creando FaqAgente desde feedback: {ex}", request, "error")
 
                             # 2. Agregar al FAISS si está configurado (compatibilidad)
-                            if agente.vectorstore_path and agente.apikey.filter(estado=True).exists():
-                                apikey_obj = agente.apikey.filter(estado=True).first()
-                                # Solo Gemini soporta embeddings en esta app (Claude/Ollama
-                                # no ofrecen API de embeddings); pasar el int crudo evita el
-                                # fallback silencioso a 'gemini' con una key de otro proveedor.
-                                if apikey_obj.proveedor == 2:
-                                    try:
-                                        from agents_ai.vectorstore_manager import VectorStoreManager
-                                        import os
-                                        from django.conf import settings
-                                        storage = os.path.join(settings.MEDIA_ROOT, 'vectorstores')
-                                        vsm = VectorStoreManager(storage, apikey_obj.proveedor, apikey_obj.descripcion)
-                                        vsm.add_correction(agente.vectorstore_path, pregunta, correccion)
-                                        feedback.procesado_vectorstore = True
-                                        feedback.save(update_fields=['procesado_vectorstore'])
-                                        from agents_ai.agente_consultor import AgenteConsultor
-                                        AgenteConsultor._faiss_cache.clear()
-                                    except Exception as ex:
-                                        log(f"Error al agregar corrección al vectorstore: {ex}", request, "error")
+                            if agente.vectorstore_path and agente.apikey.filter(estado=True, status=True).exists():
+                                apikey_obj = (
+                                    agente.apikey.filter(estado=True, proveedor__in=(2, 3, 8)).first()
+                                    or agente.apikey_activa()
+                                )
+                                try:
+                                    from agents_ai.vectorstore_manager import VectorStoreManager
+                                    import os
+                                    from django.conf import settings
+                                    storage = os.path.join(settings.MEDIA_ROOT, 'vectorstores')
+                                    vs_abs = os.path.join(settings.MEDIA_ROOT, agente.vectorstore_path)
+                                    vsm = VectorStoreManager(
+                                        storage, apikey_obj.proveedor, apikey_obj.descripcion,
+                                        base_url=(getattr(apikey_obj, 'base_url', '') or None)
+                                    )
+                                    vsm.add_correction(vs_abs, pregunta, correccion)
+                                    feedback.procesado_vectorstore = True
+                                    feedback.save(update_fields=['procesado_vectorstore'])
+                                    from agents_ai.consultor.retrieval import invalidate_vectorstore_cache
+                                    invalidate_vectorstore_cache(vs_abs)
+                                except Exception as ex:
+                                    log(f"Error al agregar corrección al vectorstore: {ex}", request, "error")
 
                             # 3. Indexar la corrección en Weaviate (RAG oficial del agente)
                             try:
@@ -632,6 +1360,50 @@ def conversacionesView(request):
                         'mensaje': 'Feedback guardado' + (' y agregado al vectorstore ✓' if feedback.procesado_vectorstore else ''),
                     })
 
+                elif action == 'crear_cliente_manual':
+                    # Alta manual de la ficha del cliente desde la conversación,
+                    # para el caso en que el cliente no terminó el flujo del
+                    # chatbot tradicional. Reusa cliente_upsert (misma lógica de
+                    # origen + ClienteOrigen que el flujo automático).
+                    conv = get_object_or_404(ConversacionWhatsApp, pk=int(request.POST['id']))
+                    if not puede_ver_conversacion(request.user, conv):
+                        return JsonResponse({'error': True, 'message': 'No autorizado.'})
+                    cedula = (request.POST.get('cedula') or '').strip()
+                    if not cedula:
+                        return JsonResponse({'error': True, 'message': 'La cédula / identificación es obligatoria.'})
+                    variables = {
+                        'cedula':           cedula,
+                        'nombres':          (request.POST.get('nombres') or '').strip(),
+                        'apellidos':        (request.POST.get('apellidos') or '').strip(),
+                        'email':            (request.POST.get('email') or '').strip(),
+                        'telefono':         (request.POST.get('telefono') or '').strip(),
+                        'ciudad':           (request.POST.get('ciudad') or '').strip(),
+                        'edad':             (request.POST.get('edad') or '').strip(),
+                        'fecha_nacimiento': (request.POST.get('fecha_nacimiento') or '').strip(),
+                        'sexo':             (request.POST.get('sexo') or '').strip(),
+                        'notas':            (request.POST.get('notas') or '').strip(),
+                        'canal_origen':     'manual',
+                    }
+                    from crm.funciones_cliente import cliente_upsert
+                    resultado = cliente_upsert(conv, variables, {'canal_origen': 'manual'})
+                    if resultado.get('etiqueta') != 'ok':
+                        return JsonResponse({
+                            'error': True,
+                            'message': resultado.get('error') or 'No se pudo registrar el cliente.',
+                        })
+                    body = resultado.get('body') or {}
+                    creado = bool(body.get('cliente_creado'))
+                    log(f"Cliente {'registrado' if creado else 'actualizado'} manualmente "
+                        f"desde conversación {conv.id} (cédula {cedula})",
+                        request, "add" if creado else "change", obj=conv.id)
+                    return JsonResponse({
+                        'error': False,
+                        'creado': creado,
+                        'cliente_id': body.get('cliente_id'),
+                        'message': 'Cliente registrado correctamente.' if creado
+                                   else 'Ya existía un cliente con esa cédula; se actualizó la ficha.',
+                    })
+
 
         except Exception as ex:
             # forms.js espera array para recorrer con forEach — envolver en lista.
@@ -642,18 +1414,31 @@ def conversacionesView(request):
     filtro_clasificacion = request.GET.get('clasificacion', '')
     filtro_sin_responder = request.GET.get('sin_responder', '')
     filtro_mis_conv = request.GET.get('mis_conv', '')
+    filtro_asesor = request.GET.get('asesor', '')
+    filtro_sin_asesor = request.GET.get('sin_asesor', '')
+    filtro_por_caducar = request.GET.get('por_caducar', '')
+    filtro_caducada = request.GET.get('caducada', '')
+    if forzar_caducada:
+        # Vista dedicada /conversaciones-caducadas/: el filtro es la base fija.
+        filtro_caducada = '1'
 
+    # `sesiones` ya viene acotado por canal_fijo (wrappers /instagram/ y
+    # /tiktok/): sin esto, con canal sin sesiones (sesion_seleccionada=None)
+    # el listado mostraba conversaciones de TODOS los canales.
     filtros = Q(
         contacto__status=True, status=True,
-        contacto__sesion__usuario__id=request.user.id,
+        contacto__sesion__in=sesiones,
         contacto__sesion__status=True,
         estado_conversacion=0
     )
     url_vars = ''
+    sesion_url_frag = ''
 
     if sesion_seleccionada:
         filtros = filtros & Q(contacto__sesion=sesion_seleccionada)
-        url_vars += f'&sesion={encrypt_sesion_id(sesion_seleccionada.id)}'
+        filtros = filtros & filtro_conversaciones_por_rol(request.user, sesion_seleccionada)
+        sesion_url_frag = f'&sesion={encrypt_sesion_id(sesion_seleccionada.id)}'
+        url_vars += sesion_url_frag
 
     if criterio:
         filtros = filtros & (Q(contacto__contacto_numero__icontains=criterio) | Q(contacto__contacto_nombre__icontains=criterio))
@@ -682,21 +1467,164 @@ def conversacionesView(request):
         data["filtro_mis_conv"] = True
         url_vars += '&mis_conv=1'
 
+    if filtro_asesor:
+        try:
+            data["filtro_asesor"] = int(filtro_asesor)
+            filtros = filtros & Q(asignado_a_id=data["filtro_asesor"])
+            url_vars += f'&asesor={data["filtro_asesor"]}'
+        except (TypeError, ValueError):
+            filtro_asesor = ''
+
+    if filtro_sin_asesor:
+        filtros = filtros & Q(asignado_a__isnull=True)
+        data["filtro_sin_asesor"] = True
+        url_vars += '&sin_asesor=1'
+
+    if filtro_por_caducar:
+        # El filtrado real se aplica en el branch load_conversations sobre la
+        # anotación fecha_ultimo_entrante (ventana Meta de 24h).
+        data["filtro_por_caducar"] = True
+        url_vars += '&por_caducar=1'
+
+    if filtro_caducada:
+        # El filtrado real se aplica en el branch load_conversations sobre la
+        # anotación fecha_ultimo_entrante (ventana Meta de 24h ya vencida).
+        data["filtro_caducada"] = True
+        url_vars += '&caducada=1'
+
     data["url_vars"] = url_vars
+    # Filtros activos sin el fragmento de sesión: el JS del listado los usa para
+    # rearmar el load_conversations sin depender de un replace frágil sobre el
+    # token firmado (que lleva timestamp y puede diferir entre renders).
+    data["filtros_activos_qs"] = (url_vars.replace(sesion_url_frag, '', 1) if sesion_url_frag else url_vars).lstrip('&')
     data['conversacion_selected'] = conversacion_selected
     data["today"] = timezone.now().date()
     data["SENTIMIENTO_CHOICES"] = SENTIMIENTO_CHOICES
     from .models import ESTADOS_CLASIFICACION
     data["ESTADOS_CLASIFICACION"] = ESTADOS_CLASIFICACION
 
-    # Conteo global de conversaciones sin leer (para badge en header)
+    # Conteo de conversaciones sin leer (para badge en header), acotado al
+    # canal del inbox cuando hay canal_fijo.
+    badge_scope = Q(contacto__sesion__in=sesiones) & (
+        Q(contacto__sesion__in=sesiones_vista_completa(request.user))
+        | Q(asignado_a=request.user)
+    )
     data["total_sin_leer"] = ConversacionWhatsApp.objects.filter(
+        badge_scope,
         contacto__status=True, status=True,
-        contacto__sesion__usuario__id=request.user.id,
         estado_conversacion=0,
         mensajes__leido=False,
         mensajes__remitente=models.F('contacto__contacto_numero')
     ).distinct().count()
+
+    # Contadores de abiertas / finalizadas para las pestañas. Mismo alcance
+    # de visibilidad que el badge de no-leídos, pero acotado a la sesión
+    # seleccionada (es lo que el operador está mirando).
+    contadores_scope = badge_scope & Q(contacto__status=True, status=True)
+    if sesion_seleccionada:
+        contadores_scope = contadores_scope & Q(contacto__sesion=sesion_seleccionada)
+    # Caducadas = ventana Meta de 24h ya vencida (último entrante > 24h). Se
+    # define por la ventana Meta y NO por el timer interno `fecha_hora_expira`
+    # (con min_sesion≈1440 ambos coincidían y las caducadas quedaban ocultas de
+    # `sin_expirar`). Abiertas y Caducadas quedan disjuntas: <24h Abiertas,
+    # >24h Caducadas. El cron sigue respetando las asignadas a un humano.
+    from django.db.models import OuterRef as _OE_bdg, Subquery as _SQ_bdg
+    from datetime import timedelta as _td_bdg
+    _ult_entrante_bdg = (
+        MensajeWhatsApp.objects
+        .filter(conversacion=_OE_bdg('pk'))
+        .exclude(remitente=_OE_bdg('contacto__sesion__numero'))
+        .order_by('-fecha').values('fecha')[:1]
+    )
+    _limite_caducada_bdg = timezone.now() - _td_bdg(hours=HORAS_VENTANA_META_CUSTOMER_SERVICE)
+    data["total_caducadas"] = (
+        ConversacionWhatsApp.objects
+        .filter(contadores_scope, estado_conversacion=0,
+                conversacion_finalizada=False,
+                contacto__sesion__proveedor='meta')
+        .annotate(_fue=_SQ_bdg(_ult_entrante_bdg))
+        .filter(_fue__lte=_limite_caducada_bdg)
+        .distinct().count()
+    )
+    # `sin_expirar` (mismo manager que usa el listado) y no un filtro propio:
+    # con estado_conversacion=0 a secas el badge contaba conversaciones
+    # expiradas-sin-cerrar que el listado oculta (badge decía N, lista vacía).
+    # Además excluimos las caducadas (ventana Meta vencida) para no doblarlas.
+    data["total_abiertas"] = (
+        ConversacionWhatsApp.objects.sin_expirar
+        .filter(contadores_scope)
+        .annotate(_fue=_SQ_bdg(_ult_entrante_bdg))
+        .exclude(contacto__sesion__proveedor='meta', _fue__lte=_limite_caducada_bdg)
+        .distinct().count()
+    )
+    data["total_finalizadas"] = ConversacionWhatsApp.objects.filter(
+        contadores_scope, estado_conversacion=1,
+    ).distinct().count()
+    data["total_sin_asesor"] = ConversacionWhatsApp.objects.sin_expirar.filter(
+        contadores_scope, asignado_a__isnull=True,
+    ).distinct().count()
+    # Botón "Asignación automática": permiso propio por sesión, no basta el rol.
+    from .permisos_sesion import puede_asignar_masivo
+    data["puede_asignar_masivo"] = puede_asignar_masivo(request.user, sesion_seleccionada)
+
+    # Dropdown "Asesor": solo para quien tiene vista completa de la sesión.
+    # Los candidatos salen de PerfilSesionWhatsApp (quién atiende la sesión).
+    data["mostrar_filtro_asesor"] = es_vista_completa(request.user, sesion_seleccionada)
+    data["asesores_filtro"] = []
+    if data["mostrar_filtro_asesor"]:
+        from .models import PerfilSesionWhatsApp
+        perfiles = PerfilSesionWhatsApp.objects.filter(
+            status=True, usuario__is_active=True,
+        ).select_related('usuario')
+        if sesion_seleccionada:
+            perfiles = perfiles.filter(sesion=sesion_seleccionada)
+        else:
+            perfiles = perfiles.filter(sesion__in=sesiones)
+        vistos = set()
+        for p in perfiles.order_by('usuario__first_name', 'usuario__last_name'):
+            if p.usuario_id in vistos:
+                continue
+            vistos.add(p.usuario_id)
+            data["asesores_filtro"].append({
+                'id': p.usuario_id,
+                'nombre': p.usuario.get_full_name() or p.usuario.username,
+            })
+
+        # Deep-link `?asesor=<id>` (ej. desde "Carga de asesores"): si ese asesor
+        # tiene conversaciones asignadas pero ya no es perfil activo de la sesión,
+        # igual lo agregamos como candidato para que el chip resuelva su nombre y
+        # se marque. Además exponemos el nombre para la etiqueta del chip.
+        asesor_sel = data.get("filtro_asesor")
+        if asesor_sel:
+            if asesor_sel not in vistos:
+                u_sel = Usuario.objects.filter(id=asesor_sel).first()
+                if u_sel:
+                    vistos.add(asesor_sel)
+                    data["asesores_filtro"].append({
+                        'id': u_sel.id,
+                        'nombre': u_sel.get_full_name() or u_sel.username,
+                    })
+            data["nombre_asesor_filtro"] = next(
+                (a['nombre'] for a in data["asesores_filtro"] if a['id'] == asesor_sel), ''
+            )
+
+    # Exportación a Excel del listado de caducadas. Usa el mismo `filtros` que
+    # arma el listado, así el archivo respeta sesión, criterio y chips activos.
+    if request.GET.get('exportar_excel') and filtro_caducada:
+        from django.http import HttpResponse
+        from .funciones_conversaciones_excel import (
+            queryset_caducadas_export, exportar_caducadas_excel,
+        )
+        qs_export = list(queryset_caducadas_export(filtros))
+        wb = exportar_caducadas_excel(qs_export)
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        nombre_archivo = f"conversaciones_caducadas_{timezone.now().date()}.xlsx"
+        response['Content-Disposition'] = f'attachment; filename="{nombre_archivo}"'
+        wb.save(response)
+        log(f"Exportó conversaciones caducadas a Excel ({len(qs_export)} filas)", request, "view")
+        return response
 
     # Si es una solicitud AJAX para cargar conversaciones
     if request.GET.get('load_conversations'):
@@ -705,9 +1633,17 @@ def conversacionesView(request):
         # select_related sobre los FK que el partial usa (foto, nombre,
         # numero de la sesión, foto del contacto). Sin esto, el render del
         # partial dispara N+1 queries por cada item del listado.
+        from django.db.models import Count, Q as _Q_nl, F as _F_nl
+        # La vista Caducadas parte del manager base (NO `sin_expirar`): las
+        # caducadas suelen tener `expirado=True` (min_sesion≈24h) y `sin_expirar`
+        # las ocultaba. Se acota luego a Meta + ventana de 24h vencida.
+        _base_listado = (
+            ConversacionWhatsApp.objects.filter(filtros, conversacion_finalizada=False)
+            if filtro_caducada
+            else ConversacionWhatsApp.objects.sin_expirar.filter(filtros)
+        )
         qs = (
-            ConversacionWhatsApp.objects.sin_expirar
-            .filter(filtros)
+            _base_listado
             .select_related(
                 'contacto',
                 'contacto__sesion',
@@ -715,6 +1651,13 @@ def conversacionesView(request):
                 'contacto__sesion__config_baileys',
                 'asignado_a',
             )
+            # Cuenta de no-leídos por SQL (evita 1 COUNT por tarjeta del inbox).
+            # El template la consume vía `mensajes_no_leidos`.
+            .annotate(_no_leidos_ann=Count(
+                'mensajes',
+                filter=_Q_nl(mensajes__leido=False,
+                             mensajes__remitente=_F_nl('contacto__contacto_numero')),
+            ))
             .distinct()
         )
 
@@ -738,10 +1681,103 @@ def conversacionesView(request):
                 _ultimo_remitente=django_models.F('_numero_sesion')
             )
 
+        mostrar_supervisor = es_vista_completa(request.user, sesion_seleccionada)
+        if mostrar_supervisor:
+            ultimo_remitente_sup = (
+                MensajeWhatsApp.objects
+                .filter(conversacion=OuterRef('pk'))
+                .order_by('-fecha')
+                .values('remitente')[:1]
+            )
+            ultima_fecha_sup = (
+                MensajeWhatsApp.objects
+                .filter(conversacion=OuterRef('pk'))
+                .order_by('-fecha')
+                .values('fecha')[:1]
+            )
+            qs = qs.annotate(
+                sup_ultimo_remitente=Subquery(ultimo_remitente_sup),
+                sup_fecha_ultimo=Subquery(ultima_fecha_sup),
+            )
+
+        ultima_fecha_entrante = (
+            MensajeWhatsApp.objects
+            .filter(conversacion=OuterRef('pk'))
+            .exclude(remitente=OuterRef('contacto__sesion__numero'))
+            .order_by('-fecha')
+            .values('fecha')[:1]
+        )
+        qs = qs.annotate(
+            fecha_ultimo_entrante=Subquery(ultima_fecha_entrante),
+        )
+
+        from datetime import timedelta as _td
+        ahora_ts = timezone.now()
+
+        # "Por caducar": ventana Meta de 24h a la que le quedan menos horas que
+        # el aviso configurado en la sesión (`horas_aviso_por_caducar`, 6h por
+        # defecto). vence = fecha_ultimo_entrante + 24h → quedan <N horas cuando
+        # el último entrante tiene entre 24-N y 24 horas de antigüedad. Solo
+        # aplica a Meta (Baileys no tiene ventana de servicio).
+        if filtro_por_caducar:
+            horas_aviso = horas_aviso_de_sesion(sesion_seleccionada)
+            qs = qs.filter(
+                contacto__sesion__proveedor='meta',
+                fecha_ultimo_entrante__gt=ahora_ts - _td(hours=HORAS_VENTANA_META_CUSTOMER_SERVICE),
+                fecha_ultimo_entrante__lte=ahora_ts - _td(
+                    hours=HORAS_VENTANA_META_CUSTOMER_SERVICE - horas_aviso,
+                ),
+            )
+
+        # "Caducadas": ventana Meta de 24h ya vencida por completo (el último
+        # mensaje entrante tiene más de 24h). Solo texto libre bloqueado —
+        # solo aplica a Meta. Espejo del gate `_bloqueo_ventana_meta`.
+        if filtro_caducada:
+            qs = qs.filter(
+                contacto__sesion__proveedor='meta',
+                fecha_ultimo_entrante__lte=ahora_ts - _td(hours=HORAS_VENTANA_META_CUSTOMER_SERVICE),
+            )
+        else:
+            # En cualquier vista que NO sea Caducadas (Abiertas y sus chips), las
+            # conversaciones con la ventana Meta ya vencida no cuentan como
+            # abiertas: viven en la pestaña Caducadas. Mantiene ambos disjuntos.
+            qs = qs.exclude(
+                contacto__sesion__proveedor='meta',
+                fecha_ultimo_entrante__lte=ahora_ts - _td(hours=HORAS_VENTANA_META_CUSTOMER_SERVICE),
+            )
+
+        # Orden: última actividad primero. Se ordena por el dato vivo del
+        # contacto (el mismo que muestra el "hace X min" de la card) y no por
+        # el snapshot `order`, que quedó desactualizado en conversaciones
+        # creadas antes del fix de procesar_mensaje.
+        qs = qs.order_by(
+            django_models.F('contacto__fecha_ultimo_mensaje').desc(nulls_last=True),
+            '-id',
+        )
+
+        conv_list = list(qs)
+        for _c in conv_list:
+            if getattr(_c, 'atendida_por_meta', False) and getattr(_c, 'fecha_ultimo_entrante', None):
+                _c.vence_meta_en = _c.fecha_ultimo_entrante + _td(hours=24)
+                _c.vence_meta_expirada = _c.vence_meta_en <= ahora_ts
+            else:
+                _c.vence_meta_en = None
+                _c.vence_meta_expirada = False
+
         return JsonResponse({
             'html': render_to_string('whatsapp/conversaciones/conversaciones_partial.html',
-                                    {'conversaciones': qs, 'today': timezone.now().date()},
-                                    request=request)
+                                    {
+                                        'conversaciones': conv_list,
+                                        'today': ahora_ts.date(),
+                                        'now': ahora_ts,
+                                        'es_vista_completa': mostrar_supervisor,
+                                        'sesion_numero': sesion_seleccionada.numero if sesion_seleccionada else '',
+                                    },
+                                    request=request),
+            'listado_count':     len(conv_list),
+            'total_abiertas':    data.get('total_abiertas', 0),
+            'total_finalizadas': data.get('total_finalizadas', 0),
+            'total_caducadas':   data.get('total_caducadas', 0),
         })
 
     # Pipelines disponibles para el modal "Asignar a pipeline"
@@ -749,4 +1785,9 @@ def conversacionesView(request):
     data['pipelines_disponibles'] = (
         _PV.objects.filter(status=True).prefetch_related('etapas').order_by('-es_default', 'nombre')
     )
-    return render(request, 'whatsapp/conversaciones/listado.html', data)
+    # Respuestas rápidas globales (invocables con /atajo en el composer).
+    data['atajos_globales'] = list(
+        RespuestaRapidaGlobal.objects.filter(status=True)
+        .values('atajo', 'titulo', 'cuerpo')
+    )
+    return render(request, template, data)

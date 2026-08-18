@@ -1,0 +1,138 @@
+.guia-conexion ol {
+    margin-bottom: 0;
+}
+
+.candidatos-detectados {
+    display: none;
+}
+
+.token-truncado {
+    max-width: 180px;
+    display: inline-block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+    font-family: monospace;
+    font-size: .75rem;
+}
+
+.fb-avatar {
+    background: linear-gradient(135deg, #1877f2 0%, #0a5dc2 100%);
+    color: #fff;
+}
+
+.canal-badge.canal-facebook {
+    background: linear-gradient(135deg, #1877f2 0%, #0a5dc2 100%);
+    color: #fff;
+}
+
+.pane-hero-icon.fb-grad {
+    background: linear-gradient(135deg, #1877f2 0%, #0a5dc2 100%);
+    color: #fff;
+}
+
+.conex-canal .ic.ic-wa {
+    background: #d4f5e3;
+    color: #25d366;
+}
+
+.conex-canal .ic.ic-tk {
+    background: #000;
+    color: #fff;
+}
+
+.conex-canal .ic.ic-fb {
+    background: #e7f0fe;
+    color: #1877f2;
+}
+
+#formCuenta .pane-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: .5rem;
+    margin-top: .5rem;
+}
+
+.guia-inline {
+    margin: .75rem 0 1rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background: #f9fafb;
+}
+
+.guia-inline summary {
+    cursor: pointer;
+    padding: .6rem .9rem;
+    font-size: .85rem;
+    font-weight: 600;
+    color: #374151;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+
+.guia-inline summary::-webkit-details-marker {
+    display: none;
+}
+
+.guia-inline[open] summary {
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.guia-steps {
+    display: flex;
+    flex-direction: column;
+    gap: .9rem;
+    padding: .9rem;
+}
+
+.guia-step {
+    display: flex;
+    align-items: flex-start;
+    gap: .75rem;
+    position: relative;
+}
+
+.guia-step:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    left: 13px;
+    top: 28px;
+    bottom: -14px;
+    width: 2px;
+    background: #e5e7eb;
+}
+
+.guia-step-num {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    border-radius: 50%;
+    background: #e7f0fe;
+    color: #1877f2;
+    font-weight: 700;
+    font-size: .8rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+}
+
+.guia-step-body {
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+}
+
+.guia-step-body b {
+    font-size: .85rem;
+    color: #111827;
+}
+
+.guia-step-body span {
+    font-size: .78rem;
+    color: #6b7280;
+    line-height: 1.4;
+}

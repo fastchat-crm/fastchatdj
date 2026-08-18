@@ -36,3 +36,63 @@
     border-radius: 999px;
     font-size: 0.75rem;
 }
+
+.agent-actions .dropdown,
+.apikey-actions .dropdown {
+    display: inline-flex;
+}
+.btn-ag.more,
+.btn-apk.more {
+    background: #f1f5f9;
+    color: #475569;
+}
+.btn-ag.more:hover,
+.btn-apk.more:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+.btn-ag.more::after,
+.btn-apk.more::after {
+    display: none;
+}
+.agent-actions .dropdown-menu,
+.apikey-actions .dropdown-menu {
+    font-size: .8rem;
+    border: 1px solid #e3e8f0;
+    border-radius: 12px;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, .14);
+    padding: 6px;
+    min-width: 210px;
+    z-index: 1080;
+}
+.agent-actions .dropdown-item,
+.apikey-actions .dropdown-item {
+    display: flex;
+    align-items: center;
+    border-radius: 7px;
+    padding: 7px 10px;
+    font-weight: 500;
+    font-size: .8rem;
+}
+.agent-actions .dropdown-item i,
+.apikey-actions .dropdown-item i {
+    width: 18px;
+    text-align: center;
+}
+.agent-actions .dropdown-item:hover,
+.apikey-actions .dropdown-item:hover {
+    background: #f1f5f9;
+}
+.agent-actions .dropdown-item:active,
+.apikey-actions .dropdown-item:active {
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+.agent-actions .dropdown-item.item-danger,
+.apikey-actions .dropdown-item.item-danger {
+    color: #be123c;
+}
+.agent-actions .dropdown-item.item-danger:hover,
+.apikey-actions .dropdown-item.item-danger:hover {
+    background: #fff1f2;
+}

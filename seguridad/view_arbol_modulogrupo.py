@@ -30,24 +30,39 @@ def arbol_modulo_grupo(request):
                 try:
                     with transaction.atomic():
                         c_modulos = request.POST.getlist('c_modulos', [])
+                        cambios = 0
                         for x in c_modulos:
                             cm = json.loads(x)
-                            cm["pk_origen"] = int(cm["pk_origen"])
-                            cm["pk_destino"] = int(cm["pk_destino"])
-                            cm["orden"] = int(cm["orden"])
-                            if cm["pk_destino"] > 0:
-                                mg_origen = ModuloGrupo.objects.get(pk=cm["pk_origen"])
-                                mg_destino = ModuloGrupo.objects.get(pk=cm["pk_destino"])
-                                modulo = Modulo.objects.get(pk=cm['pk_modulo'])
-                                modulo.orden = cm["orden"]
+                            try:
+                                pk_destino = int(cm.get("pk_destino") or 0)
+                                pk_modulo = int(cm.get("pk_modulo") or 0)
+                                orden_nuevo = int(cm.get("orden") or 0)
+                            except (TypeError, ValueError):
+                                continue
+                            if pk_destino <= 0 or pk_modulo <= 0:
+                                continue
+                            mg_destino = ModuloGrupo.objects.filter(pk=pk_destino, status=True).first()
+                            modulo = Modulo.objects.filter(pk=pk_modulo, status=True).first()
+                            if not mg_destino or not modulo:
+                                continue
+                            grupos_actuales = set(ModuloGrupo.objects.filter(modulos=modulo, status=True).values_list('pk', flat=True))
+                            if grupos_actuales == {pk_destino} and modulo.orden == orden_nuevo:
+                                continue
+                            if modulo.orden != orden_nuevo:
+                                modulo.orden = orden_nuevo
                                 modulo.save(request)
-                                mg_origen.modulos.remove(modulo)
-                                mg_destino.modulos.add(modulo)
-                        messages.success(request, "Grupos de urls cambiados correctamente")
+                            for mg_otro in ModuloGrupo.objects.filter(modulos=modulo, status=True).exclude(pk=pk_destino):
+                                mg_otro.modulos.remove(modulo)
+                            mg_destino.modulos.add(modulo)
+                            cambios += 1
+                        if cambios:
+                            messages.success(request, f"{cambios} URL group assignment(s) updated.")
+                        else:
+                            messages.info(request, "No changes detected.")
                 except ValueError as e:
                     messages.error(request, str(e))
                 except Exception as ex:
-                    messages.error(request, "Hubo un error, intente nuevamente")
+                    messages.error(request, "An error occurred. Please try again.")
 
                 return redirect(request.path)
 

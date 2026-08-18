@@ -2,450 +2,9 @@
 {% load static %}
 
 {% block head %}
-    <link rel="stylesheet" href="{% static 'stylenew/entrenamiento.css' %}">
-    <link rel="stylesheet" href="{% static 'stylenew/agentesia_form.css' %}">
-    <style>
-        /* ── Agent cards ─────────────────────────────────────────────── */
-        .agent-card {
-            transition: box-shadow .25s ease, transform .25s ease;
-            border: 1px solid #e3e8f0;
-            border-radius: 14px;
-            overflow: hidden;
-            background: #fff;
-        }
-        .agent-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 10px 28px rgba(0,0,0,.10);
-            border-color: #4f7ef8;
-        }
-        .agent-card-header {
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-            padding: 16px 16px 10px;
-        }
-        .agent-icon {
-            width: 44px; height: 44px;
-            flex-shrink: 0;
-            border-radius: 10px;
-            background: linear-gradient(135deg,#667eea,#764ba2);
-            display: flex; align-items: center; justify-content: center;
-            color: #fff; font-size: 18px;
-        }
-        .agent-icon.icon-2 { background: linear-gradient(135deg,#f093fb,#f5576c); }
-        .agent-icon.icon-3 { background: linear-gradient(135deg,#4facfe,#00f2fe); }
-        .agent-icon.icon-4 { background: linear-gradient(135deg,#fa709a,#fee140); }
-        .agent-icon.icon-5 { background: linear-gradient(135deg,#43e97b,#38f9d7); }
-        .agent-icon.icon-6 { background: linear-gradient(135deg,#f7971e,#ffd200); }
-
-        .agent-title-group { flex: 1; min-width: 0; }
-        .agent-title-group h5 {
-            margin: 0 0 2px;
-            font-size: .93rem; font-weight: 700;
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
-        .agent-desc {
-            font-size: .80rem; color: #6b7280; line-height: 1.45;
-        }
-        .agent-status-dot {
-            width: 11px; height: 11px;
-            border-radius: 50%; flex-shrink: 0; margin-top: 4px;
-        }
-        .agent-status-dot.ok   { background:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.2); animation: pulseok 2s infinite; }
-        .agent-status-dot.warn { background:#f59e0b; box-shadow:0 0 0 3px rgba(245,158,11,.2); }
-        .agent-status-dot.err  { background:#ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.2); }
-        @keyframes pulseok {
-            0%,100% { box-shadow:0 0 0 3px rgba(34,197,94,.2); }
-            50%      { box-shadow:0 0 0 6px rgba(34,197,94,.05); }
-        }
-
-        .agent-card-body { padding: 0 16px 14px; }
-
-        /* Stats chips */
-        .agent-stats { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
-        .stat-chip {
-            display:inline-flex; align-items:center; gap:4px;
-            font-size:.70rem; font-weight:600;
-            padding:3px 8px; border-radius:20px; border:1px solid transparent;
-        }
-        .stat-chip.ok    { background:#dcfce7; color:#15803d; border-color:#bbf7d0; }
-        .stat-chip.err   { background:#fee2e2; color:#b91c1c; border-color:#fecaca; }
-        .stat-chip.warn  { background:#fef3c7; color:#92400e; border-color:#fde68a; }
-        .stat-chip.info  { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
-        .stat-chip.ctx   { background:#f0fdf4; color:#166534; border-color:#bbf7d0; }
-        .stat-chip.noctx { background:#fefce8; color:#854d0e; border-color:#fef08a; }
-
-        /* API key badges */
-        .api-key-badge {
-            font-size:.70rem; font-weight:600;
-            padding:2px 8px; border-radius:20px; border:1px solid transparent;
-            display:inline-flex; align-items:center; gap:4px; margin:2px;
-        }
-        .api-key-badge.ok    { background:#dcfce7; color:#15803d; border-color:#bbf7d0; }
-        .api-key-badge.err   { background:#fee2e2; color:#b91c1c; border-color:#fecaca; }
-        .api-key-badge.no-keys { background:#fef3c7; color:#92400e; border-color:#fde68a; }
-        .api-key-badge code {
-            background:rgba(0,0,0,.08); padding:0 4px; border-radius:3px;
-            font-size:.67rem; color:inherit;
-        }
-
-        /* ── API Key cards ──────────────────────────────────────────── */
-        .apikey-card {
-            border:1px solid #e5e7eb; border-radius:12px;
-            transition:box-shadow .15s, transform .15s;
-            overflow:hidden;
-        }
-        .apikey-card:hover { box-shadow:0 4px 14px rgba(0,0,0,.06); transform:translateY(-1px); }
-        .apikey-card.inactiva { opacity:.7; }
-
-        .apikey-card-header {
-            display:flex; align-items:center; gap:10px;
-            padding:12px 14px;
-            background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color:#fff;
-        }
-        .apikey-card-header.provider-2 { background:linear-gradient(135deg,#4285f4 0%, #0ea5e9 100%); } /* Gemini azul */
-        .apikey-card-header.provider-3 { background:linear-gradient(135deg,#10a37f 0%, #059669 100%); } /* OpenAI verde */
-
-        .apikey-icon {
-            width:38px; height:38px; flex-shrink:0;
-            display:flex; align-items:center; justify-content:center;
-            background:rgba(255,255,255,.22); border-radius:10px;
-            font-size:1.1rem;
-        }
-        .apikey-title-group { flex-grow:1; min-width:0; }
-        .apikey-title-group h6 {
-            font-weight:700; color:#fff;
-            white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-        }
-        .apikey-provider { color:rgba(255,255,255,.88); font-size:.7rem; }
-        .apikey-provider code {
-            background:rgba(255,255,255,.22); color:#fff;
-            padding:0 5px; border-radius:3px; font-size:.68rem;
-        }
-        .apikey-estado { font-size:.65rem; padding:4px 9px; }
-
-        .apikey-card-body { padding:12px 14px; background:#fff; }
-
-        .apikey-info-row {
-            display:flex; gap:6px; align-items:center;
-            margin-bottom:8px; font-size:.78rem;
-        }
-        .apikey-label { color:#6b7280; font-weight:600; }
-        .apikey-value {
-            flex-grow:1; font-family:monospace;
-            background:#f1f5f9; padding:3px 8px; border-radius:4px;
-            color:#475569; font-size:.72rem;
-            white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-        }
-        .apikey-modelo {
-            flex-grow:1;
-            display:inline-flex; align-items:center; gap:4px;
-            padding:3px 9px; border-radius:4px;
-            font-size:.74rem; font-weight:600;
-        }
-        .apikey-modelo.ok {
-            background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0;
-        }
-        .apikey-modelo.ok code {
-            background:rgba(21,128,61,.12); color:#15803d;
-            padding:1px 5px; border-radius:3px; font-size:.72rem;
-        }
-        .apikey-modelo.missing {
-            background:#fef3c7; color:#92400e; border:1px solid #fde68a;
-        }
-        .apikey-modelo.missing small { font-weight:500; opacity:.75; }
-        .apikey-modelo-hdr {
-            background:rgba(255,255,255,.22); color:#fff;
-            padding:1px 7px; border-radius:3px; font-size:.67rem;
-            display:inline-block; font-family:monospace;
-        }
-        .apikey-modelo-hdr.missing {
-            background:rgba(255,193,7,.32); color:#fff3cd; font-family:inherit;
-        }
-
-        /* Botón X para limpiar el mensaje de error */
-        .apikey-error-clear {
-            background:rgba(185,28,28,.1); color:#b91c1c;
-            border:none; border-radius:3px;
-            width:20px; height:20px; padding:0;
-            display:inline-flex; align-items:center; justify-content:center;
-            cursor:pointer; font-size:.65rem;
-            transition:background .12s;
-        }
-        .apikey-error-clear:hover { background:rgba(185,28,28,.25); }
-
-        .apikey-error {
-            background:#fef2f2; border:1px solid #fecaca;
-            border-radius:6px; padding:8px 10px; margin-bottom:10px;
-        }
-        .apikey-error-head {
-            display:flex; align-items:center; gap:4px;
-            font-size:.72rem; color:#991b1b; margin-bottom:4px;
-        }
-        .apikey-error-date {
-            font-weight:normal; color:#b91c1c; font-size:.68rem;
-            background:#fee2e2; padding:1px 6px; border-radius:3px;
-        }
-        .apikey-error-msg { font-size:.72rem; color:#7f1d1d; line-height:1.35; }
-
-        .apikey-actions {
-            display:flex; flex-wrap:wrap; gap:5px;
-            padding-top:10px; border-top:1px solid #f1f5f9;
-        }
-        .btn-apk {
-            display:inline-flex; align-items:center; gap:5px;
-            font-size:.72rem; font-weight:600;
-            padding:5px 10px; border-radius:6px; border:none;
-            cursor:pointer; transition:background .15s, color .15s;
-        }
-        .btn-apk.test      { background:#fff8e1; color:#92400e; }
-        .btn-apk.test:hover{ background:#fde68a; }
-        .btn-apk.consumo   { background:#e0f2fe; color:#075985; }
-        .btn-apk.consumo:hover { background:#bae6fd; }
-        .btn-apk.alertas   { background:#f1f5f9; color:#475569; }
-        .btn-apk.alertas:hover { background:#e2e8f0; }
-        .btn-apk.alertas-on{ background:#fee2e2; color:#b91c1c; }
-        .btn-apk.alertas-on:hover { background:#fecaca; }
-        .btn-apk.edit      { background:#eff6ff; color:#2563eb; }
-        .btn-apk.edit:hover{ background:#dbeafe; }
-        .btn-apk.reactivar { background:#f0fdf4; color:#15803d; }
-        .btn-apk.reactivar:hover { background:#bbf7d0; }
-        .btn-apk.del       { background:#fff1f2; color:#be123c; }
-        .btn-apk.del:hover { background:#ffe4e6; }
-
-        /* Checklist de configuración del agente */
-        .agent-checklist {
-            display:flex; gap:4px; flex-wrap:wrap;
-            padding:8px; margin-bottom:10px;
-            background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;
-        }
-        .chk-item {
-            display:inline-flex; align-items:center; gap:4px;
-            font-size:.68rem; font-weight:600;
-            padding:3px 7px; border-radius:4px;
-            background:#fff; border:1px solid #e5e7eb;
-        }
-        .chk-item.ok  { color:#15803d; border-color:#bbf7d0; background:#f0fdf4; }
-        .chk-item.off { color:#6b7280; background:#f9fafb; }
-        .chk-item strong { margin-left:3px; font-weight:700; }
-        .chk-item .badge { font-size:.6rem; padding:1px 5px; }
-
-        /* Action buttons */
-        .agent-actions {
-            display:flex; gap:5px; flex-wrap:wrap;
-            padding-top:10px; border-top:1px solid #f1f5f9;
-        }
-        .btn-ag {
-            display:inline-flex; align-items:center; gap:5px;
-            font-size:.76rem; font-weight:500;
-            padding:5px 10px; border-radius:7px; border:none;
-            cursor:pointer; text-decoration:none;
-            transition:background .15s, color .15s; white-space:nowrap;
-        }
-        .btn-ag.edit  { background:#eff6ff; color:#2563eb; }
-        .btn-ag.edit:hover  { background:#dbeafe; }
-        .btn-ag.del   { background:#fff1f2; color:#be123c; padding:5px 9px; }
-        .btn-ag.del:hover   { background:#ffe4e6; }
-        .btn-ag.chat  { background:#f0fdf4; color:#15803d; }
-        .btn-ag.chat:hover  { background:#dcfce7; }
-        .btn-ag.proc  { background:#fefce8; color:#854d0e; }
-        .btn-ag.proc:hover  { background:#fef9c3; }
-        .btn-ag.view  { background:#f5f3ff; color:#6d28d9; }
-        .btn-ag.view:hover  { background:#ede9fe; }
-
-        /* Empty state */
-        .empty-state { text-align:center; padding:60px 20px; color:#6c757d; }
-        .empty-state i { font-size:4rem; margin-bottom:20px; opacity:.3; }
-
-        /* Table API keys */
-        .btn-test     { background:#fef3c7; color:#92400e; }
-        .btn-test:hover { background:#fde68a; }
-
-        /* ── Context modal ──────────────────────────────────────────── */
-        .ctx-pane {
-            font-family:'Courier New',monospace;
-            font-size:.76rem; white-space:pre-wrap; word-break:break-word;
-            max-height:55vh; overflow-y:auto;
-            background:#f8fafc; border:1px solid #e2e8f0;
-            border-radius:8px; padding:14px; color:#1e293b; line-height:1.65;
-        }
-        /* Variables resaltadas dentro del preview del prompt */
-        .prompt-var {
-            display:inline-block; padding:0 5px; border-radius:4px;
-            font-weight:600; font-size:.74rem;
-            border:1px solid transparent;
-        }
-        .prompt-var-persona { background:#ede9fe; color:#6d28d9; border-color:#ddd6fe; }
-        .prompt-var-runtime { background:#dbeafe; color:#1d4ed8; border-color:#bfdbfe; }
-        .prompt-var-negocio { background:#fef3c7; color:#92400e; border-color:#fde68a; }
-        .prompt-var-otro    { background:#f1f5f9; color:#475569; border-color:#e2e8f0; }
-        .prompt-legend {
-            border-top:1px dashed #cbd5e1; padding-top:10px; margin-top:14px;
-            color:#64748b; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-        }
-        .prompt-legend-item { margin-right:14px; display:inline-flex; align-items:center; gap:4px; }
-        .ctx-source-item {
-            display:flex; align-items:flex-start; gap:10px;
-            padding:10px 12px; border:1px solid #e2e8f0;
-            border-radius:8px; margin-bottom:8px; background:#fff;
-        }
-        .ctx-source-icon {
-            width:32px; height:32px; border-radius:8px;
-            display:flex; align-items:center; justify-content:center;
-            font-size:13px; flex-shrink:0;
-        }
-        .ctx-source-icon.tipo-1 { background:#eff6ff; color:#2563eb; }
-        .ctx-source-icon.tipo-2 { background:#fdf4ff; color:#7c3aed; }
-        .ctx-source-icon.tipo-3 { background:#f0fdf4; color:#15803d; }
-        .ctx-mode-badge {
-            font-size:.70rem; font-weight:700;
-            padding:3px 10px; border-radius:20px; border:1px solid transparent;
-        }
-        .ctx-mode-badge.estatico { background:#dcfce7; color:#15803d; border-color:#bbf7d0; }
-        .ctx-mode-badge.faiss    { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
-        .ctx-mode-badge.sin_datos{ background:#fef3c7; color:#92400e; border-color:#fde68a; }
-
-        /* ── FAQs activas ── */
-        .ctx-faq-item {
-            background:#fff; border:1px solid #e2e8f0; border-left:3px solid #28a745;
-            border-radius:8px; padding:10px 12px; margin-bottom:8px;
-        }
-        .ctx-faq-head {
-            display:flex; gap:.4rem; align-items:center; flex-wrap:wrap; margin-bottom:.3rem;
-            font-size:.7rem;
-        }
-        .ctx-faq-num { font-weight:700; color:#228be6; }
-        .ctx-faq-prio { background:#fff3bf; color:#8a6d1a; padding:1px 6px; border-radius:3px; }
-        .ctx-faq-hits { background:#e7f5ff; color:#1971c2; padding:1px 6px; border-radius:3px; }
-        .ctx-faq-origen {
-            padding:1px 6px; border-radius:3px;
-            background:#f1f3f5; color:#495057; margin-left:auto;
-        }
-        .ctx-faq-origen.origen-conversacion { background:#d0ebff; color:#1864ab; }
-        .ctx-faq-origen.origen-feedback { background:#ffdeeb; color:#a61e4d; }
-        .ctx-faq-origen.origen-auditor { background:#e7e5ff; color:#5f3dc4; }
-        .ctx-faq-q, .ctx-faq-a {
-            font-size:.78rem; line-height:1.4; margin-bottom:.2rem;
-        }
-        .ctx-faq-q strong { color:#228be6; }
-        .ctx-faq-a { color:#495057; }
-        .ctx-faq-a strong { color:#2b8a3e; }
-        .ctx-faq-preview { margin-top:.8rem; }
-        .ctx-faq-preview summary {
-            cursor:pointer; font-size:.75rem; color:#667eea; font-weight:600;
-            padding:.3rem 0;
-        }
-
-        /* ── Flujo de lectura del contexto ── */
-        .ctx-flow-step {
-            display:flex; gap:12px;
-            padding:14px; margin-bottom:10px;
-            background:#fff; border:1px solid #e2e8f0;
-            border-left:4px solid #667eea;
-            border-radius:8px;
-            position:relative;
-        }
-        .ctx-flow-step:not(:last-child)::after {
-            content:''; position:absolute;
-            left:29px; bottom:-12px; width:2px; height:12px;
-            background:#cbd5e1;
-        }
-        .ctx-flow-step.inactivo {
-            opacity:.55; border-left-color:#cbd5e1; background:#f8fafc;
-        }
-        .ctx-flow-num {
-            width:38px; height:38px; flex-shrink:0;
-            display:flex; align-items:center; justify-content:center;
-            border-radius:50%; color:#fff; font-size:.9rem;
-            box-shadow:0 2px 6px rgba(0,0,0,.1);
-        }
-        .ctx-flow-body { flex-grow:1; min-width:0; }
-        .ctx-flow-title {
-            font-weight:700; color:#1f2937; font-size:.85rem;
-            margin-bottom:4px;
-        }
-        .ctx-flow-step-num {
-            display:inline-block; font-size:.65rem;
-            padding:1px 6px; border-radius:3px;
-            background:#e0e7ff; color:#4338ca;
-            font-weight:700; margin-right:6px;
-        }
-        .ctx-flow-omitido {
-            display:inline-block; font-size:.62rem;
-            padding:1px 6px; border-radius:3px;
-            background:#fef3c7; color:#92400e;
-            font-weight:600; margin-left:6px;
-        }
-        .ctx-flow-detail {
-            font-size:.76rem; color:#475569;
-            line-height:1.45; margin-bottom:5px;
-        }
-        .ctx-flow-usa {
-            font-size:.68rem; color:#6b7280;
-            background:#f8fafc; padding:4px 8px; border-radius:4px;
-            display:inline-block;
-        }
-        .ctx-flow-usa code {
-            background:#e0e7ff; color:#4338ca;
-            padding:1px 5px; border-radius:3px; font-size:.66rem;
-            margin:0 2px;
-        }
-
-        /* ── Herramientas ── */
-        .ctx-herr-item {
-            background:#fff; border:1px solid #e2e8f0; border-left:3px solid #667eea;
-            border-radius:8px; padding:10px 12px; margin-bottom:8px;
-        }
-        .ctx-herr-item.inactiva { opacity:.55; border-left-color:#adb5bd; }
-        .ctx-herr-head {
-            display:flex; gap:.4rem; align-items:center; flex-wrap:wrap; margin-bottom:.3rem;
-            font-size:.82rem;
-        }
-        .ctx-herr-method {
-            font-family:monospace; font-size:.65rem; font-weight:700;
-            padding:1px 6px; border-radius:3px;
-        }
-        .ctx-herr-method.GET  { background:#e7f5ff; color:#1971c2; }
-        .ctx-herr-method.POST { background:#fff4e6; color:#d9480f; }
-        .ctx-herr-slug {
-            font-family:monospace; font-size:.72rem;
-            background:#f1f3f5; padding:1px 5px; border-radius:3px; color:#495057;
-        }
-        .ctx-herr-url {
-            font-family:monospace; font-size:.72rem; color:#495057;
-            word-break:break-all; margin:.2rem 0;
-        }
-        .ctx-herr-loc { color:#868e96; font-style:italic; }
-        .ctx-herr-desc { font-size:.76rem; color:#495057; margin:.2rem 0; line-height:1.35; }
-        .ctx-herr-params { font-size:.72rem; color:#6c757d; }
-        .ctx-herr-params code {
-            background:#fff3bf; color:#a17c00; padding:1px 4px; border-radius:3px;
-            font-size:.7rem;
-        }
-
-        .row [class*='col-'] { background-clip:content-box; }
-
-        /* ── Modales agrandados (editar/ver-contexto) ── */
-        .modal-wide .modal-dialog {
-            max-width: 92vw;
-            width: 92vw;
-            margin: 1.5rem auto;
-        }
-        .modal-wide .modal-content {
-            max-height: 92vh;
-        }
-        .modal-wide .modal-body {
-            max-height: calc(92vh - 120px);
-            overflow-y: auto;
-        }
-        @media (min-width: 1400px) {
-            .modal-wide .modal-dialog { max-width: 1320px; width: 1320px; }
-        }
-        @media (max-width: 768px) {
-            .modal-wide .modal-dialog { max-width: 98vw; width: 98vw; margin: .5rem auto; }
-        }
-    </style>
+    <link rel="stylesheet" href="/static/stylenew/entrenamiento.css?v1.1">
+    <link rel="stylesheet" href="/static/stylenew/agentesia_form.css?v1.0">
+    <link rel="stylesheet" href="/static/stylenew/entrenamiento_agentes.css?v1.1">
 {% endblock %}
 
 {% block content %}
@@ -454,21 +13,11 @@
         perfil del negocio, agrega productos y servicios, y define respuestas a preguntas frecuentes para entrenar la IA según tus criterios.
     </div>
 
-    <ul class="nav nav-tabs mb-3" role="tablist">
-        <li class="nav-item">
-            <a class="nav-link fw-medium active" data-bs-toggle="tab" href="#agentes" role="tab"
-               aria-selected="false">Agentes</a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link fw-medium" data-bs-toggle="tab" href="#apikeys" role="tab"
-               aria-selected="false">Api Keys</a>
-        </li>
-    </ul>
-    <div class="tab-content">
+    <div>
         {# ── Tab Agentes ──────────────────────────────────────────────── #}
-        <div class="tab-pane active" id="agentes" role="tabpanel">
-            <div class="card bg-transparent shadow-sm mb-4">
-                <div class="card-header bg-white border-bottom-0 d-flex justify-content-between align-items-center">
+        <div id="agentes">
+            <div class="seccion-ia mb-4">
+                <div class="seccion-ia-header d-flex justify-content-between align-items-center">
                     <div>
                         <h5 class="mb-0 text-primary"><i class="fas fa-robot me-2"></i>Agentes AI</h5>
                         <small class="text-muted">Configura cómo responde la IA en cada conversación.</small>
@@ -484,8 +33,8 @@
                         </a>
                     </div>
                 </div>
-                <div class="card-body" id="bloque_agentes_ia">
-                    <div class="card-body pt-0">
+                <div class="seccion-ia-body" id="bloque_agentes_ia">
+                    <div class="pt-0">
                         {% if agentes %}
                             <div class="row g-3">
                                 {% for l in agentes %}
@@ -550,17 +99,29 @@
                                                     {% endif %}
                                                 </div>
 
+                                                <div class="agent-keys mb-2">
+                                                    {% if l.num_sesiones %}
+                                                        <span class="api-key-badge ok"
+                                                              title="{% for su in l.sesiones_uso %}{{ su.canal }}: {{ su.nombre }}{% if not forloop.last %} · {% endif %}{% endfor %}">
+                                                            <i class="fas fa-share-alt"></i>
+                                                            En {{ l.num_sesiones }} sesión{{ l.num_sesiones|pluralize:"es" }}
+                                                        </span>
+                                                        {% for su in l.sesiones_uso|slice:":3" %}
+                                                            <span class="api-key-badge" title="{{ su.canal }} · {{ su.nombre }}">
+                                                                <i class="fas fa-plug"></i> {{ su.canal }}
+                                                            </span>
+                                                        {% endfor %}
+                                                    {% else %}
+                                                        <span class="api-key-badge no-keys" title="Asigna este agente a una sesión en el tablero de sesiones">
+                                                            <i class="fas fa-unlink"></i> Sin sesiones asignadas
+                                                        </span>
+                                                    {% endif %}
+                                                </div>
+
                                                 {# Action buttons #}
                                                 <div class="agent-actions">
-                                                    <a href="javascript:void(0)" class="btn-ag proc"
-                                                       onclick="procesarAgente({{ l.pk }}, '{{ l.nombre|escapejs }}', this)"
-                                                       title="Extraer texto de archivos y preparar contexto estático">
-                                                        <i class="fas fa-cogs"></i> Procesar
-                                                    </a>
-                                                    <a href="javascript:void(0)" class="btn-ag view"
-                                                       onclick="verContexto({{ l.pk }}, '{{ l.nombre|escapejs }}')"
-                                                       title="Ver contexto, prompt completo y fuentes">
-                                                        <i class="fas fa-eye"></i> Ver contexto
+                                                    <a href="?action=procedimiento&id={{ l.pk }}" class="btn-ag edit">
+                                                        <i class="fas fa-edit"></i> Editar
                                                     </a>
                                                     {% if l.chat_url %}
                                                     <a href="{{ l.chat_url }}" class="btn-ag chat" target="_blank"
@@ -568,14 +129,58 @@
                                                         <i class="fas fa-comments"></i> Probar
                                                     </a>
                                                     {% endif %}
-                                                    <a href="?action=procedimiento&id={{ l.pk }}" class="btn-ag edit">
-                                                        <i class="fas fa-edit"></i> Editar
-                                                    </a>
-                                                    <a href="javascript:void(0)" class="btn-ag del"
-                                                       onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'deleteagente')"
-                                                       title="Eliminar agente">
-                                                        <i class="fas fa-trash"></i>
-                                                    </a>
+                                                    <div class="dropdown">
+                                                        <button type="button" class="btn-ag more"
+                                                                data-bs-toggle="dropdown" data-bs-strategy="fixed"
+                                                                aria-expanded="false" title="Más acciones">
+                                                            <i class="fas fa-ellipsis-h"></i>
+                                                        </button>
+                                                        <ul class="dropdown-menu dropdown-menu-end">
+                                                            <li>
+                                                                <a class="dropdown-item" href="javascript:void(0)"
+                                                                   onclick="procesarAgente({{ l.pk }}, '{{ l.nombre|escapejs }}', this)">
+                                                                    <i class="fas fa-cogs me-2 text-warning"></i> Procesar
+                                                                </a>
+                                                            </li>
+                                                            <li>
+                                                                <a class="dropdown-item" href="javascript:void(0)"
+                                                                   onclick="verContexto({{ l.pk }}, '{{ l.nombre|escapejs }}')">
+                                                                    <i class="fas fa-eye me-2 text-primary"></i> Ver contexto
+                                                                </a>
+                                                            </li>
+                                                            <li>
+                                                                <a class="dropdown-item" href="javascript:void(0)"
+                                                                   onclick="inspeccionarRag({{ l.pk }})">
+                                                                    <i class="fas fa-database me-2 text-info"></i> Inspeccionar RAG
+                                                                </a>
+                                                            </li>
+                                                            <li>
+                                                                <a class="dropdown-item" href="javascript:void(0)"
+                                                                   onclick="duplicarAgente({{ l.pk }}, '{{ l.nombre }}')">
+                                                                    <i class="fas fa-clone me-2 text-secondary"></i> Duplicar
+                                                                </a>
+                                                            </li>
+                                                            <li>
+                                                                <a class="dropdown-item" href="javascript:void(0)"
+                                                                   onclick="reprocesarRag({{ l.pk }}, '{{ l.nombre }}')">
+                                                                    <i class="fas fa-sync-alt me-2 text-secondary"></i> Reprocesar RAG
+                                                                </a>
+                                                            </li>
+                                                            <li>
+                                                                <a class="dropdown-item" href="javascript:void(0)"
+                                                                   onclick="evaluarAgente({{ l.pk }}, '{{ l.nombre }}')">
+                                                                    <i class="fas fa-vial me-2 text-success"></i> Evaluar
+                                                                </a>
+                                                            </li>
+                                                            <li><hr class="dropdown-divider"></li>
+                                                            <li>
+                                                                <a class="dropdown-item item-danger" href="javascript:void(0)"
+                                                                   onclick="eliminarajax({{ l.pk }}, '{{ l.nombre }}', 'deleteagente')">
+                                                                    <i class="fas fa-trash me-2"></i> Eliminar
+                                                                </a>
+                                                            </li>
+                                                        </ul>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -597,166 +202,21 @@
             </div>
         </div>
 
-        {# ── Tab API Keys ─────────────────────────────────────────────── #}
-        <div class="tab-pane" id="apikeys" role="tabpanel">
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-white border-bottom-0 d-flex justify-content-between align-items-center">
-                    <div>
-                        <h5 class="mb-0 text-primary"><i class="fas fa-key me-2"></i>APIs Keys AI</h5>
-                        <small class="text-muted">Credenciales para conectar con los proveedores de IA.</small>
-                        <p class="mb-0 mt-1">
-                            <a href="javascript:void(0)" class="small text-primary text-decoration-none"
-                               data-bs-toggle="modal" data-bs-target="#modalGuiaTokens">
-                                <i class="fas fa-book-open me-1"></i>Guía: ¿cómo obtener un token de Gemini, GPT o Claude?
-                            </a>
-                        </p>
-                    </div>
-                    <div class="d-flex gap-2 flex-wrap">
-                        <a href="javascript:void(0)" class="btn btn-sm btn-outline-primary"
-                           data-bs-toggle="modal" data-bs-target="#modalGuiaTokens"
-                           title="Tour para obtener API Keys de proveedores LLM">
-                            <i class="fas fa-route me-1"></i> Guía tokens
-                        </a>
-                        <a href="javascript:void(0)" class="btn btn-sm btn-outline-success" id="btnTestAllKeys"
-                           onclick="testAllApiKeys(this)"
-                           title="Probar todas las API Keys y ver cuales estan activas">
-                            <i class="fas fa-vials me-1"></i> Probar todas
-                        </a>
-                        <a href="javascript:void(0)" class="btn btn-sm btn-dark"
-                           onclick="formModal('', 'Agregar Api Key', 'addapikey')">
-                            <i class="fa fa-plus"></i> Api Key
-                        </a>
-                    </div>
+        <div id="apikeys" class="seccion-ia mb-4">
+            <div class="alert alert-info d-flex align-items-center gap-3 mb-0">
+                <i class="fa fa-key fa-2x"></i>
+                <div>
+                    <strong>Las API keys se administran en el Centro de IA.</strong><br>
+                    <small>Ahí se registran, se prueban y se define cuál vectoriza y cuál es la
+                           predeterminada de cada proveedor.</small>
                 </div>
-                <div class="card-body" id="bloque_apis_ia">
-                    <div class="card-body pt-0">
-                        {% if apis %}
-                        <div class="row g-3">
-                            {% for l in apis %}
-                            <div class="col-xl-4 col-lg-6 col-md-6" id="apikey-row-{{ l.pk }}">
-                                <div class="card apikey-card h-100 {% if not l.estado %}inactiva{% endif %}">
-                                    <div class="apikey-card-header provider-{{ l.proveedor }}">
-                                        <div class="apikey-icon">
-                                            <i class="fas fa-{% if l.proveedor == 2 %}gem{% elif l.proveedor == 3 %}robot{% else %}key{% endif %}"></i>
-                                        </div>
-                                        <div class="apikey-title-group">
-                                            <h6 class="mb-0">{{ l.alias|default:l.get_proveedor_display }}</h6>
-                                            <small class="apikey-provider">
-                                                {{ l.get_proveedor_display }}
-                                                {% if l.modelo %}
-                                                    · <code class="apikey-modelo-hdr" title="Modelo asignado"><i class="fas fa-microchip me-1"></i>{{ l.modelo }}</code>
-                                                {% else %}
-                                                    · <span class="apikey-modelo-hdr missing" title="Sin modelo asignado — usa el default del provider"><i class="fas fa-exclamation-triangle me-1"></i>sin modelo</span>
-                                                {% endif %}
-                                            </small>
-                                        </div>
-                                        <span class="apikey-estado badge {% if l.estado %}bg-success{% else %}bg-danger{% endif %}" id="badge-estado-{{ l.pk }}">
-                                            {{ l.estado|yesno:'Activa,Inactiva' }}
-                                        </span>
-                                    </div>
-                                    <div class="apikey-card-body">
-                                        <div class="apikey-info-row">
-                                            <span class="apikey-label"><i class="fas fa-microchip"></i> Modelo</span>
-                                            {% if l.modelo %}
-                                                <span class="apikey-modelo ok" title="Modelo asignado">
-                                                    <i class="fas fa-check-circle me-1"></i><code>{{ l.modelo }}</code>
-                                                </span>
-                                            {% else %}
-                                                <span class="apikey-modelo missing" title="No hay modelo asignado — usará el default del proveedor">
-                                                    <i class="fas fa-exclamation-triangle me-1"></i>Sin asignar <small class="ms-1">(usa default del provider)</small>
-                                                </span>
-                                            {% endif %}
-                                        </div>
-                                        <div class="apikey-info-row">
-                                            <span class="apikey-label"><i class="fas fa-key"></i> Key</span>
-                                            <code class="apikey-value" title="{{ l.descripcion }}">{{ l.descripcion|slice:":16" }}…{{ l.descripcion|slice:"-4:" }}</code>
-                                        </div>
-                                        <div class="apikey-error-container" id="apikey-error-{{ l.pk }}">
-                                            {% if l.msgerror %}
-                                            <div class="apikey-error">
-                                                <div class="apikey-error-head">
-                                                    <i class="fas fa-exclamation-triangle me-1"></i>
-                                                    <strong>Último error</strong>
-                                                    <span class="apikey-error-date ms-auto">
-                                                        {% if l.fecha_modificacion %}{{ l.fecha_modificacion|date:"d/m/Y H:i" }}{% else %}—{% endif %}
-                                                    </span>
-                                                    <button type="button" class="apikey-error-clear ms-1" title="Limpiar este error"
-                                                            onclick="limpiarErrorApiKey({{ l.pk }})">
-                                                        <i class="fas fa-times"></i>
-                                                    </button>
-                                                </div>
-                                                <div class="apikey-error-msg" title="{{ l.msgerror }}">{{ l.msgerror|truncatechars:120 }}</div>
-                                            </div>
-                                            {% endif %}
-                                        </div>
-                                        <div class="apikey-actions">
-                                            <button type="button" class="btn-apk test"
-                                                    onclick="testApiKey({{ l.pk }}, this)"
-                                                    title="Probar conectividad con el proveedor">
-                                                <i class="fas fa-vial"></i> Probar
-                                            </button>
-                                            <button type="button" class="btn-apk consumo"
-                                                    onclick="verConsumo({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display|escapejs }}')"
-                                                    title="Ver consumo de tokens">
-                                                <i class="fas fa-chart-bar"></i> Consumo
-                                            </button>
-                                            <button type="button"
-                                                    class="btn-apk {% if l.alerta_consumo and l.alerta_consumo.umbral_diario or l.alerta_consumo and l.alerta_consumo.umbral_mensual %}alertas-on{% else %}alertas{% endif %}"
-                                                    onclick="verAlerta({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display|escapejs }}')"
-                                                    title="Configurar alertas de consumo">
-                                                <i class="fas fa-bell"></i>
-                                                {% if l.alerta_consumo and l.alerta_consumo.umbral_diario or l.alerta_consumo and l.alerta_consumo.umbral_mensual %}Alertas ON{% else %}Alertas{% endif %}
-                                            </button>
-                                            <button type="button" class="btn-apk test"
-                                                    onclick="verDocsWebService('{{ l.webservice_token|default:''|escapejs }}', '{{ l.get_proveedor_display|escapejs }}', '{{ l.modelo|default:''|escapejs }}', {{ l.pk }})"
-                                                    title="Documentacion del WebService IA">
-                                                <i class="fas fa-code"></i> WebService
-                                            </button>
-                                            <button type="button" class="btn-apk edit"
-                                                    onclick="abrirGenerarAgenteIA({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display|escapejs }}')"
-                                                    title="Crear agente con IA asignado a esta API Key">
-                                                <i class="fas fa-wand-magic-sparkles"></i> Crear agente IA
-                                            </button>
-                                            <button type="button" class="btn-apk edit"
-                                                    onclick="formModal({{ l.pk }}, 'Editar {{ l }}', 'changeapikey')"
-                                                    title="Editar">
-                                                <i class="fas fa-edit"></i> Editar
-                                            </button>
-                                            {% if not l.estado %}
-                                            <button type="button" class="btn-apk reactivar"
-                                                    onclick="reactivarApiKey({{ l.pk }})"
-                                                    title="Reactivar">
-                                                <i class="fas fa-redo"></i>
-                                            </button>
-                                            {% endif %}
-                                            <button type="button" class="btn-apk del"
-                                                    onclick="eliminarajax({{ l.pk }}, '{{ l.alias|default:l.get_proveedor_display }}', 'deleteapikey')"
-                                                    title="Eliminar">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% else %}
-                        <div class="empty-state">
-                            <i class="fas fa-key"></i>
-                            <h4>Sin API Keys registradas</h4>
-                            <p class="mb-3">Agrega tu primera API Key de Gemini, OpenAI o Claude.</p>
-                            <button class="btn btn-primary" onclick="formModal('', 'Agregar Api Key', 'addapikey')">
-                                <i class="fas fa-plus me-2"></i>Crear primera API Key
-                            </button>
-                        </div>
-                        {% endif %}
-                    </div>
-                </div>
+                <a href="/crm/centro-ia/" class="btn btn-sm btn-primary ms-auto">
+                    <i class="fa fa-arrow-right me-1"></i>Ir al Centro de IA
+                </a>
             </div>
         </div>
     </div>
 
-    {# ── Modal consumo de tokens ──────────────────────────────────────── #}
     <div class="modal fade" id="modalConsumo" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
@@ -786,27 +246,58 @@
                     {# Tarjetas resumen #}
                     <div class="row g-3 mb-4" id="consumo-cards">
                         <div class="col-6 col-md-3">
-                            <div class="card border-0 bg-light text-center py-3">
+                            <div class="tile-metrica text-center py-3">
                                 <div class="h4 mb-0 text-primary fw-bold" id="c-llamadas">—</div>
                                 <div class="small text-muted mt-1">Llamadas al LLM</div>
                             </div>
                         </div>
                         <div class="col-6 col-md-3">
-                            <div class="card border-0 bg-light text-center py-3">
+                            <div class="tile-metrica text-center py-3">
                                 <div class="h4 mb-0 text-success fw-bold" id="c-total">—</div>
                                 <div class="small text-muted mt-1">Tokens totales</div>
                             </div>
                         </div>
                         <div class="col-6 col-md-3">
-                            <div class="card border-0 bg-light text-center py-3">
+                            <div class="tile-metrica text-center py-3">
                                 <div class="h4 mb-0 text-info fw-bold" id="c-entrada">—</div>
                                 <div class="small text-muted mt-1">Tokens prompt</div>
                             </div>
                         </div>
                         <div class="col-6 col-md-3">
-                            <div class="card border-0 bg-light text-center py-3">
+                            <div class="tile-metrica text-center py-3">
                                 <div class="h4 mb-0 text-warning fw-bold" id="c-salida">—</div>
                                 <div class="small text-muted mt-1">Tokens respuesta</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3">
+                            <div class="tile-metrica text-center py-3">
+                                <div class="h4 mb-0 text-danger fw-bold" id="c-costo">—</div>
+                                <div class="small text-muted mt-1">Costo estimado (USD)</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-12">
+                            <p class="small fw-semibold text-muted text-uppercase mb-2" style="letter-spacing:.05em">
+                                <i class="fas fa-dollar-sign me-1"></i>Costo por modelo (estimado según pricing del proveedor)
+                            </p>
+                            <div class="table-responsive" style="max-height:220px;overflow-y:auto">
+                                <table class="table table-sm table-hover">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th>Modelo</th>
+                                            <th class="text-end">Llamadas</th>
+                                            <th class="text-end">Tokens entrada</th>
+                                            <th class="text-end">Tokens salida</th>
+                                            <th class="text-end">Tokens total</th>
+                                            <th class="text-end">Costo USD</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="consumo-tbody-modelos">
+                                        <tr><td colspan="6" class="text-center text-muted py-3">Selecciona un rango y pulsa Consultar</td></tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
@@ -2535,6 +2026,222 @@
     let _consumoApikeyId = null;
     const _RUTA = '{{ request.path }}';
 
+    function duplicarAgente(pk, nombre) {
+        Swal.fire({
+            type: 'question',
+            title: 'Duplicar agente',
+            html: 'Se creará <b>' + nombre + ' (copia)</b> con toda su configuración, conocimiento, FAQs y herramientas.<br><small class="text-muted">El conocimiento se copia tal cual — sin gastar tokens de embeddings.</small>',
+            showCancelButton: true,
+            confirmButtonText: 'Duplicar',
+            cancelButtonText: 'Cancelar'
+        }).then(function (r) {
+            if (!r.value) return;
+            pantallaespera();
+            $.post(_RUTA, {
+                action: 'duplicar_agente', id: pk,
+                csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').first().val()
+            }, function (res) {
+                setTimeout($.unblockUI, 1);
+                const data = Array.isArray(res) ? res[0] : res;
+                if (data && !data.error) { location.reload(); }
+                else { alertaWarning((data && data.message) || 'No se pudo duplicar el agente.'); }
+            }, 'json').fail(function () {
+                setTimeout($.unblockUI, 1);
+                alertaWarning('Error de conexión al duplicar.');
+            });
+        });
+    }
+
+    function evaluarAgente(pk, nombre) {
+        pantallaespera();
+        $.get(_RUTA, { action: 'eval_datos', id: pk }, function (res) {
+            setTimeout($.unblockUI, 1);
+            if (!res.result) { alertaWarning(res.message || 'Error'); return; }
+            let html = '<div class="text-start small">';
+            if (res.historial && res.historial.length) {
+                html += '<div class="mb-2">Historial: ';
+                res.historial.forEach(function (h) {
+                    const col = h.score >= 7 ? 'success' : (h.score >= 5 ? 'warning' : 'danger');
+                    html += '<span class="badge bg-' + col + ' me-1" title="' + escHtml(h.fecha) + ' · ' + h.aprobadas + '/' + h.total + ' aprobadas">' + h.score + '</span>';
+                });
+                html += '</div>';
+            }
+            html += '<div class="fw-semibold mb-1">Preguntas de prueba (' + res.preguntas.length + ')</div>';
+            if (!res.preguntas.length) {
+                html += '<p class="text-muted">Sin preguntas aún — agrega la primera abajo.</p>';
+            } else {
+                html += '<ul class="mb-2">';
+                res.preguntas.forEach(function (p) {
+                    html += '<li>' + escHtml(p.pregunta) +
+                        (p.criterio ? ' <span class="text-muted">(' + escHtml(p.criterio) + ')</span>' : '') +
+                        ' <a href="javascript:void(0)" class="text-danger" onclick="evalPreguntaDelete(' + p.id + ',' + pk + ')" title="Quitar"><i class="fas fa-times"></i></a></li>';
+                });
+                html += '</ul>';
+            }
+            html += '<div class="mb-2">' +
+                '<input type="text" class="form-control form-control-sm mb-1" id="eval-pregunta" placeholder="Nueva pregunta de prueba, ej: ¿Cuánto cuesta la pizza familiar?">' +
+                '<input type="text" class="form-control form-control-sm mb-1" id="eval-criterio" placeholder="Criterio de éxito (opcional), ej: debe dar el precio exacto">' +
+                '<button class="btn btn-sm btn-outline-primary" onclick="evalPreguntaAdd(' + pk + ')"><i class="fas fa-plus me-1"></i>Agregar pregunta</button>' +
+            '</div>';
+            html += '</div>';
+            Swal.fire({
+                title: '🧪 Evaluación de ' + escHtml(res.agente),
+                html: html,
+                width: 680,
+                showCancelButton: true,
+                confirmButtonText: 'Ejecutar evaluación',
+                cancelButtonText: 'Cerrar'
+            }).then(function (r) {
+                if (r.value) evalEjecutar(pk, nombre);
+            });
+        }, 'json').fail(function () { setTimeout($.unblockUI, 1); alertaWarning('Error de conexión.'); });
+    }
+
+    function evalPreguntaAdd(pk) {
+        const pregunta = (document.getElementById('eval-pregunta').value || '').trim();
+        if (!pregunta) { return; }
+        $.post(_RUTA, {
+            action: 'eval_pregunta_save', agente_id: pk,
+            pregunta: pregunta, criterio: document.getElementById('eval-criterio').value || '',
+            csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').first().val()
+        }, function () { evaluarAgente(pk, ''); }, 'json');
+    }
+
+    function evalPreguntaDelete(id, pk) {
+        $.post(_RUTA, {
+            action: 'eval_pregunta_delete', id: id,
+            csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').first().val()
+        }, function () { evaluarAgente(pk, ''); }, 'json');
+    }
+
+    function evalEjecutar(pk, nombre) {
+        pantallaespera();
+        $.post(_RUTA, {
+            action: 'eval_ejecutar', id: pk,
+            csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').first().val()
+        }, function (res) {
+            setTimeout($.unblockUI, 1);
+            const data = Array.isArray(res) ? res[0] : res;
+            if (!data || data.error) { alertaWarning((data && data.message) || 'No se pudo ejecutar.'); return; }
+            const col = data.score >= 7 ? 'success' : (data.score >= 5 ? 'warning' : 'danger');
+            let html = '<div class="text-start small">' +
+                '<div class="mb-2"><span class="badge bg-' + col + '" style="font-size:1rem;">Score ' + data.score + '/10</span> ' +
+                '<span class="badge bg-secondary">' + data.aprobadas + '/' + data.total + ' aprobadas</span> ' +
+                '<span class="badge bg-light text-dark">' + fmtN(data.tokens) + ' tokens</span></div>';
+            (data.resultados || []).forEach(function (x) {
+                const icono = x.aprobada ? '<i class="fas fa-check-circle text-success me-1"></i>' : '<i class="fas fa-times-circle text-danger me-1"></i>';
+                html += '<div class="p-2 border rounded mb-1">' +
+                    '<b>' + icono + escHtml(x.pregunta) + '</b> <span class="badge bg-secondary">' + x.score + '/10</span>' +
+                    (x.inventa ? ' <span class="badge bg-danger">inventa</span>' : '') +
+                    (x.uso_datos ? ' <span class="badge bg-success">usa datos</span>' : ' <span class="badge bg-warning text-dark">sin datos</span>') +
+                    '<div class="mt-1" style="white-space:pre-wrap;max-height:90px;overflow:auto;">' + escHtml(x.respuesta) + '</div>' +
+                    (x.comentario ? '<div class="text-muted mt-1"><i class="fas fa-gavel me-1"></i>' + escHtml(x.comentario) + '</div>' : '') +
+                '</div>';
+            });
+            html += '</div>';
+            Swal.fire({ title: '🧪 Resultado de ' + escHtml(nombre || ''), html: html, width: 720, confirmButtonText: 'Cerrar' });
+        }, 'json').fail(function () { setTimeout($.unblockUI, 1); alertaWarning('Error de conexión.'); });
+    }
+
+    function reprocesarRag(pk, nombre) {
+        Swal.fire({
+            type: 'question',
+            title: 'Reprocesar conocimiento',
+            html: 'Se reconstruye el RAG de <b>' + nombre + '</b>: extracción de texto → fragmentación → embeddings → verificación → resumen del negocio (1 llamada LLM).<br><small class="text-muted">Puede tardar según la cantidad de documentos.</small>',
+            showCancelButton: true,
+            confirmButtonText: 'Reprocesar',
+            cancelButtonText: 'Cancelar'
+        }).then(function (r) {
+            if (!r.value) return;
+            pantallaespera();
+            $.post(_RUTA, {
+                action: 'reprocesar_rag', id: pk,
+                csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').first().val()
+            }, function (res) {
+                setTimeout($.unblockUI, 1);
+                const data = Array.isArray(res) ? res[0] : res;
+                if (!data || data.error) { alertaWarning((data && data.message) || 'No se pudo reprocesar.'); return; }
+                let html = '<div class="text-start small">';
+                html += '<div class="mb-2"><span class="badge bg-primary me-1">' + escHtml(data.modo || '') + '</span>';
+                if (data.chunks_total) html += '<span class="badge bg-secondary">' + data.chunks_total + ' fragmentos</span>';
+                html += '</div>';
+                (data.etapas || []).forEach(function (e) {
+                    const icono = e.ok ? '<i class="fas fa-check-circle text-success me-1"></i>' : '<i class="fas fa-times-circle text-danger me-1"></i>';
+                    html += '<div class="p-2 border rounded mb-1"><b>' + icono + escHtml(e.etapa) + '</b><br>' + escHtml(e.detalle) + '</div>';
+                });
+                html += '</div>';
+                Swal.fire({
+                    title: (data.ok ? '✅ ' : '⚠️ ') + 'Reproceso de ' + escHtml(nombre),
+                    html: html,
+                    width: 640,
+                    confirmButtonText: 'Cerrar'
+                });
+            }, 'json').fail(function () {
+                setTimeout($.unblockUI, 1);
+                alertaWarning('Error de conexión al reprocesar.');
+            });
+        });
+    }
+
+    function inspeccionarRag(pk, q) {
+        pantallaespera();
+        $.get(_RUTA, { action: 'rag_inspeccionar', id: pk, q: q || '' }, function (res) {
+            setTimeout($.unblockUI, 1);
+            if (!res.result) { alertaWarning(res.message || 'No se pudo inspeccionar.'); return; }
+            const esc = escHtml;
+            let html = '<div class="text-start small">';
+            html += '<div class="mb-2">' +
+                '<span class="badge bg-primary me-1">' + esc(res.modo) + '</span>' +
+                '<span class="badge bg-secondary me-1">' + fmtN(res.conocimiento.chunks_total) + ' fragmentos</span>' +
+                '<span class="badge bg-info me-1">' + fmtN(res.memoria.chunks_total) + ' memorias</span>' +
+                '<span class="badge bg-success me-1">' + fmtN(res.faqs_aprobadas) + ' FAQs</span>' +
+                '<span class="badge bg-light text-dark">' + fmtN(res.contexto_estatico_chars) + ' chars estáticos</span>' +
+            '</div>';
+            if (res.fuentes && res.fuentes.length) {
+                html += '<div class="fw-semibold mb-1">Fuentes de entrenamiento</div><ul class="mb-2">';
+                res.fuentes.forEach(function (f) {
+                    html += '<li>[' + esc(f.tipo) + '] ' + esc(f.archivo || f.enlace || f.descripcion || '—') + '</li>';
+                });
+                html += '</ul>';
+            }
+            if (res.errores_entrenamiento && res.errores_entrenamiento.length) {
+                html += '<div class="alert alert-warning py-2 px-2 mb-2"><b>⚠️ Errores del último entrenamiento</b><ul class="mb-0">';
+                res.errores_entrenamiento.forEach(function (e) { html += '<li>' + esc(e) + '</li>'; });
+                html += '</ul></div>';
+            }
+            html += '<div class="input-group input-group-sm mb-2">' +
+                '<input type="text" class="form-control" id="rag-q" value="' + esc(res.busqueda || '') + '" placeholder="Probar una búsqueda: ¿qué recupera el agente?">' +
+                '<button class="btn btn-primary" onclick="inspeccionarRag(' + pk + ', document.getElementById(\'rag-q\').value)">Buscar</button>' +
+            '</div>';
+            const titulo = res.busqueda ? 'Fragmentos recuperados para la búsqueda' : 'Muestra del conocimiento indexado';
+            html += '<div class="fw-semibold mb-1">' + titulo + '</div>';
+            if (!res.conocimiento.muestra.length) {
+                html += '<p class="text-muted">Sin fragmentos' + (res.embeddings_ok ? '' : ' (la API Key del agente no soporta embeddings)') + '.</p>';
+            } else {
+                res.conocimiento.muestra.forEach(function (c) {
+                    html += '<div class="p-2 border rounded mb-1 bg-light" style="white-space:pre-wrap;max-height:120px;overflow:auto;">' + esc(c.contenido) + '</div>';
+                });
+            }
+            if (res.memoria.muestra && res.memoria.muestra.length) {
+                html += '<div class="fw-semibold mb-1 mt-2">Memoria de conversaciones previas</div>';
+                res.memoria.muestra.slice(0, 3).forEach(function (c) {
+                    html += '<div class="p-2 border rounded mb-1" style="background:#eef7ff;white-space:pre-wrap;max-height:100px;overflow:auto;">' + esc(c.contenido) + '</div>';
+                });
+            }
+            html += '</div>';
+            Swal.fire({
+                title: '🧠 Conocimiento de ' + esc(res.agente),
+                html: html,
+                width: 720,
+                showConfirmButton: true,
+                confirmButtonText: 'Cerrar'
+            });
+        }, 'json').fail(function () {
+            setTimeout($.unblockUI, 1);
+            alertaWarning('Error de conexión.');
+        });
+    }
+
     function fmtN(n) { return Number(n || 0).toLocaleString('es-EC'); }
 
     function cargarConsumo() {
@@ -2553,6 +2260,23 @@
             document.getElementById('c-total').textContent    = fmtN(res.totales.total);
             document.getElementById('c-entrada').textContent  = fmtN(res.totales.entrada);
             document.getElementById('c-salida').textContent   = fmtN(res.totales.salida);
+            document.getElementById('c-costo').textContent    = '$' + Number(res.totales.costo_usd || 0).toFixed(4);
+
+            const tbodyModelos = document.getElementById('consumo-tbody-modelos');
+            if (!res.por_modelo || !res.por_modelo.length) {
+                tbodyModelos.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Sin datos</td></tr>';
+            } else {
+                tbodyModelos.innerHTML = res.por_modelo.map(m =>
+                    `<tr>
+                        <td><code>${escHtml(m.modelo)}</code></td>
+                        <td class="text-end">${fmtN(m.llamadas)}</td>
+                        <td class="text-end">${fmtN(m.entrada)}</td>
+                        <td class="text-end">${fmtN(m.salida)}</td>
+                        <td class="text-end fw-semibold">${fmtN(m.total)}</td>
+                        <td class="text-end fw-bold text-danger">$${Number(m.costo_usd || 0).toFixed(4)}</td>
+                    </tr>`
+                ).join('');
+            }
 
             // Ocultar panel detalle al recargar
             $('#consumo-detalle-panel').hide();
@@ -2931,6 +2655,12 @@
     </script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            // Agentes y Api Keys dejaron de ser pestañas: ahora son secciones
+            // apiladas. Se descarta el valor guardado para que a quien tenía
+            // una de esas dos activa no le quede apuntando a algo inexistente.
+            if (['#agentes', '#apikeys'].includes(localStorage.getItem('mainTab'))) {
+                localStorage.removeItem('mainTab');
+            }
             const mainTab = localStorage.getItem('mainTab');
             const subTab  = localStorage.getItem('subTab');
             if (mainTab) {
@@ -2944,7 +2674,7 @@
             document.querySelectorAll('.nav-tabs > .nav-item > .nav-link').forEach(tab => {
                 tab.addEventListener('shown.bs.tab', function (e) {
                     const href = e.target.getAttribute('href');
-                    if (['#perfil','#mantenimientos','#preguntas','#agentes','#apikeys'].includes(href)) {
+                    if (['#perfil','#mantenimientos','#preguntas'].includes(href)) {
                         localStorage.setItem('mainTab', href);
                     } else if (['#productos','#servicios'].includes(href)) {
                         localStorage.setItem('subTab', href);

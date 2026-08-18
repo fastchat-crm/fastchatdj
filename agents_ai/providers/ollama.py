@@ -5,6 +5,8 @@ apuntando el base_url a Ollama. El conteo de tokens viene en formato OpenAI est�
 
 Nota: Ollama Cloud NO provee embeddings con la cuenta actual; el RAG usa embeddings
 de otro proveedor (Gemini). Por eso get_embeddings lanza NotImplementedError.
+
+Para Ollama auto-hospedado (modelos locales), ver providers/ollama_local.py.
 """
 import requests
 
@@ -20,7 +22,8 @@ class OllamaProvider(BaseProvider):
     def default_model(self) -> str:
         return "gpt-oss:20b"
 
-    def get_llm(self, apikey, model_name, max_output_tokens, temperature=0.1):
+    def get_llm(self, apikey, model_name, max_output_tokens, temperature=0.1, base_url=None,
+                razonamiento=True):
         # ChatOpenAI moderno (langchain_openai) — soporta tool-calling (bind_tools)
         # y parsea bien las respuestas. El de langchain_community está deprecado y
         # NO soporta bind_tools con Ollama.
@@ -39,9 +42,9 @@ class OllamaProvider(BaseProvider):
             extra_body={"options": {"num_predict": max_output_tokens}},
         )
 
-    def get_embeddings(self, apikey):
+    def get_embeddings(self, apikey, base_url=None):
         raise NotImplementedError(
-            "Ollama Cloud no provee embeddings. Para el RAG de un agente Ollama, "
+            "Ollama Cloud no provee embeddings. Para el RAG de un agente Ollama Cloud, "
             "configura embeddings de Gemini (el vectorstore usa un proveedor de embeddings aparte)."
         )
 

@@ -1,0 +1,28 @@
+.seg-bloque {
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 14px;
+    background: var(--bs-tertiary-bg, #f8f9fa);
+}
+
+.seg-bloque-titulo {
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+}
+
+.seg-regla-campo {
+    margin-bottom: 8px;
+}
+
+.seg-preview-box {
+    border: 1px dashed var(--bs-border-color, #ced4da);
+    border-radius: 8px;
+    padding: 12px;
+    min-height: 60px;
+}
+
+.seg-select-multiple {
+    min-height: 110px;
+}

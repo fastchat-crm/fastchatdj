@@ -67,6 +67,18 @@ def campanasView(request):
         )[:200]
         return render(request, 'whatsapp/campanas/detalle.html', data)
 
+    # Reporte de leads por campaña (sistema + campañas de Meta)
+    if action == 'reporte':
+        from .funciones_campanas_reporte import reporte_leads_context
+        data['titulo'] = 'Reporte de leads por campaña'
+        data['sesiones'] = _sesiones_del_usuario(request.user)
+        data.update(reporte_leads_context(request, data['sesiones']))
+        return render(request, 'whatsapp/campanas/reporte.html', data)
+
+    if action == 'reporte_detalle':
+        from .funciones_campanas_reporte import detalle_leads_campana
+        return detalle_leads_campana(request, _sesiones_del_usuario(request.user))
+
     # ===== LISTADO CON FILTROS =====
     filtros = Q(sesion__usuario=request.user, status=True)
 
@@ -107,6 +119,8 @@ def campanasView(request):
     data['etiquetas'] = EtiquetaContacto.objects.filter(
         status=True, usuario_creacion=request.user,
     )
+    from .models import SegmentoContacto
+    data['segmentos'] = SegmentoContacto.objects.filter(status=True).order_by('nombre')
     # Solo exponemos proveedores que el usuario realmente tiene conectados.
     # Mapeamos proveedor → canal del form (Baileys/Meta mandan por "whatsapp";
     # Instagram/Messenger son sus propios canales).
@@ -135,6 +149,11 @@ def campanasView(request):
 
 def _manejar_post(request):
     action = request.POST.get('action')
+    # Fuera de la transacción: consulta la Marketing API de Meta, no escribe
+    # nada del dominio salvo la caché de nombres de campañas.
+    if action == 'sync_campanas_meta':
+        from .funciones_campanas_reporte import sincronizar_campanas_meta
+        return sincronizar_campanas_meta(request, _sesiones_del_usuario(request.user))
     try:
         with transaction.atomic():
             if action == 'add':
@@ -153,6 +172,7 @@ def _manejar_post(request):
                     plantilla_id=int(request.POST['plantilla_id']) if request.POST.get('plantilla_id') else None,
                     throttle_por_minuto=int(request.POST.get('throttle_por_minuto', 20) or 20),
                     canales=request.POST.getlist('canales[]') or [],
+                    segmento_id=int(request.POST['segmento_id']) if request.POST.get('segmento_id') else None,
                     estado='borrador',
                     usuario_creacion=request.user,
                 )
