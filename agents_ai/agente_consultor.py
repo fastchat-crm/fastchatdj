@@ -38,19 +38,20 @@ class ConsultaResultado:
     tokens_salida: int = 0
     tokens_total: int = 0
     sin_datos: bool = False  # True cuando el agente no tiene documentos cargados
+    prompt_enviado: str = ''  # prompt COMPLETO ensamblado que se envió al LLM (para traza)
 
 
 # ---------------------------------------------------------------------------
 # Parámetros de control de tokens
 # ---------------------------------------------------------------------------
-_FAISS_K           = 5      # chunks a recuperar
+_FAISS_K           = 3      # chunks a recuperar (bajado 5->3 para reducir tokens de entrada)
 _FAISS_FETCH_K     = 20     # candidatos pre-MMR
-_MAX_CONTEXT_CHARS = 4_000  # techo del contexto FAISS para consultas específicas
+_MAX_CONTEXT_CHARS = 2_500  # techo del contexto FAISS (bajado 4000->2500 para reducir entrada)
 _MAX_STATIC_CHARS  = 1_200  # máx chars del contexto estático en Modo B (suplemento)
-_HISTORY_TURNS     = 5      # turnos de historial (5 turnos = 10 mensajes) — suficiente para continuidad típica
+_HISTORY_TURNS     = 3      # turnos de historial (bajado 5->3; evita inflar el prompt en charlas largas)
 _USER_SNIPPET      = 150    # chars por mensaje de usuario en historial
 _AI_SNIPPET        = 400    # chars por respuesta IA en historial
-_MAX_OUTPUT_TOKENS = 3000   # tokens de salida — suficiente para menús completos con pizzas/precios
+_MAX_OUTPUT_TOKENS = 1200   # tope de salida (bajado 3000->1200; corta runaways de respuestas)
 _TOPIC_ANCHOR_CHARS = 180   # chars del primer mensaje sustantivo como ancla de tema
 # Para consultas amplias en Modo A (sin FAISS) se envía el contexto_estatico completo sin cap
 
@@ -1117,7 +1118,7 @@ class AgenteConsultor:
         return ConsultaResultado(
             respuesta=respuesta, fin_detectado=fin_detectado,
             tokens_entrada=t_in, tokens_salida=t_out, tokens_total=t_in + t_out,
-            sin_datos=_sin_datos,
+            sin_datos=_sin_datos, prompt_enviado=prompt_final,
         )
 
     # ------------------------------------------------------------------
@@ -1334,6 +1335,7 @@ class AgenteConsultor:
             respuesta=respuesta, fin_detectado=fin_detectado,
             tokens_entrada=t_in_acc, tokens_salida=t_out_acc,
             tokens_total=t_in_acc + t_out_acc, sin_datos=_sin_datos,
+            prompt_enviado=prompt_final,
         )
 
     def _incrementar_hits_faqs(self) -> None:
@@ -1384,5 +1386,6 @@ class AgenteConsultor:
                 respuesta=reemplazo, fin_detectado=resultado.fin_detectado,
                 tokens_entrada=resultado.tokens_entrada, tokens_salida=resultado.tokens_salida,
                 tokens_total=resultado.tokens_total, sin_datos=resultado.sin_datos,
+                prompt_enviado=getattr(resultado, 'prompt_enviado', ''),
             )
         return resultado

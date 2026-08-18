@@ -188,3 +188,159 @@ def api_cliente_cedula(request, cedula):
         return JsonResponse(r.json(), status=r.status_code, safe=False)
     except Exception as exc:
         return JsonResponse({"error": str(exc)}, status=502)
+
+
+def documentacion_view(request):
+    """Página estática que explica cómo funciona el cotizador y qué tecnologías usa."""
+    return render(request, 'cotizador/documentacion.html')
+
+
+# ===========================================================================
+# TRAZA / OBSERVABILIDAD DE CONSUMO IA
+# Muestra por cada request al LLM: qué prompt se ejecutó, tokens in/out,
+# modelo, origen y COSTO en USD (crm.costos_ia). Más totales día/mes.
+# ===========================================================================
+def traza_view(request):
+    """Página HTML de la traza de consumo (tabla + totales, auto-refresh vía api_traza)."""
+    return render(request, 'cotizador/traza.html')
+
+
+def api_traza(request):
+    """JSON con los últimos consumos de tokens + costo USD y totales día/mes."""
+    from django.conf import settings
+    from django.utils import timezone
+    from crm.models import ConsumoTokenIA
+    from crm import costos_ia
+
+    limite = int(request.GET.get('limit') or 60)
+    limite = max(1, min(limite, 200))
+
+    ahora = timezone.now()
+    if settings.USE_TZ:
+        ahora = timezone.localtime(ahora)
+    hoy = ahora.date()
+    inicio_mes = hoy.replace(day=1)
+
+    def _fmt_fecha(dt):
+        if settings.USE_TZ and timezone.is_aware(dt):
+            dt = timezone.localtime(dt)
+        return dt.strftime('%Y-%m-%d %H:%M:%S')
+
+    # Últimos N registros (detalle)
+    qs = (ConsumoTokenIA.objects
+          .select_related('agente', 'apikey')
+          .order_by('-fecha')[:limite])
+    filas = []
+    for c in qs:
+        costo = costos_ia.costo_desde_consumo(c)
+        costo_ref = costos_ia.costo_referencia_usd(c.tokens_entrada, c.tokens_salida)
+        filas.append({
+            'id': c.id,
+            'fecha': _fmt_fecha(c.fecha),
+            'origen': c.get_origen_display() if c.origen else (c.origen or '—'),
+            'origen_key': c.origen or '',
+            'modelo': c.modelo or '—',
+            'agente': c.agente.nombre if c.agente_id else '—',
+            'prompt_preview': c.prompt_preview or '',
+            'tokens_in': c.tokens_entrada,
+            'tokens_out': c.tokens_salida,
+            'tokens_total': c.tokens_total,
+            'costo_usd': round(costo, 6),
+            'costo_ref_usd': round(costo_ref, 6),
+            'incluido': costos_ia.en_suscripcion(c.modelo) or costos_ia.es_local(c.modelo),
+        })
+
+    # Totales del día y del mes (iterando; costo depende del modelo por fila)
+    def _acumular(desde):
+        tot = {'requests': 0, 'tokens': 0, 'costo': 0.0, 'costo_ref': 0.0, 'por_modelo': {}, 'por_origen': {}}
+        for c in ConsumoTokenIA.objects.filter(fecha__date__gte=desde).only(
+                'modelo', 'origen', 'tokens_entrada', 'tokens_salida', 'tokens_total'):
+            costo = costos_ia.costo_desde_consumo(c)
+            costo_ref = costos_ia.costo_referencia_usd(c.tokens_entrada, c.tokens_salida)
+            tot['requests'] += 1
+            tot['tokens'] += c.tokens_total or 0
+            tot['costo'] += costo
+            tot['costo_ref'] += costo_ref
+            m = c.modelo or '—'
+            o = c.get_origen_display() if c.origen else '—'
+            pm = tot['por_modelo'].setdefault(m, {'tokens': 0, 'costo': 0.0, 'costo_ref': 0.0, 'requests': 0})
+            pm['tokens'] += c.tokens_total or 0; pm['costo'] += costo; pm['costo_ref'] += costo_ref; pm['requests'] += 1
+            po = tot['por_origen'].setdefault(o, {'tokens': 0, 'costo': 0.0, 'costo_ref': 0.0, 'requests': 0})
+            po['tokens'] += c.tokens_total or 0; po['costo'] += costo; po['costo_ref'] += costo_ref; po['requests'] += 1
+        tot['costo'] = round(tot['costo'], 6)
+        tot['costo_ref'] = round(tot['costo_ref'], 6)
+        for d in (tot['por_modelo'], tot['por_origen']):
+            for v in d.values():
+                v['costo'] = round(v['costo'], 6)
+                v['costo_ref'] = round(v['costo_ref'], 6)
+        return tot
+
+    mes = _acumular(inicio_mes)
+    hoy_t = _acumular(hoy)
+    suscripcion = float(getattr(costos_ia, 'SUSCRIPCION_MENSUAL_USD', 0.0) or 0.0)
+    amortizado = round(suscripcion / mes['requests'], 6) if mes['requests'] else 0.0
+    ahorro_mes = round(mes['costo_ref'] - suscripcion, 6)  # equivalente nube - lo que pagas fijo
+
+    return JsonResponse({
+        'ok': True,
+        'generado': ahora.strftime('%Y-%m-%d %H:%M:%S'),
+        'facturacion': {
+            'tipo': 'suscripcion_fija',
+            'suscripcion_mensual_usd': round(suscripcion, 2),
+            'costo_amortizado_por_request_usd': amortizado,
+            'equivalente_nube_mes_usd': mes['costo_ref'],
+            'ahorro_vs_nube_mes_usd': ahorro_mes,
+            'modelo_referencia': getattr(costos_ia, 'MODELO_REFERENCIA', ''),
+        },
+        'hoy': hoy_t,
+        'mes': mes,
+        'ultimos': filas,
+    })
+
+
+def api_traza_detalle(request, cid):
+    """Detalle COMPLETO de un request de consumo: qué enviamos (mensaje + prompt
+    ensamblado), qué retornó el LLM, tokens y costo."""
+    from django.conf import settings
+    from django.utils import timezone
+    from crm.models import ConsumoTokenIA
+    from crm import costos_ia
+
+    try:
+        c = ConsumoTokenIA.objects.select_related('agente', 'apikey', 'conversacion').get(pk=cid)
+    except ConsumoTokenIA.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': 'No encontrado'}, status=404)
+
+    f = c.fecha
+    if settings.USE_TZ and timezone.is_aware(f):
+        f = timezone.localtime(f)
+
+    proveedor_map = {2: 'Gemini', 3: 'OpenAI', 4: 'Claude', 5: 'Ollama'}
+    prov = ''
+    try:
+        prov = proveedor_map.get(getattr(c.apikey, 'proveedor', None), '')
+    except Exception:
+        prov = ''
+
+    return JsonResponse({
+        'ok': True,
+        'id': c.id,
+        'fecha': f.strftime('%Y-%m-%d %H:%M:%S'),
+        'origen': c.get_origen_display() if c.origen else (c.origen or '—'),
+        'modelo': c.modelo or '—',
+        'proveedor': prov or '—',
+        'agente': c.agente.nombre if c.agente_id else '—',
+        'conversacion': str(c.conversacion) if c.conversacion_id else '',
+        'tokens_in': c.tokens_entrada,
+        'tokens_out': c.tokens_salida,
+        'tokens_total': c.tokens_total,
+        'costo_usd': round(costos_ia.costo_desde_consumo(c), 6),
+        'costo_ref_usd': round(costos_ia.costo_referencia_usd(c.tokens_entrada, c.tokens_salida), 6),
+        'incluido': costos_ia.en_suscripcion(c.modelo) or costos_ia.es_local(c.modelo),
+        # Lo "todito":
+        'mensaje_usuario': c.mensaje_usuario or '',
+        'prompt_preview': c.prompt_preview or '',
+        'prompt_full': c.prompt_full or '',
+        'respuesta_full': c.respuesta_full or '',
+        'tiene_full': bool(c.prompt_full or c.respuesta_full),
+    })

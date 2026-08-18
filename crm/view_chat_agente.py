@@ -24,6 +24,15 @@ import logging
 _logger = logging.getLogger(__name__)
 
 
+def _costo_usd_seguro(modelo, tokens_in, tokens_out):
+    """Costo estimado en USD (nunca relanza; 0.0 si falla)."""
+    try:
+        from crm.costos_ia import costo_usd
+        return round(costo_usd(modelo, tokens_in, tokens_out), 6)
+    except Exception:
+        return 0.0
+
+
 def _registrar_consumo_tokens(respuesta_llm, apikey_obj, agente=None, modelo='',
                               conversacion=None, origen='chat_crm', prompt_preview=''):
     """Extrae tokens de la respuesta LangChain y crea ConsumoTokenIA + verifica alertas."""
@@ -214,6 +223,9 @@ def chat_agente_view(request, agente_enc_id):
                         modelo=consultor.model_name,
                         origen='chat_crm',
                         prompt_preview=(pregunta or '')[:300],
+                        prompt_full=getattr(resultado, 'prompt_enviado', ''),
+                        respuesta_full=getattr(resultado, 'respuesta', ''),
+                        mensaje_usuario=(pregunta or ''),
                     )
                     verificar_alerta_consumo(apikey_obj, resultado.tokens_total)
                 except Exception:
@@ -245,6 +257,7 @@ def chat_agente_view(request, agente_enc_id):
                     'tokens_in': resultado.tokens_entrada,
                     'tokens_out': resultado.tokens_salida,
                     'tokens_total': resultado.tokens_total,
+                    'costo_usd': _costo_usd_seguro(consultor.model_name, resultado.tokens_entrada, resultado.tokens_salida),
                     'modelo': consultor.model_name,
                     'proveedor': {2: 'Gemini', 3: 'OpenAI', 4: 'Claude', 5: 'Ollama'}.get(apikey_obj.proveedor, 'LLM'),
                     'caracteres_respuesta': len(resultado.respuesta or ''),

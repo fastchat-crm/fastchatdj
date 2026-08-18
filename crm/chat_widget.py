@@ -184,11 +184,27 @@ def widget_mensaje_view(request):
     except Exception:
         logger.exception('chat-widget: captura de lead falló (no crítico)')
 
+    try:
+        from crm import costos_ia as _cia
+        _costo_val = round(_cia.costo_usd(model_name, tokens.get('entrada', 0), tokens.get('salida', 0)), 6)
+        _costo_ref = round(_cia.costo_referencia_usd(tokens.get('entrada', 0), tokens.get('salida', 0)), 6)
+        _incluido = _cia.en_suscripcion(model_name) or _cia.es_local(model_name)
+        _modelo_ref = getattr(_cia, 'MODELO_REFERENCIA', '')
+    except Exception:
+        _costo_val = _costo_ref = 0.0
+        _incluido = False
+        _modelo_ref = ''
+
     return _cors(JsonResponse({
         'ok': True,
         'respuesta': respuesta,
         'session_id': session_id or '',
         'tokens': tokens,
+        'modelo': model_name,
+        'costo_usd': _costo_val,
+        'costo_ref_usd': _costo_ref,
+        'incluido': _incluido,
+        'modelo_ref': _modelo_ref,
     }), request)
 
 
@@ -238,7 +254,8 @@ _WIDGET_JS = r"""
     titulo:S.getAttribute('data-titulo') || 'Asistente IA',
     color: S.getAttribute('data-color') || '#1b6ec2',
     bienvenida: S.getAttribute('data-bienvenida') || '¡Hola! ¿En qué puedo ayudarte?',
-    abierto: S.getAttribute('data-abierto') === 'true'
+    abierto: S.getAttribute('data-abierto') === 'true',
+    trazaUrl: S.getAttribute('data-traza-url') || ''
   };
   if (!cfg.key) { console.warn('[chat-widget] falta data-embed-key'); return; }
 
@@ -289,7 +306,12 @@ _WIDGET_JS = r"""
    + '.cww-in{flex:1;border:1px solid #d6e0ec;border-radius:22px;padding:10px 14px;font-size:14px;outline:none;resize:none;max-height:90px;font-family:inherit;}'
    + '.cww-send{border:none;color:#fff;width:42px;height:42px;border-radius:50%;cursor:pointer;font-size:17px;flex-shrink:0;}'
    + '.cww-send:disabled{opacity:.5;cursor:default;}'
-   + '.cww-cred{text-align:center;font-size:10px;color:#a7b4c4;padding:4px;background:#fff;}';
+   + '.cww-cred{text-align:center;font-size:10px;color:#a7b4c4;padding:4px;background:#fff;}'
+   + '.cww-badge{font-size:10.5px;color:#8a99ad;margin:-3px 6px 9px 8px;line-height:1.35;}'
+   + '.cww-badge b{color:#5a6b80;font-weight:700;} .cww-badge .free{color:#16a34a;font-weight:700;}'
+   + '.cww-badge a{color:#1b6ec2;text-decoration:none;font-weight:600;} .cww-badge a:hover{text-decoration:underline;}'
+   + '.cww-trz{background:rgba(255,255,255,.22);border:none;color:#fff;font-size:14px;cursor:pointer;margin-left:auto;border-radius:8px;padding:3px 8px;}'
+   + '.cww-trz:hover{background:rgba(255,255,255,.38);}';
   var st=document.createElement('style'); st.textContent=css; document.head.appendChild(st);
 
   var root=document.createElement('div'); root.className='cww'; root.innerHTML=''
@@ -298,7 +320,8 @@ _WIDGET_JS = r"""
    +   '<div class="cww-hd" style="background:'+cfg.color+'">'
    +     '<div class="cww-av">🤖</div>'
    +     '<div><div class="cww-t">'+esc(cfg.titulo)+'</div><div class="cww-s">En línea</div></div>'
-   +     '<button class="cww-x" aria-label="Cerrar">×</button>'
+   +     (cfg.trazaUrl ? '<button class="cww-trz" title="Ver traza tecnica: prompt, tokens y costo">🔍 traza</button>' : '')
+   +     '<button class="cww-x" aria-label="Cerrar" style="margin-left:'+(cfg.trazaUrl?'8px':'auto')+'">×</button>'
    +   '</div>'
    +   '<div class="cww-body"></div>'
    +   '<div class="cww-ft">'
@@ -311,7 +334,9 @@ _WIDGET_JS = r"""
 
   var bt=root.querySelector('.cww-bt'), panel=root.querySelector('.cww-panel'),
       body=root.querySelector('.cww-body'), input=root.querySelector('.cww-in'),
-      send=root.querySelector('.cww-send'), cerrar=root.querySelector('.cww-x');
+      send=root.querySelector('.cww-send'), cerrar=root.querySelector('.cww-x'),
+      trz=root.querySelector('.cww-trz');
+  if(trz){ trz.addEventListener('click', function(){ window.open(cfg.trazaUrl,'_blank','noopener'); }); }
   var bienvenidaMostrada=false;
 
   function scroll(){ body.scrollTop=body.scrollHeight; }
@@ -320,6 +345,20 @@ _WIDGET_JS = r"""
     var b=document.createElement('div'); b.className='cww-b';
     if(quien==='u'){ b.style.background=cfg.color; b.textContent=texto; } else { b.innerHTML=md(texto); }
     w.appendChild(b); body.appendChild(w); scroll(); return b;
+  }
+  function badge(d){
+    try{
+      var tk=d.tokens||{}, tot=tk.total||0, ent=tk.entrada||0, sal=tk.salida||0;
+      var costo=(typeof d.costo_usd==='number')?d.costo_usd:0;
+      var ref=(typeof d.costo_ref_usd==='number')?d.costo_ref_usd:0;
+      var costoTxt = d.incluido
+        ? '<span class="free">$0 (incluido en plan)</span>' + (ref>0 ? ' · ≈$'+ref.toFixed(5)+' en '+esc(d.modelo_ref||'nube') : '')
+        : ('$'+costo.toFixed(6));
+      var txt='⚙️ <b>'+tot+'</b> tokens · in '+ent+'/out '+sal+(d.modelo?(' · '+esc(d.modelo)):'')+' · '+costoTxt;
+      if(cfg.trazaUrl) txt+=' · <a href="'+cfg.trazaUrl+'" target="_blank" rel="noopener">ver traza ↗</a>';
+      var el=document.createElement('div'); el.className='cww-badge'; el.innerHTML=txt;
+      body.appendChild(el); scroll();
+    }catch(e){}
   }
   function typing(){
     var w=document.createElement('div'); w.className='cww-msg a'; w.setAttribute('data-typing','1');
@@ -347,7 +386,7 @@ _WIDGET_JS = r"""
       body:JSON.stringify({embed_key:cfg.key,mensaje:mensajeReal,session_id:sesion,lead_context:leadContext})})
      .then(function(r){return r.json();})
      .then(function(d){ t.remove();
-        if(d && d.ok){ burbuja(d.respuesta||'',''); }
+        if(d && d.ok){ burbuja(d.respuesta||'',''); badge(d); }
         else { burbuja((d&&d.error)||'No pude responder ahora. Intenta de nuevo.',''); }
      })
      .catch(function(){ t.remove(); burbuja('Error de conexión. Intenta de nuevo.',''); })

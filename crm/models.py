@@ -1007,6 +1007,18 @@ class ConsumoTokenIA(models.Model):
         verbose_name='Preview del prompt',
         help_text='Primeros 300 chars del mensaje/pregunta enviada al LLM.',
     )
+    prompt_full = models.TextField(
+        blank=True, default='', verbose_name='Prompt completo enviado al LLM',
+        help_text='Prompt ensamblado real (system + RAG + historial + mensaje) enviado al modelo.',
+    )
+    respuesta_full = models.TextField(
+        blank=True, default='', verbose_name='Respuesta completa del LLM',
+        help_text='Texto completo devuelto por el modelo para este request.',
+    )
+    mensaje_usuario = models.TextField(
+        blank=True, default='', verbose_name='Mensaje del usuario',
+        help_text='Lo que el usuario/cliente envió (sin el andamiaje del prompt).',
+    )
 
     class Meta:
         verbose_name = 'Consumo de Tokens IA'
