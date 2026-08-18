@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cómo funciona el Cotizador — Documentación técnica</title>
+    <style>
+        :root{--azul:#0b2a4a;--azul2:#1b6ec2;--cyan:#27c2d8;--bg:#f4f7fb;--ok:#16a34a;--code:#0f2233;}
+        *{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Roboto,Arial,sans-serif;}
+        body{background:var(--bg);color:#13293d;line-height:1.6;}
+        header{background:linear-gradient(135deg,var(--azul),var(--azul2));color:#fff;padding:34px 20px;}
+        .wrap{max-width:1000px;margin:0 auto;padding:0 16px;}
+        header h1{font-size:28px;font-weight:800;} header h1 span{color:var(--cyan);}
+        header p{opacity:.92;margin-top:8px;max-width:720px;}
+        .back{display:inline-block;margin-top:14px;color:#fff;background:rgba(255,255,255,.15);
+              padding:8px 16px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;}
+        .back:hover{background:rgba(255,255,255,.28);}
+        .panel{background:#fff;border-radius:14px;box-shadow:0 6px 24px rgba(13,42,74,.08);
+               padding:26px 28px;margin:22px auto;max-width:1000px;}
+        h2{color:var(--azul);font-size:22px;margin-bottom:6px;border-left:5px solid var(--cyan);padding-left:12px;}
+        h2 .n{color:var(--azul2);font-weight:900;margin-right:8px;}
+        h3{color:var(--azul2);font-size:17px;margin:18px 0 6px;}
+        p{margin:8px 0;} ul{margin:8px 0 8px 22px;} li{margin:5px 0;}
+        code{background:#eef4fb;color:var(--azul);padding:2px 7px;border-radius:6px;font-family:Consolas,Monaco,monospace;font-size:13.5px;}
+        pre{background:var(--code);color:#e6f1ff;padding:16px;border-radius:10px;overflow-x:auto;margin:12px 0;
+            font-family:Consolas,Monaco,monospace;font-size:13px;line-height:1.5;}
+        pre .k{color:#7fd3ff;} pre .c{color:#7fae7f;} pre .s{color:#f6c177;}
+        table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;}
+        th,td{border:1px solid #e0e8f2;padding:9px 12px;text-align:left;vertical-align:top;}
+        th{background:#eef4fb;color:var(--azul);font-weight:700;}
+        tr:nth-child(even) td{background:#f9fbfe;}
+        .badge{display:inline-block;background:#eef4fb;color:var(--azul2);border-radius:20px;
+               padding:4px 12px;font-size:13px;margin:3px 5px 3px 0;font-weight:600;border:1px solid #d9e6f4;}
+        .flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:14px 0;}
+        .step{background:#f0f8ff;border:1px solid #cfe4f7;border-radius:10px;padding:10px 14px;font-size:13.5px;font-weight:600;color:var(--azul);}
+        .arrow{color:var(--azul2);font-weight:900;font-size:18px;}
+        .note{background:#fff8e6;border-left:4px solid #f0b429;padding:12px 16px;border-radius:8px;margin:12px 0;font-size:14px;}
+        .ok{background:#eafaf0;border-left:4px solid var(--ok);padding:12px 16px;border-radius:8px;margin:12px 0;font-size:14px;}
+        .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;margin:12px 0;}
+        .box{background:#f7fafd;border:1px solid #e6edf5;border-radius:12px;padding:16px;}
+        .box h4{color:var(--azul2);font-size:15px;margin-bottom:6px;}
+        .box small{color:#678;} .box code{font-size:12.5px;}
+        footer{text-align:center;color:#89a;padding:26px;font-size:13px;}
+        .toc{columns:2;font-size:14px;} .toc a{color:var(--azul2);text-decoration:none;} .toc a:hover{text-decoration:underline;}
+        @media(max-width:640px){.toc{columns:1;}}
+    </style>
+</head>
+<body>
+<header>
+    <div class="wrap">
+        <h1>Cómo funciona el <span>Cotizador Médico</span></h1>
+        <p>Documentación técnica: arquitectura, flujo de datos, motor tarifario, endpoints y tecnologías usadas por <code>/cotizador/</code>.</p>
+        <a class="back" href="/cotizador/" target="_blank" rel="noopener">← Abrir el cotizador</a>
+        <a class="back" href="/cotizador/traza/" target="_blank" rel="noopener" style="background:rgba(39,194,216,.28);">📊 Traza de consumo IA (tokens + costo)</a>
+    </div>
+</header>
+
+<div class="panel">
+    <h2><span class="n">§</span>Contenido</h2>
+    <div class="toc">
+        <a href="#resumen">1. Resumen en una frase</a><br>
+        <a href="#stack">2. Tecnologías (stack)</a><br>
+        <a href="#flujo">3. Flujo de una cotización</a><br>
+        <a href="#motor">4. El motor tarifario</a><br>
+        <a href="#modelo">5. Modelo de datos</a><br>
+        <a href="#endpoints">6. Endpoints (API)</a><br>
+        <a href="#cedula">7. Consulta por cédula</a><br>
+        <a href="#chat">8. Integración con el chatbot</a><br>
+        <a href="#archivos">9. Dónde está cada cosa</a><br>
+        <a href="#plataforma">10. Arquitectura de la plataforma</a><br>
+        <a href="#ia">11. Capa de IA (agentes y proveedores)</a><br>
+        <a href="#rag">12. RAG: FAISS + Weaviate</a><br>
+        <a href="#memoria">13. Memoria de conversación</a><br>
+        <a href="#servicios">14. Servicios aparte (infra)</a><br>
+        <a href="#tokens">15. Contabilidad de tokens y costo</a><br>
+        <a href="#optim">16. Cómo optimizar el consumo</a><br>
+    </div>
+</div>
+
+<div class="panel" id="resumen">
+    <h2><span class="n">1</span>Resumen en una frase</h2>
+    <p>El cotizador es una <b>app de Django</b> llamada <code>cotizador</code> que, a partir de una <b>edad + género</b>
+    (o una cédula que autocompleta esos datos), consulta unas tablas de tarifas en la base de datos y muestra
+    <b>tarjetas comparativas</b> con la prima mensual exacta de cada plan médico. El mismo cálculo lo reutilizan el
+    chatbot y (a futuro) WhatsApp.</p>
+    <div class="ok"><b>Idea clave:</b> no hay precios fijos en el código. Todo — rangos de edad, tarifas y coberturas —
+    vive en la base de datos y se administra desde el panel. El código solo <i>consulta y suma</i>.</div>
+</div>
+
+<div class="panel" id="stack">
+    <h2><span class="n">2</span>Tecnologías (stack)</h2>
+    <h3>Backend</h3>
+    <span class="badge">Python 3</span>
+    <span class="badge">Django 4.2</span>
+    <span class="badge">Django REST framework</span>
+    <span class="badge">PostgreSQL (psycopg2)</span>
+    <span class="badge">Channels + Daphne (ASGI)</span>
+    <span class="badge">Redis (channel layer)</span>
+    <span class="badge">openpyxl / pandas (carga Excel)</span>
+    <span class="badge">requests (APIs externas)</span>
+    <h3>Frontend (de esta página)</h3>
+    <span class="badge">HTML + CSS puro (sin framework)</span>
+    <span class="badge">JavaScript vanilla</span>
+    <span class="badge">fetch() → API JSON</span>
+    <h3>Infraestructura</h3>
+    <span class="badge">Nginx (proxy inverso, puerto 80)</span>
+    <span class="badge">Daphne vía socket unix</span>
+    <span class="badge">systemd: fastchatdj.service</span>
+    <div class="note"><b>Cómo llega la petición:</b>
+        <div class="flow">
+            <span class="step">Navegador</span><span class="arrow">→</span>
+            <span class="step">Nginx :80 (2.24.107.52)</span><span class="arrow">→</span>
+            <span class="step">unix socket</span><span class="arrow">→</span>
+            <span class="step">Daphne / Django</span><span class="arrow">→</span>
+            <span class="step">app cotizador</span><span class="arrow">→</span>
+            <span class="step">PostgreSQL</span>
+        </div>
+    </div>
+</div>
+
+<div class="panel" id="flujo">
+    <h2><span class="n">3</span>Flujo de una cotización</h2>
+    <ol style="margin-left:22px;">
+        <li>El usuario entra a <code>/cotizador/</code>. La vista <code>cotizador_view</code> renderiza la plantilla
+            y calcula la <b>empresa por defecto</b> (la primera con planes y con un agente IA activo).</li>
+        <li>El usuario escribe <b>cédula</b> (opcional) o directamente <b>edad + género</b>.</li>
+        <li>Si usa cédula → el JS llama a <code>/cotizador/api/cliente/&lt;cedula&gt;/</code> para autocompletar edad y sexo.</li>
+        <li>El JS llama a <code>/cotizador/api/cotizar/?edad=..&amp;genero=..</code>.</li>
+        <li>La vista <code>api_cotizar</code> recorre todos los planes activos de la empresa y, para cada uno,
+            pide al motor la prima en variante <b>Básico</b> y <b>Plus</b>.</li>
+        <li>Devuelve un JSON con planes + primas + coberturas. El JS dibuja las tarjetas.</li>
+        <li>Al pulsar <b>“Elegir este plan”</b>, se abre el chatbot con el contexto de la cotización ya cargado.</li>
+    </ol>
+</div>
+
+<div class="panel" id="motor">
+    <h2><span class="n">4</span>El motor tarifario</h2>
+    <p>Vive en <code>cotizador/motor_tarifario.py</code>. Es compartido por cotizador, chatbot y WhatsApp.
+    La regla de negocio: <b>la prima depende exclusivamente de edad + género + rango etario + plan + variante dental</b>.</p>
+    <h3>Cómo calcula</h3>
+    <ul>
+        <li><b>Rango etario:</b> para una edad, busca el tramo <code>(X-Y)</code> que la contiene. El límite superior es
+            <b>exclusivo</b> — la edad 45 cae en <code>(45-50)</code>, no en <code>(40-45)</code>; solo el último tramo es inclusivo.</li>
+        <li><b>Tarifa individual:</b> con <code>(plan, vigencia, rango, género, variante_dental)</code> busca <b>una</b>
+            fila en la tabla <code>Tarifa</code> y toma su <code>prima_mensual</code>. Si no existe, lanza
+            <code>TarifaNoEncontrada</code> (la tarjeta muestra “—”).</li>
+        <li><b>Grupos:</b> para “titular + 1” o “familia”, la prima total es la <b>suma</b> de las primas individuales.</li>
+        <li><b>Vigencia:</b> siempre usa la <code>VigenciaTarifaria</code> activa de la empresa (versionado de tarifarios).</li>
+    </ul>
+<pre><span class="c"># Esencia del cálculo (motor_tarifario.py)</span>
+<span class="k">def</span> cotizar(plan, integrantes, variante_dental=<span class="s">'basico'</span>):
+    vigencia = vigencia_activa(plan.empresa)
+    total = Decimal(<span class="s">'0.00'</span>)
+    <span class="k">for</span> integrante <span class="k">in</span> integrantes:
+        rango  = rango_para_edad(plan.empresa, integrante[<span class="s">'edad'</span>])
+        tarifa = Tarifa.objects.get(plan, vigencia, rango, genero, variante_dental)
+        total += tarifa.prima_mensual        <span class="c"># suma por integrante</span>
+    <span class="k">return</span> total</pre>
+    <div class="note"><b>Multi-tenant:</b> cada <code>Plan</code> pertenece a una empresa (<code>PerfilNegocioIA</code>),
+    así el mismo motor sirve a varias aseguradoras.</div>
+</div>
+
+<div class="panel" id="modelo">
+    <h2><span class="n">5</span>Modelo de datos</h2>
+    <p>Definido en <code>cotizador/models.py</code>. Tablas principales:</p>
+    <table>
+        <tr><th>Modelo</th><th>Qué guarda</th></tr>
+        <tr><td><code>VigenciaTarifaria</code></td><td>Versión del tarifario (ej. “Tarifario 2026”). Solo una activa por empresa.</td></tr>
+        <tr><td><code>RangoEtario</code></td><td>Tramos de edad: (0-5), (5-10)… (70-100).</td></tr>
+        <tr><td><code>Plan</code></td><td>Plan comercial: nombre, suma asegurada, deducible, modalidad, nivel de referencia.</td></tr>
+        <tr><td><code>Tarifa</code> ★</td><td>Tabla núcleo: prima mensual por (plan, rango, género, variante dental, vigencia).</td></tr>
+        <tr><td><code>Cobertura</code></td><td>Filas del cuadro de coberturas (ambulatoria, hospitalaria, maternidad…).</td></tr>
+        <tr><td><code>Carencia</code></td><td>Períodos de carencia por tipo.</td></tr>
+        <tr><td><code>Exclusion</code> / <code>BeneficioAdicional</code></td><td>Exclusiones y beneficios extra por plan.</td></tr>
+        <tr><td><code>ProcedimientoDental</code></td><td>Procedimientos de la red dental (básica/plus) y su copago.</td></tr>
+    </table>
+    <div class="ok"><b>Carga inicial:</b> el comando <code>python manage.py import_excel_vidabuena</code> importa todo
+    desde <code>PLANES INDIVIDUALES VIDA SANA 2026.xlsx</code> (carpeta <code>cotizador/data/</code>).</div>
+</div>
+
+<div class="panel" id="endpoints">
+    <h2><span class="n">6</span>Endpoints (API)</h2>
+    <p>Definidos en <code>cotizador/urls.py</code>, bajo el prefijo <code>/cotizador/</code>:</p>
+    <table>
+        <tr><th>Ruta</th><th>Vista</th><th>Qué hace</th></tr>
+        <tr><td><code>/cotizador/</code></td><td><code>cotizador_view</code></td><td>Página HTML con las tarjetas.</td></tr>
+        <tr><td><code>/cotizador/api/cotizar/</code></td><td><code>api_cotizar</code></td><td>JSON con planes + prima Básico/Plus. Params: <code>edad</code>, <code>genero</code>, o <code>integrantes=[…]</code>.</td></tr>
+        <tr><td><code>/cotizador/api/cliente/&lt;cedula&gt;/</code></td><td><code>api_cliente_cedula</code></td><td>Autocompleta datos del titular a partir de la cédula.</td></tr>
+    </table>
+    <h3>Ejemplo de respuesta de <code>api_cotizar</code></h3>
+<pre>{
+  <span class="s">"empresa_id"</span>: 1,
+  <span class="s">"integrantes"</span>: [{<span class="s">"edad"</span>: 28, <span class="s">"genero"</span>: <span class="s">"M"</span>}],
+  <span class="s">"planes"</span>: [
+    {
+      <span class="s">"plan"</span>: <span class="s">"Protección 10.000"</span>,
+      <span class="s">"suma_asegurada"</span>: <span class="s">"10000.00"</span>,
+      <span class="s">"prima_basico"</span>: <span class="s">"38.50"</span>,
+      <span class="s">"prima_plus"</span>: <span class="s">"45.20"</span>,
+      <span class="s">"coberturas"</span>: [ … ]
+    }
+  ]
+}</pre>
+</div>
+
+<div class="panel" id="cedula">
+    <h2><span class="n">7</span>Consulta por cédula</h2>
+    <p><code>api_cliente_cedula</code> consulta dos fuentes externas con <b>respaldo automático</b>:</p>
+    <div class="grid2">
+        <div class="box"><h4>1) Broktech (preferida)</h4>
+            <small><code>POST broktech.com.ec/endpoints/vidanueva/cliente-cedula/</code> con auth básica
+            (credenciales en variables de entorno <code>VIDANUEVA_USER</code> / <code>VIDANUEVA_PASS</code>).</small></div>
+        <div class="box"><h4>2) Cotimédica (respaldo)</h4>
+            <small>Si Broktech falla o no responde JSON válido, usa <code>fguerrero.mgaseguros.ec/cotimedica-api/</code>
+            — la misma que usa el chatbot.</small></div>
+    </div>
+    <p>La respuesta se <b>normaliza</b> siempre a <code>{ok, fuente, data:{edad, sexo, nombres, …}}</code> sin importar
+    cuál fuente respondió.</p>
+</div>
+
+<div class="panel" id="chat">
+    <h2><span class="n">8</span>Integración con el chatbot</h2>
+    <p>Al elegir un plan, el JS abre el widget de chat (<code>/chat-widget/embed.js</code>) y le inyecta un
+    <b>prefacio con contexto</b>: perfil del cliente, todos los planes cotizados con sus precios exactos y el plan elegido.
+    Así el asesor IA no vuelve a pedir la cédula y puede comparar planes y responder dudas usando el RAG.</p>
+    <p>El agente se resuelve en <code>cotizador_view</code>: se prefiere el agente de la empresa que tenga una
+    herramienta <code>cotizar*</code> activa; si no, el primer agente activo. Se puede forzar con <code>?agente_id=</code>
+    o <code>?empresa_id=</code> para montar cotizadores por cliente.</p>
+</div>
+
+<div class="panel" id="archivos">
+    <h2><span class="n">9</span>Dónde está cada cosa</h2>
+    <table>
+        <tr><th>Archivo</th><th>Rol</th></tr>
+        <tr><td><code>cotizador/urls.py</code></td><td>Rutas de la app.</td></tr>
+        <tr><td><code>cotizador/views.py</code></td><td>Vistas: página + APIs cotizar/cédula.</td></tr>
+        <tr><td><code>cotizador/motor_tarifario.py</code></td><td>Cálculo de primas (núcleo).</td></tr>
+        <tr><td><code>cotizador/models.py</code></td><td>Tablas: planes, tarifas, coberturas…</td></tr>
+        <tr><td><code>cotizador/templates/cotizador/cotizador.html</code></td><td>Frontend del cotizador.</td></tr>
+        <tr><td><code>cotizador/management/commands/import_excel_vidabuena.py</code></td><td>Carga inicial desde Excel.</td></tr>
+        <tr><td><code>fastchatdj/urls.py</code> (línea 115)</td><td>Engancha <code>/cotizador/</code> al proyecto.</td></tr>
+        <tr><td><code>/etc/nginx/sites-available/fastchatdj</code></td><td>Proxy Nginx → Daphne.</td></tr>
+    </table>
+    <a class="back" href="/cotizador/" target="_blank" rel="noopener" style="background:var(--azul2);">← Volver al cotizador</a>
+</div>
+
+
+<div class="panel" id="plataforma">
+    <h2><span class="n">10</span>Arquitectura de la plataforma completa</h2>
+    <p>El cotizador es <b>una</b> app dentro de un proyecto Django mucho más grande (<code>fastchatdj</code>):
+    un CRM con chatbot IA, WhatsApp, voz y campañas. Apps principales por tamaño:</p>
+    <table>
+        <tr><th>App</th><th>Rol</th></tr>
+        <tr><td><code>crm</code> (~23k líneas)</td><td>Núcleo: agentes IA, API keys, conversaciones, chat de prueba, consumo de tokens, alertas.</td></tr>
+        <tr><td><code>whatsapp</code> (~16k)</td><td>Integración WhatsApp (webhooks, sesiones, envío/recepción, plantillas).</td></tr>
+        <tr><td><code>agents_ai</code> (~6k)</td><td>Cerebro IA: consultor, proveedores LLM, RAG, memoria, resumidor, auditor, humanización.</td></tr>
+        <tr><td><code>seguridad</code> / <code>autenticacion</code></td><td>Permisos, roles, usuarios.</td></tr>
+        <tr><td><code>agenda</code> / <code>meta</code> / <code>voz</code></td><td>Turnos, integración Meta, transcripción de audio (Whisper).</td></tr>
+        <tr><td><code>cotizador</code> (~1.2k)</td><td>Este cotizador médico.</td></tr>
+        <tr><td><code>cron_jobs</code></td><td>Tareas programadas (campañas, recordatorios, reconexión de sesiones).</td></tr>
+    </table>
+    <div class="flow">
+        <span class="step">Navegador / WhatsApp</span><span class="arrow">→</span>
+        <span class="step">Nginx</span><span class="arrow">→</span>
+        <span class="step">Daphne (ASGI)</span><span class="arrow">→</span>
+        <span class="step">Django + Channels</span><span class="arrow">→</span>
+        <span class="step">agents_ai (LLM)</span><span class="arrow">→</span>
+        <span class="step">OpenAI / Gemini / Claude / Ollama</span>
+    </div>
+    <p>La base de datos es <b>PostgreSQL</b>; <b>Redis</b> es el channel layer de WebSockets (chat en vivo).</p>
+</div>
+
+<div class="panel" id="ia">
+    <h2><span class="n">11</span>Capa de IA — agentes y proveedores</h2>
+    <p>Todo el LLM vive en <code>agents_ai/</code>. Es <b>multi-proveedor</b>: cada agente elige su proveedor y modelo
+    a través de una <code>ApiKeyIA</code>. Los proveedores están en <code>agents_ai/providers/</code>:</p>
+    <table>
+        <tr><th>Código</th><th>Proveedor</th><th>Modelo por defecto</th><th>SDK</th></tr>
+        <tr><td>2</td><td>Google Gemini</td><td><code>gemini-2.5-flash</code></td><td>langchain-google-genai</td></tr>
+        <tr><td>3</td><td>OpenAI</td><td><code>gpt-4o-mini</code></td><td>langchain-openai</td></tr>
+        <tr><td>4</td><td>Anthropic Claude</td><td>(configurable)</td><td>langchain-anthropic</td></tr>
+        <tr><td>5</td><td>Ollama (local)</td><td><code>gpt-oss:20b</code></td><td>ChatOpenAI apuntando a Ollama</td></tr>
+    </table>
+    <h3>Agentes especializados</h3>
+    <ul>
+        <li><b>Consultor</b> (<code>agente_consultor.py</code>): el chatbot principal. Decide si buscar en RAG,
+            arma el prompt con contexto + historial, llama al LLM y puede usar <i>tools</i> (buscar productos, cotizar).</li>
+        <li><b>Resumidor</b> (<code>agente_resumidor.py</code>): resume la conversación y analiza sentimiento — mantiene
+            la memoria compacta (menos tokens).</li>
+        <li><b>Auditor</b> (<code>auditor_agente.py</code>): evalúa la calidad de las respuestas del agente.</li>
+        <li><b>Acciones IA</b> (<code>ai_actions/</code>): generación de plantillas, campañas WhatsApp, pipelines.</li>
+    </ul>
+    <div class="note">El cotizador y el chatbot <b>comparten el mismo motor tarifario</b>: cuando el cliente elige un plan,
+    el JS le pasa al chatbot el contexto con precios exactos, y el consultor usa el RAG solo para las coberturas.</div>
+</div>
+
+<div class="panel" id="rag">
+    <h2><span class="n">12</span>RAG — dos sistemas complementarios</h2>
+    <div class="grid2">
+        <div class="box"><h4>FAISS (local, en proceso)</h4>
+            <small>En <code>agente_consultor.py</code>. Índice por agente en disco, cargado en RAM con
+            <b>cache por mtime</b>. Recupera <code>k=5</code> chunks (de <code>fetch_k=20</code> candidatos) con
+            <b>MMR</b> (diversidad), deduplica y corta el contexto a <b>4.000 chars</b>. Embeddings del proveedor del agente.</small></div>
+        <div class="box"><h4>Weaviate (multi-tenant)</h4>
+            <small>En <code>weaviate_rag.py</code>. Una colección <code>Conocimiento</code> con <b>1 tenant por empresa</b>
+            (aísla el conocimiento de cada cliente). <code>vectorizer=none</code>: los embeddings los genera
+            <b>Gemini</b> (<code>text-embedding-004 / gemini-embedding-001</code>) y se insertan junto al objeto —
+            así Weaviate no consume CPU/RAM vectorizando. Conexión local <code>127.0.0.1</code> con API key.</small></div>
+    </div>
+    <h3>¿De dónde saca el RAG su información? (fuente del conocimiento)</h3>
+    <p>El conocimiento NO está en el código: lo carga cada cliente desde el panel <b>“Mi Entrenamiento”</b>
+    (<code>crm/view_mientrenamiento.py</code>), y de ahí se indexa al RAG del agente. Fuentes posibles:</p>
+    <table>
+        <tr><th>Fuente</th><th>Cómo entra</th><th>Dónde termina</th></tr>
+        <tr><td><b>Documentos subidos</b> (PDF, DOCX, TXT)</td><td>Acción <code>subir_documento</code>: se extrae el texto y se trocea (<code>load_and_split</code>).</td><td>Weaviate (tenant del agente) · o FAISS si es muy grande.</td></tr>
+        <tr><td><b>Textos / descripciones</b> del panel</td><td>Se escriben a mano como fuentes del agente (<code>build_from_string</code>).</td><td>Weaviate + contexto estático.</td></tr>
+        <tr><td><b>Datos del negocio</b> (productos, planes, centros)</td><td>Comandos <code>indexar_conocimiento</code> / <code>indexar_centros</code>.</td><td>Weaviate (colección <code>Conocimiento</code>).</td></tr>
+    </table>
+    <p>El pipeline al indexar: <b>texto → troceo en chunks → embeddings (Gemini) → se guardan en Weaviate</b> junto con
+    metadatos <code>content</code>, <code>source</code> (de qué documento salió), <code>tipo</code> y <code>categoria</code>.
+    Cada agente vive en su propio <b>tenant</b> (<code>agente_&lt;id&gt;</code>), así el conocimiento de un cliente nunca se mezcla con otro.</p>
+    <div class="note"><b>Enrutado inteligente:</b> documentos <b>grandes</b> → FAISS local + contexto estático;
+    fuentes normales → Weaviate multi-tenant. Al elegir el RAG, el consultor recupera solo los chunks relevantes a la
+    pregunta (no todo el documento) — por eso responde coberturas exactas sin inflar el prompt.</div>
+    <div class="ok"><b>En este servidor</b> el agente activo (id 22) usa <b>RAG Weaviate</b> (tenant <code>agente_22</code>)
+    y el LLM se sirve vía <b>Ollama Cloud (ollama.com) con API key y suscripción fija mensual</b> (<code>gemma4:31b</code>, <code>ministral-3:14b</code>). Por eso el costo <b>por token es $0 (incluido en el plan)</b> y la traza valora el consumo con el <b>equivalente en la nube</b>.</div>
+
+    <h3>Indexación</h3>
+    <p>Comandos de management: <code>indexar_conocimiento</code> (base de conocimiento) e <code>indexar_centros</code>.
+    Tras reindexar se llama <code>invalidate_vectorstore_cache()</code> para forzar recarga del FAISS.</p>
+    <div class="ok"><b>Ahorro de tokens en RAG:</b> el consultor <b>evita el LLM por completo</b> en saludos y confirmaciones
+    (“hola”, “ok”, “gracias”) con regex, y salta la búsqueda vectorial cuando no aporta.</div>
+</div>
+
+<div class="panel" id="memoria">
+    <h2><span class="n">13</span>Memoria de conversación</h2>
+    <p>Implementada en <code>agents_ai/memoria_django.py</code> como <code>DjangoChatMessageHistory</code>
+    (interfaz de LangChain) respaldada por la tabla <code>MessageStore</code> (<code>session_id</code>, <code>role</code>, <code>content</code>).</p>
+    <ul>
+        <li>Guarda cada mensaje humano/IA por <code>session_id</code>; cachea la lista en memoria durante el request.</li>
+        <li>El consultor solo inyecta los <b>últimos 5 turnos</b> (10 mensajes), recortando cada mensaje de usuario a
+            150 chars y cada respuesta IA a 400 chars — memoria suficiente sin inflar el prompt.</li>
+        <li>El <b>Resumidor</b> comprime conversaciones largas en un resumen, para no arrastrar todo el historial.</li>
+    </ul>
+</div>
+
+<div class="panel" id="servicios">
+    <h2><span class="n">14</span>Servicios aparte (infraestructura)</h2>
+    <table>
+        <tr><th>Servicio</th><th>Qué hace</th><th>Dónde</th></tr>
+        <tr><td><b>Nginx</b></td><td>Proxy inverso :80, sirve <code>/static/</code> y <code>/media/</code>, pasa el resto a Daphne.</td><td><code>/etc/nginx/sites-available/fastchatdj</code></td></tr>
+        <tr><td><b>Daphne (ASGI)</b></td><td>Servidor de aplicación (HTTP + WebSockets) vía socket unix.</td><td><code>systemd: fastchatdj.service</code></td></tr>
+        <tr><td><b>PostgreSQL</b></td><td>Base de datos principal.</td><td><code>psycopg2</code></td></tr>
+        <tr><td><b>Redis</b></td><td>Channel layer de Channels (WebSockets del chat en vivo).</td><td><code>channels_redis</code></td></tr>
+        <tr><td><b>Weaviate</b></td><td>Base vectorial del RAG multi-tenant.</td><td><code>127.0.0.1</code> + <code>/home/weaviate/.env</code></td></tr>
+        <tr><td><b>Ollama</b> (opcional)</td><td>LLM local (proveedor 5), coste $0 en tokens.</td><td>host local</td></tr>
+        <tr><td><b>Cron jobs</b></td><td>Campañas, recordatorios de turnos, mensajes programados, reconexión de sesiones (cada 5 min), aprender de conversaciones.</td><td><code>cron_jobs/</code></td></tr>
+    </table>
+    <div class="note"><b>Variables de entorno</b> del servicio: <code>/etc/fastchatdj.env</code> (credenciales, API keys, Redis, DB).</div>
+</div>
+
+<div class="panel" id="tokens">
+    <h2><span class="n">15</span>Contabilidad de tokens y costo</h2>
+    <p>Cada llamada al LLM registra un <code>ConsumoTokenIA</code> con: tokens de entrada/salida/total, modelo, origen
+    (whatsapp, chat_crm, webservice, resumidor, sentimiento, auditor…), agente, conversación y un <b>preview del prompt</b> (300 chars).</p>
+    <ul>
+        <li><b>Registro:</b> <code>log_consumo()</code> (en <code>ai_actions/base.py</code>) y
+            <code>_registrar_consumo_tokens()</code> (chat CRM) extraen los tokens del <code>usage_metadata</code> del proveedor.</li>
+        <li><b>Alertas:</b> <code>AlertaConsumoIA</code> define umbrales diario/mensual por API key; al superarlos notifica.</li>
+        <li><b>Costo en USD (nuevo):</b> <code>crm/costos_ia.py</code> traduce tokens → dinero. <b>Ojo:</b> este servidor usa
+            <b>Ollama Cloud</b>, que <b>NO se cobra por tokens</b> sino con <b>tarifa plana</b> (Free $0 · Pro $20/mes · Max $100/mes)
+            y límites de uso por <b>GPU-time</b> — sesión (reset 5h) y semanal (reset 7 días), no un tope de tokens. Por eso el costo
+            real por token es $0 y se muestra el <b>equivalente en la nube</b>. Para proveedores de pago por token (OpenAI/Gemini/Claude) sí se calcula el costo real.</li>
+    </ul>
+    <div class="ok"><b>Panel de traza:</b> abre <a href="/cotizador/traza/" target="_blank" rel="noopener"><b>/cotizador/traza/</b></a>
+    para ver, en vivo, cada request: prompt ejecutado, tokens in/out y <b>costo en USD</b>, con totales del día y del mes por modelo y por origen.</div>
+</div>
+
+<div class="panel" id="optim">
+    <h2><span class="n">16</span>Cómo optimizar el consumo (playbook)</h2>
+    <h3>A. Lo que el sistema YA hace para gastar menos</h3>
+    <table>
+        <tr><th>Técnica</th><th>Efecto</th><th>Dónde</th></tr>
+        <tr><td>Corto-circuito de saludos/acks por regex</td><td>“hola/ok/gracias” <b>no llaman al LLM</b> → 0 tokens.</td><td><code>_es_saludo</code>, <code>_es_ack_simple</code></td></tr>
+        <tr><td>Contexto RAG con techo</td><td>Máx 4.000 chars de FAISS; estático máx 1.200.</td><td><code>_MAX_CONTEXT_CHARS</code></td></tr>
+        <tr><td>Historial recortado</td><td>Solo 5 turnos; usuario 150 / IA 400 chars.</td><td><code>_HISTORY_TURNS</code></td></tr>
+        <tr><td>Salida acotada</td><td><code>max_tokens=3000</code> en el consultor.</td><td><code>_MAX_OUTPUT_TOKENS</code></td></tr>
+        <tr><td>MMR + dedup de chunks</td><td>Menos chunks redundantes en el prompt.</td><td>FAISS MMR</td></tr>
+        <tr><td>Cache de FAISS por mtime</td><td>No recarga el índice en cada request.</td><td><code>_get_vectorstore_cached</code></td></tr>
+        <tr><td>Resumen de conversación</td><td>Comprime historial largo → menos tokens de entrada.</td><td><code>AgenteResumidor</code></td></tr>
+        <tr><td>Weaviate <code>vectorizer=none</code></td><td>Embeddings fuera de Weaviate → menos CPU/RAM.</td><td><code>weaviate_rag.py</code></td></tr>
+        <tr><td>Imports diferidos de proveedores</td><td>No carga SDKs que no se usan.</td><td><code>providers/</code></td></tr>
+    </table>
+    <h3>B. Palancas para gastar aún menos</h3>
+    <ul>
+        <li><b>Elige el modelo correcto por tarea.</b> El costo por millón varía ~40× entre <code>gpt-4o-mini</code> y <code>gpt-4</code>.
+            Usa modelos mini/flash para chat general y reserva los grandes solo para tareas complejas. <b>Ollama = $0</b> para lo interno.</li>
+        <li><b>Baja <code>max_tokens</code> de salida</b> donde no se necesiten respuestas largas (la salida suele costar 3-5× la entrada).</li>
+        <li><b>Reduce el historial</b> (de 5 a 3 turnos) en flujos transaccionales; resume antes si la conversación crece.</li>
+        <li><b>Sube el umbral de RAG</b>: recupera k=3 en vez de 5 si las respuestas ya son buenas; menos chunks = menos entrada.</li>
+        <li><b>Prompt del sistema conciso.</b> El <code>prompt_template</code> del agente se envía en <b>cada</b> mensaje: cada palabra fija se paga siempre.</li>
+        <li><b>Cachea respuestas frecuentes</b> (FAQ, menú, coberturas) para no repreguntar al LLM lo mismo.</li>
+        <li><b>Usa embeddings pequeños</b> (<code>text-embedding-3-small</code>) para el RAG: 5-6× más baratos que los grandes.</li>
+        <li><b>Vigila la traza y las alertas:</b> configura <code>AlertaConsumoIA</code> (umbral diario/mensual) y revisa
+            <a href="/cotizador/traza/" target="_blank" rel="noopener">/cotizador/traza/</a> para detectar orígenes o agentes que disparan el gasto.</li>
+    </ul>
+    <div class="note"><b>Regla práctica:</b> el costo ≈ (tokens_entrada × precio_in + tokens_salida × precio_out). Los tres
+    factores que más mueven la aguja: <b>modelo</b>, <b>tamaño del prompt fijo</b> y <b>longitud de la respuesta</b>.</div>
+
+    <h3>C. Optimización aplicada — resultados reales (ago 2026)</h3>
+    <p>Diagnóstico sobre 200 requests: <b>89% de los tokens eran de ENTRADA</b> (ratio 8×), media 5.255 tok/request,
+    con un <b>runaway de salida de 33.343 tokens</b>. Se aplicó:</p>
+    <table>
+        <tr><th>Cambio</th><th>Dónde</th><th>Efecto</th></tr>
+        <tr><td>Fix tope de salida (Ollama ignoraba <code>max_tokens</code>)</td><td><code>providers/ollama.py</code> → <code>num_predict</code> vía <code>extra_body</code></td><td>Eliminó runaways de 33k</td></tr>
+        <tr><td>RAG capado: <code>cfg_faiss_k 8→4</code>, <code>cfg_max_context_chars 4000→2500</code></td><td>Config por agente</td><td>−375 tok/turno</td></tr>
+        <tr><td>Historial <code>5→3</code> turnos, salida <code>3500/3000→2000</code></td><td>Config + constantes</td><td>Baja los casos pesados</td></tr>
+        <tr><td>Prompts condensados sin perder reglas</td><td>Agentes 22 (−28%), 23 (−29%), 2 (−42%)</td><td>−600 a −900 chars fijos por turno</td></tr>
+    </table>
+    <table>
+        <tr><th>Agente</th><th>Modelo</th><th>in/req antes → ahora</th></tr>
+        <tr><td>22 · Vida Buena</td><td>Ollama (plan fijo)</td><td>~2.590 → <b>2.186</b></td></tr>
+        <tr><td>2 · Menu Tifozzi</td><td>Gemini (pago)</td><td>~3.587 → <b>1.688</b></td></tr>
+        <tr><td>23 · Sandow Fitness</td><td>Gemini (pago)</td><td>~4.117 → <b>2.454</b></td></tr>
+    </table>
+    <div class="ok"><b>Resultado:</b> desaparecieron los picos de 33k tokens y el consumo por mensaje bajó <b>15–45%</b>
+    según el agente. En los agentes Gemini eso es ahorro de dinero directo (~−45% en el agente 23).
+    Hallazgo: para agentes con RAG Weaviate el <code>contexto_estatico</code> no se envía (es fallback); el peso real
+    es el <b>prompt de instrucciones</b> + el contexto RAG.</div>
+
+    <h3>D. Alertas de consumo configuradas</h3>
+    <p>Se activó <code>AlertaConsumoIA</code> para avisar (notificación in-app al usuario <code>admin</code>) si el
+    consumo se dispara:</p>
+    <table>
+        <tr><th>API Key</th><th>Agentes</th><th>Umbral diario</th><th>Umbral mensual</th></tr>
+        <tr><td>API JS (Gemini · pago)</td><td>2, 23, 4</td><td>150.000 tok</td><td>3.000.000 tok</td></tr>
+        <tr><td>Ollama (plan fijo)</td><td>22</td><td>460.000 tok</td><td>9.200.000 tok</td></tr>
+    </table>
+    <p class="muted">Umbrales editables en el panel de Entrenamiento IA o vía <code>AlertaConsumoIA</code>. Monitorea el consumo en vivo en <a href="/cotizador/traza/" target="_blank" rel="noopener">/cotizador/traza/</a>.</p>
+</div>
+
+<footer>Documentación técnica del Cotizador Médico · Vida Buena / MGA · Django 4.2</footer>
+</body>
+</html>

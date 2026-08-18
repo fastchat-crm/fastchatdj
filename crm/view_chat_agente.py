@@ -251,6 +251,9 @@ def chat_agente_view(request, agente_enc_id):
                         modelo=consultor.model_name,
                         origen='chat_crm',
                         prompt_preview=(pregunta or '')[:300],
+                        prompt_full=getattr(resultado, 'prompt_enviado', ''),
+                        respuesta_full=getattr(resultado, 'respuesta', ''),
+                        mensaje_usuario=(pregunta or ''),
                     )
                     verificar_alerta_consumo(apikey_obj, resultado.tokens_total)
                 except Exception:

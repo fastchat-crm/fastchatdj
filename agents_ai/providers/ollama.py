@@ -28,12 +28,18 @@ class OllamaProvider(BaseProvider):
         # y parsea bien las respuestas. El de langchain_community está deprecado y
         # NO soporta bind_tools con Ollama.
         from langchain_openai import ChatOpenAI
+        # Ollama Cloud (endpoint OpenAI-compat) suele IGNORAR `max_tokens`; su knob
+        # real es `num_predict`. Lo mandamos por model_kwargs para que el tope de
+        # salida se respete de verdad y no haya runaways (respuestas de 30k+ tokens).
         return ChatOpenAI(
             model=model_name or self.default_model(),
             api_key=apikey,
             base_url=OLLAMA_BASE_URL,
             max_tokens=max_output_tokens,
             temperature=temperature,
+            # `extra_body` va en el cuerpo JSON (no como kwarg del SDK), así Ollama
+            # recibe su knob nativo `num_predict` sin romper el cliente OpenAI.
+            extra_body={"options": {"num_predict": max_output_tokens}},
         )
 
     def get_embeddings(self, apikey, base_url=None):

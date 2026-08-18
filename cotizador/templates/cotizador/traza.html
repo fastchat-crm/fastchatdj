@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traza de consumo IA — prompt · tokens · costo</title>
+    <style>
+        :root{--azul:#0b2a4a;--azul2:#1b6ec2;--cyan:#27c2d8;--bg:#f4f7fb;--ok:#16a34a;--warn:#d97706;--dark:#0f2233;}
+        *{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Roboto,Arial,sans-serif;}
+        body{background:var(--bg);color:#13293d;}
+        header{background:linear-gradient(135deg,var(--azul),var(--azul2));color:#fff;padding:26px 20px;}
+        .wrap{max-width:1280px;margin:0 auto;padding:0 16px;}
+        header h1{font-size:24px;font-weight:800;} header h1 span{color:var(--cyan);}
+        header p{opacity:.9;margin-top:6px;font-size:14px;}
+        .links a{color:#fff;background:rgba(255,255,255,.15);padding:7px 14px;border-radius:8px;
+                 text-decoration:none;font-weight:600;font-size:13px;margin-top:12px;display:inline-block;}
+        .links a:hover{background:rgba(255,255,255,.3);}
+        .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:18px 0;}
+        .kpi{background:#fff;border-radius:12px;box-shadow:0 4px 16px rgba(13,42,74,.08);padding:16px 18px;}
+        .kpi small{color:#789;font-size:12px;text-transform:uppercase;letter-spacing:.4px;font-weight:700;}
+        .kpi .v{font-size:26px;font-weight:800;color:var(--azul);margin-top:4px;}
+        .kpi .sub{font-size:12px;color:#678;margin-top:2px;}
+        .kpi.money .v{color:var(--ok);}
+        .panel{background:#fff;border-radius:12px;box-shadow:0 4px 16px rgba(13,42,74,.08);padding:16px 18px;margin-bottom:18px;}
+        h2{color:var(--azul);font-size:17px;margin-bottom:10px;}
+        table{width:100%;border-collapse:collapse;font-size:13px;}
+        th,td{border-bottom:1px solid #eef2f7;padding:8px 10px;text-align:left;vertical-align:top;}
+        th{background:#f4f8fd;color:var(--azul);font-weight:700;position:sticky;top:0;}
+        td.num{text-align:right;font-variant-numeric:tabular-nums;}
+        .prompt{max-width:420px;color:#334;font-size:12.5px;white-space:pre-wrap;word-break:break-word;}
+        .tag{display:inline-block;border-radius:16px;padding:2px 9px;font-size:11px;font-weight:700;}
+        .t-chat_crm{background:#e0f2fe;color:#0369a1;} .t-whatsapp{background:#dcfce7;color:#15803d;}
+        .t-webservice{background:#ede9fe;color:#6d28d9;} .t-resumidor{background:#fef3c7;color:#b45309;}
+        .t-sentimiento{background:#fce7f3;color:#be185d;} .t-auditor{background:#f1f5f9;color:#475569;}
+        .t-otro,.t-{background:#f1f5f9;color:#475569;}
+        .money{color:var(--ok);font-weight:700;} .muted{color:#89a;} .free{color:#0369a1;font-weight:700;}
+        .split{display:grid;grid-template-columns:1fr 1fr;gap:18px;} @media(max-width:820px){.split{grid-template-columns:1fr;}}
+        .bar{height:7px;border-radius:4px;background:#e6eef7;overflow:hidden;margin-top:4px;}
+        .bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--azul2),var(--cyan));}
+        .flag{display:inline-block;background:#fff8e6;border:1px solid #f0d98a;color:#8a6d1a;border-radius:8px;padding:2px 8px;font-size:11px;}
+        .foot{color:#89a;font-size:12px;padding:8px 0 30px;}
+        .refresh{float:right;font-size:12px;color:#eef;}
+        .tabla-scroll{overflow-x:auto;max-height:60vh;overflow-y:auto;}
+        .verbtn{background:var(--azul2);color:#fff;border:none;border-radius:7px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
+        .verbtn:hover{background:var(--azul);}
+        .ovl{position:fixed;inset:0;background:rgba(9,20,35,.55);display:none;z-index:9999;align-items:flex-start;justify-content:center;padding:26px 14px;overflow-y:auto;}
+        .ovl.open{display:flex;}
+        .modal{background:#fff;border-radius:14px;max-width:900px;width:100%;box-shadow:0 24px 70px rgba(0,0,0,.4);overflow:hidden;}
+        .modal-hd{background:linear-gradient(135deg,var(--azul),var(--azul2));color:#fff;padding:16px 20px;display:flex;align-items:center;gap:10px;}
+        .modal-hd h3{font-size:17px;font-weight:800;margin:0;} .modal-hd .mx{margin-left:auto;background:rgba(255,255,255,.2);border:none;color:#fff;font-size:20px;width:32px;height:32px;border-radius:8px;cursor:pointer;}
+        .modal-bd{padding:18px 20px;max-height:74vh;overflow-y:auto;}
+        .mrow{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+        .chip{background:#eef4fb;color:var(--azul);border-radius:18px;padding:5px 12px;font-size:12.5px;font-weight:700;}
+        .chip.g{background:#eafaf0;color:#15803d;} .chip.b{background:#e0f2fe;color:#0369a1;}
+        .sec{margin:14px 0;} .sec h4{font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--azul2);margin-bottom:6px;display:flex;align-items:center;gap:8px;}
+        .sec h4 .cp{margin-left:auto;font-size:11px;background:#eef4fb;color:var(--azul2);border:none;border-radius:6px;padding:3px 9px;cursor:pointer;font-weight:700;text-transform:none;}
+        .box2{background:#0f2233;color:#e6f1ff;border-radius:10px;padding:14px;font-family:Consolas,Monaco,monospace;font-size:12.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;max-height:340px;overflow-y:auto;}
+        .box2.u{background:#0b3a2e;} .box2.r{background:#0b2a4a;}
+        .empty{color:#8aa;font-style:italic;padding:10px;background:#f4f8fc;border-radius:8px;font-size:13px;}
+    </style>
+</head>
+<body>
+<header>
+    <div class="wrap">
+        <h1>Traza de <span>Consumo IA</span> — prompt · tokens · costo</h1>
+        <p>Cada request al LLM: qué prompt se ejecutó, cuántos tokens consumió y cuánto cuesta en USD. <span class="refresh" id="ref"></span></p>
+        <div class="links">
+            <a href="/cotizador/" target="_blank" rel="noopener">← Cotizador</a>
+            <a href="/cotizador/documentacion/" target="_blank" rel="noopener">📄 Documentación técnica</a>
+        </div>
+    </div>
+</header>
+
+<div class="wrap">
+    <div class="cards" id="kpis"></div>
+    <div class="panel" id="aviso" style="font-size:14px;color:#334;">Calculando ahorro…</div>
+
+    <div class="split">
+        <div class="panel"><h2>Consumo por modelo (equiv. nube, este mes)</h2><div id="por_modelo"></div></div>
+        <div class="panel"><h2>Consumo por origen (equiv. nube, este mes)</h2><div id="por_origen"></div></div>
+    </div>
+
+    <div class="panel">
+        <h2>Últimos requests</h2>
+        <div class="tabla-scroll">
+        <table>
+            <thead><tr>
+                <th>Fecha</th><th>Origen</th><th>Modelo</th><th>Agente</th>
+                <th class="prompt">Prompt ejecutado (preview)</th>
+                <th class="num">In</th><th class="num">Out</th><th class="num">Total</th>
+                <th class="num">Costo real</th><th class="num">Equiv. nube</th><th>Detalle</th>
+            </tr></thead>
+            <tbody id="filas"><tr><td colspan="11" class="muted">Cargando…</td></tr></tbody>
+        </table>
+        </div>
+        <p class="flag" style="margin-top:10px;">Facturación por <b>suscripción fija</b> (Ollama Cloud): el costo real por request es $0 (incluido en el plan). "Equiv. nube" = lo que costaría ese consumo pagando por token en el modelo de referencia. Ajusta el precio del plan y las tarifas en <code>crm/costos_ia.py</code>.</p>
+    </div>
+    <p class="foot" id="foot"></p>
+</div>
+
+<div class="ovl" id="ovl">
+  <div class="modal">
+    <div class="modal-hd"><span>🧾</span><h3 id="m-tit">Detalle del request</h3><button class="mx" id="m-close">×</button></div>
+    <div class="modal-bd" id="m-body"></div>
+  </div>
+</div>
+
+<script>
+const fmtUSD = n => '$'+ (n||0).toLocaleString('en-US',{minimumFractionDigits:4,maximumFractionDigits:6});
+const fmtN   = n => (n||0).toLocaleString('es-EC');
+
+function kpi(label, val, sub, money){
+    return `<div class="kpi ${money?'money':''}"><small>${label}</small><div class="v">${val}</div><div class="sub">${sub||''}</div></div>`;
+}
+
+function rankTable(obj){
+    const arr = Object.entries(obj||{}).map(([k,v])=>({k,...v})).sort((a,b)=>(b.costo_ref||0)-(a.costo_ref||0));
+    const max = arr.length ? (arr[0].costo_ref || 1) : 1;
+    if(!arr.length) return '<p class="muted">Sin datos este mes.</p>';
+    return '<table><thead><tr><th>Ítem</th><th class="num">Requests</th><th class="num">Tokens</th><th class="num">Equiv. nube</th></tr></thead><tbody>'
+        + arr.map(r=>`<tr><td>${r.k}<div class="bar"><i style="width:${Math.round(((r.costo_ref||0)/max)*100)}%"></i></div></td>
+            <td class="num">${fmtN(r.requests)}</td><td class="num">${fmtN(r.tokens)}</td>
+            <td class="num money">${fmtUSD(r.costo_ref||0)}</td></tr>`).join('')
+        + '</tbody></table>';
+}
+
+async function cargar(){
+    try{
+        const r = await fetch('/cotizador/api/traza/?limit=80', {cache:'no-store'});
+        const d = await r.json();
+        // KPIs
+        const fac = d.facturacion || {};
+        document.getElementById('kpis').innerHTML =
+            kpi('Suscripción fija', '$'+(fac.suscripcion_mensual_usd||0).toFixed(2)+'/mes', 'Ollama Cloud (plan fijo)', true)
+          + kpi('Amortizado / request', fmtUSD(fac.costo_amortizado_por_request_usd||0), fmtN(d.mes.requests)+' requests este mes', true)
+          + kpi('Equivalente en nube (mes)', fmtUSD(fac.equivalente_nube_mes_usd||0), 'si fuera '+(fac.modelo_referencia||'gpt-4o-mini'))
+          + kpi('Requests hoy', fmtN(d.hoy.requests), fmtN(d.hoy.tokens)+' tokens');
+        // Aviso de ahorro/sobrecosto vs nube
+        const ahorro = fac.ahorro_vs_nube_mes_usd||0;
+        const av = document.getElementById('aviso');
+        if(av){ av.innerHTML = ahorro>=0
+            ? '✅ Con la suscripción fija ahorras <b>'+fmtUSD(ahorro)+'</b> este mes frente a pagar por token en '+(fac.modelo_referencia||'gpt-4o-mini')+'.'
+            : '⚠️ Este mes el consumo equivaldría a <b>'+fmtUSD(fac.equivalente_nube_mes_usd||0)+'</b> en '+(fac.modelo_referencia||'gpt-4o-mini')+', menos que tu plan fijo de $'+(fac.suscripcion_mensual_usd||0).toFixed(2)+'.'; }
+        document.getElementById('por_modelo').innerHTML = rankTable(d.mes.por_modelo);
+        document.getElementById('por_origen').innerHTML = rankTable(d.mes.por_origen);
+        // Filas
+        const tb = document.getElementById('filas');
+        if(!d.ultimos.length){ tb.innerHTML='<tr><td colspan="11" class="muted">Aún no hay consumos registrados.</td></tr>'; }
+        else tb.innerHTML = d.ultimos.map(f=>`
+            <tr>
+                <td class="muted">${f.fecha}</td>
+                <td><span class="tag t-${f.origen_key||''}">${f.origen}</span></td>
+                <td>${f.modelo}</td>
+                <td>${f.agente}</td>
+                <td class="prompt">${(f.prompt_preview||'—').replace(/</g,'&lt;')}</td>
+                <td class="num">${fmtN(f.tokens_in)}</td>
+                <td class="num">${fmtN(f.tokens_out)}</td>
+                <td class="num"><b>${fmtN(f.tokens_total)}</b></td>
+                <td class="num">${f.incluido ? '<span class="free">$0 incluido</span>' : '<span class="money">'+fmtUSD(f.costo_usd)+'</span>'}</td>
+                <td class="num money">${fmtUSD(f.costo_ref_usd)}</td>
+                <td><button class="verbtn" data-id="${f.id}">🔍 ver todo</button></td>
+            </tr>`).join('');
+        document.getElementById('foot').textContent = 'Generado: '+d.generado+' · muestra los últimos '+d.ultimos.length+' requests.';
+        document.getElementById('ref').textContent = '↻ actualizado '+new Date().toLocaleTimeString('es-EC');
+    }catch(e){
+        document.getElementById('foot').textContent = 'Error cargando la traza: '+e;
+    }
+}
+// ── Modal de detalle ────────────────────────────────────────────────
+const ovl=document.getElementById('ovl'), mBody=document.getElementById('m-body'), mTit=document.getElementById('m-tit');
+function cerrarModal(){ ovl.classList.remove('open'); }
+document.getElementById('m-close').addEventListener('click', cerrarModal);
+ovl.addEventListener('click', e=>{ if(e.target===ovl) cerrarModal(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') cerrarModal(); });
+
+function bloque(titulo, texto, clase){
+  const vacio = !texto || !texto.trim();
+  const id = 'cp'+Math.random().toString(36).slice(2,8);
+  return '<div class="sec"><h4>'+titulo + (vacio?'':'<button class="cp" data-cp="'+id+'">copiar</button>')+'</h4>'
+    + (vacio ? '<div class="empty">— No se capturó este dato para este request —</div>'
+             : '<div class="box2 '+(clase||'')+'" id="'+id+'">'+texto.replace(/</g,'&lt;')+'</div>') + '</div>';
+}
+
+async function verDetalle(id){
+  mTit.textContent='Cargando request #'+id+'…'; mBody.innerHTML=''; ovl.classList.add('open');
+  try{
+    const r = await fetch('/cotizador/api/traza/'+id+'/', {cache:'no-store'});
+    const d = await r.json();
+    if(!d.ok){ mBody.innerHTML='<div class="empty">No se pudo cargar: '+(d.error||'')+'</div>'; return; }
+    mTit.textContent='Request #'+d.id+' · '+d.origen;
+    const costoTxt = d.incluido ? '$0 incluido (plan)' : fmtUSD(d.costo_usd);
+    mBody.innerHTML =
+      '<div class="mrow">'
+      + '<span class="chip">📅 '+d.fecha+'</span>'
+      + '<span class="chip b">'+d.origen+'</span>'
+      + '<span class="chip">🤖 '+d.modelo+'</span>'
+      + '<span class="chip">'+d.proveedor+'</span>'
+      + '<span class="chip">🧠 '+d.agente+'</span>'
+      + '</div>'
+      + '<div class="mrow">'
+      + '<span class="chip">⬇️ in '+fmtN(d.tokens_in)+'</span>'
+      + '<span class="chip">⬆️ out '+fmtN(d.tokens_out)+'</span>'
+      + '<span class="chip"><b>Σ '+fmtN(d.tokens_total)+' tokens</b></span>'
+      + '<span class="chip g">💵 real '+costoTxt+'</span>'
+      + '<span class="chip">☁️ equiv. nube '+fmtUSD(d.costo_ref_usd)+'</span>'
+      + (d.conversacion?('<span class="chip">💬 '+esc(d.conversacion)+'</span>'):'')
+      + '</div>'
+      + bloque('📨 Lo que envió el usuario', d.mensaje_usuario || d.prompt_preview, 'u')
+      + bloque('📤 Prompt COMPLETO enviado al LLM (system + RAG + historial + mensaje)', d.prompt_full, '')
+      + bloque('📥 Lo que retornó el LLM (respuesta completa)', d.respuesta_full, 'r');
+    if(!d.tiene_full){
+      mBody.innerHTML += '<div class="empty">ℹ️ El prompt/respuesta completos solo se guardan desde ahora (chat del cotizador y chat de prueba CRM). Los requests viejos solo tienen el preview.</div>';
+    }
+  }catch(e){ mBody.innerHTML='<div class="empty">Error: '+e+'</div>'; }
+}
+function esc(t){var d=document.createElement('div');d.textContent=t==null?'':t;return d.innerHTML;}
+
+document.getElementById('filas').addEventListener('click', function(e){
+  const b=e.target.closest('.verbtn'); if(b){ verDetalle(b.getAttribute('data-id')); }
+});
+mBody.addEventListener('click', function(e){
+  const c=e.target.closest('.cp'); if(!c) return;
+  const el=document.getElementById(c.getAttribute('data-cp')); if(!el) return;
+  navigator.clipboard.writeText(el.textContent).then(()=>{ c.textContent='✓ copiado'; setTimeout(()=>c.textContent='copiar',1500); });
+});
+
+cargar();
+setInterval(cargar, 8000); // auto-refresh cada 8 s
+</script>
+</body>
+</html>

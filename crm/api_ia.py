@@ -268,7 +268,10 @@ def _procesar_texto(mensaje, agente, apikey_obj, provider, model_name, session_i
         'total': getattr(resultado, 'tokens_total', 0) or 0,
     }
 
-    _registrar_consumo(apikey_obj, agente, tokens, model_name, 'webservice', mensaje)
+    _registrar_consumo(apikey_obj, agente, tokens, model_name, 'webservice', mensaje,
+                       prompt_full=getattr(resultado, 'prompt_enviado', ''),
+                       respuesta_full=getattr(resultado, 'respuesta', ''),
+                       mensaje_usuario=mensaje)
 
     return resultado.respuesta, tokens
 
@@ -345,7 +348,8 @@ def _extraer_tokens(resp) -> dict:
     return {'entrada': te, 'salida': ts, 'total': te + ts}
 
 
-def _registrar_consumo(apikey_obj, agente, tokens, modelo, origen='webservice', prompt_preview=''):
+def _registrar_consumo(apikey_obj, agente, tokens, modelo, origen='webservice', prompt_preview='',
+                       prompt_full='', respuesta_full='', mensaje_usuario=''):
     try:
         from crm.models import ConsumoTokenIA
         from crm.alertas_consumo import verificar_alerta_consumo
@@ -357,6 +361,8 @@ def _registrar_consumo(apikey_obj, agente, tokens, modelo, origen='webservice', 
                 tokens_salida=tokens.get('salida', 0),
                 tokens_total=total, modelo=modelo,
                 origen=origen, prompt_preview=(prompt_preview or '')[:300],
+                prompt_full=(prompt_full or ''), respuesta_full=(respuesta_full or ''),
+                mensaje_usuario=(mensaje_usuario or ''),
             )
             verificar_alerta_consumo(apikey_obj, total)
     except Exception:
